@@ -1,0 +1,197 @@
+/* Tracker Dashboard — Responsive
+   Breakpoints: 980px / 760px / 600px / 480px */
+
+
+/* ── 1. Header ──────────────────────────────────────────────── */
+
+@media (max-width: 760px) {
+  header {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 6px 12px;
+    gap: 0;
+  }
+  .header-logo { flex: 0 0 auto; }
+  .nav-tabs {
+    flex: 1 1 auto;
+    margin-left: 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .header-right {
+    order: 3;
+    width: 100%;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding: 6px 0 2px;
+  }
+  #proxy-toggle, #view-toggle, #theme-toggle, #logout-btn, #refresh-btn {
+    height: 28px;
+    padding: 0 10px;
+    font-size: 11px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    box-sizing: border-box;
+  }
+  #refresh-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+  #last-updated, #presentation-toggle { display: none; }
+}
+
+@media (max-width: 480px) {
+  header { padding: 6px 8px; }
+  .header-logo { height: 26px; }
+  #refresh-btn { font-size: 0; line-height: 0; width: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; gap: 0; }
+  #refresh-btn svg { display: block; flex-shrink: 0; }
+}
+
+
+/* ── 2. Main padding ────────────────────────────────────────── */
+
+@media (max-width: 760px) { main { padding: 14px 10px; } }
+@media (max-width: 480px) { main { padding: 10px 6px; } }
+
+
+/* ── 3. Grid & Cards ────────────────────────────────────────── */
+
+@media (max-width: 760px) {
+  #grid, #beta-grid {
+    grid-template-columns: 1fr;
+    width: 100%;
+    gap: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .card-header  { padding: 8px 10px 6px; }
+  .card-badges  { padding: 5px 10px 6px; }
+  .card-footer  { padding: 6px 10px 8px; }
+  .stat         { padding: 6px 10px; }
+  .stat-value   { font-size: 16px; }
+  .card-schedule { padding: 6px 10px; }
+  .error-reason  { margin: -4px 10px 10px; }
+  .incident-line { margin: 6px 10px 8px; }
+  .incident-box  { margin: 6px 10px 10px; }
+}
+
+
+/* ── 4. Proxy form ──────────────────────────────────────────── */
+
+.proxy-form input, .proxy-form select {
+  box-sizing: border-box;
+  height: 36px;
+  padding: 0 10px;
+}
+
+
+@media (max-width: 760px) {
+  .proxy-form { grid-template-columns: 1fr 1fr; }
+  /* Reset les spans inline sauf sur les toggle-switches */
+  .proxy-form > [style*="grid-column"]:not(.toggle-switch) {
+    grid-column: auto !important;
+  }
+  .proxy-form > .toggle-switch { grid-column: span 2; }
+  .proxy-form input, .proxy-form select { max-width: none !important; }
+}
+
+@media (max-width: 480px) {
+  .proxy-form { grid-template-columns: 1fr; }
+  .proxy-form > .toggle-switch { grid-column: span 1; }
+}
+
+
+/* ── 5. Beta workbench & form rows ──────────────────────────── */
+
+/* Dans un grid justify-items:center, min(100%, 2010px) ne se résout
+   pas toujours correctement sur mobile — on force width:100% */
+@media (max-width: 760px) {
+  .beta-summary,
+  .beta-toolbar,
+  .beta-section-tabs,
+  .beta-workbench {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+}
+
+@media (max-width: 980px) {
+  .beta-stack > *,
+  .beta-grid-2 > *,
+  .beta-grid-3 > * { min-width: 0; }
+  /* contain:inline-size empêche les tables (white-space:nowrap) de faire
+     déborder le panel au-delà de sa cellule grid */
+  .beta-panel { overflow-x: auto; contain: inline-size; }
+}
+
+/* Les beta-form-row ont des grid-template-columns en inline style —
+   la media query inline ne peut pas les surcharger sans !important */
+@media (max-width: 980px) {
+  .beta-form-row { grid-template-columns: 1fr !important; }
+}
+
+@media (max-width: 760px) {
+  [style*="grid-template-columns: repeat(3"] {
+    grid-template-columns: 1fr 1fr !important;
+  }
+}
+
+@media (max-width: 480px) {
+  [style*="grid-template-columns: repeat(3"] {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+
+/* ── 6. Beta toolbar ────────────────────────────────────────── */
+
+@media (max-width: 760px) {
+  .beta-toolbar { width: 100%; }
+  .beta-title { min-width: 0; }
+}
+
+@media (max-width: 480px) {
+  .beta-actions { flex-wrap: wrap; }
+  .beta-actions button { font-size: 11px; padding: 5px 8px; }
+  .beta-detail-stat strong { font-size: 15px; }
+}
+
+
+/* ── 7. Proxy override card ─────────────────────────────────── */
+
+@media (max-width: 980px) {
+  .proxy-override-card .row,
+  .proxy-override-card .row + .row { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 600px) {
+  .proxy-override-card .row,
+  .proxy-override-card .row + .row { grid-template-columns: 1fr; }
+}
+
+
+/* ── 8. Definition row (section Trackers) ───────────────────── */
+
+@media (max-width: 760px) {
+  .definition-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    min-width: 0;
+    gap: 8px 10px;
+  }
+  .definition-info { width: 100%; min-width: 0; }
+  .definition-badge, .credential-badge, .definition-new-slot { flex: 0 0 auto; }
+  .tracker-field {
+    flex: 1 1 100%;
+    min-width: 0;
+    grid-template-columns: 80px minmax(0, 1fr);
+  }
+  .definition-actions { flex: 0 0 auto; }
+  .definition-advanced { width: 100%; }
+  .advanced-cookie-row { flex-direction: column; align-items: stretch; }
+  .advanced-cookie-row .tracker-input,
+  .advanced-cookie-row textarea.tracker-input { width: 100%; flex: none; }
+  .advanced-cookie-row .btn-save { align-self: flex-start; width: auto; }
+}
