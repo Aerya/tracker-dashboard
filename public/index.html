@@ -1828,6 +1828,14 @@
         <section class="beta-section" data-beta-section="alerts">
         <div class="beta-grid-2">
           <section class="beta-panel">
+            <h3>Planification des logins</h3>
+            <p class="beta-note" style="margin-bottom:10px">Planification globale inspirée d'Autovisit. Chaque cycle visite tous les trackers actifs disposant de credentials.</p>
+            <div id="beta-schedule-settings"></div>
+            <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap">
+              <button class="beta-icon-btn primary" onclick="saveBetaSettings()" type="button">Enregistrer la planification</button>
+            </div>
+          </section>
+          <section class="beta-panel">
             <h3>Alertes par tracker</h3>
             <div id="beta-alert-rules"></div>
             <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap">
@@ -1836,7 +1844,8 @@
             </div>
           </section>
           <section class="beta-panel">
-            <h3>Notifications Discord / Apprise</h3>
+            <h3>Notifications Autovisit / Discord</h3>
+            <div id="beta-notification-preferences"></div>
             <div id="beta-notification-targets"></div>
             <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap">
               <button class="beta-icon-btn" onclick="addBetaNotificationTarget('discord')" type="button">Ajouter Discord</button>
@@ -2172,39 +2181,6 @@
     return `<span class="badge badge-stale" title="${escapeHtml((stat.stale.error || 'Timeout pendant le refresh') + failedAt)}">Données anciennes</span>`;
   }
 
-  function trackerSchedule(stat) {
-    const configured = trackerConfig.find(t => t.id === stat.id);
-    return configured?.schedule || {};
-  }
-
-  function scheduleControls(stat) {
-    const schedule = trackerSchedule(stat);
-    const enabled = Boolean(schedule.enabled);
-    const interval = schedule.intervalHours || 24;
-    const next = schedule.nextRunAt ? `Prochaine ${relativeTime(schedule.nextRunAt)}` : 'Non planifiee';
-    return `
-      <div class="card-schedule">
-        <div class="card-schedule-text">
-          <strong>Connexion automatique</strong>
-          <span>${enabled ? next : 'Desactivee'}</span>
-        </div>
-        <div class="schedule-controls">
-          <label class="toggle-switch" title="Activer la connexion automatique">
-            <input type="checkbox" ${enabled ? 'checked' : ''} onchange="saveSchedule('${escapeHtml(stat.id)}', this.checked)">
-            <div class="toggle-track"><div class="toggle-knob"></div></div>
-          </label>
-          <select id="schedule-${escapeHtml(stat.id)}" onchange="saveSchedule('${escapeHtml(stat.id)}', true)">
-            <option value="6" ${interval === 6 ? 'selected' : ''}>6h</option>
-            <option value="12" ${interval === 12 ? 'selected' : ''}>12h</option>
-            <option value="24" ${interval === 24 ? 'selected' : ''}>24h</option>
-            <option value="48" ${interval === 48 ? 'selected' : ''}>48h</option>
-            <option value="168" ${interval === 168 ? 'selected' : ''}>7j</option>
-            <option value="504" ${interval === 504 ? 'selected' : ''}>21j</option>
-          </select>
-        </div>
-      </div>`;
-  }
-
   function lastLoginText(stat) {
     return formatDateTime(stat.lastLoginAt || stat.lastUpdated);
   }
@@ -2243,7 +2219,14 @@
   let betaSection = 'overview';
   let betaCalendarMonth = new Date();
   let betaOverview = null;
-  let betaSettings = { qbitClients: [], notificationTargets: [], alertRules: [], defaults: {} };
+  let betaSettings = {
+    qbitClients: [],
+    notificationTargets: [],
+    notificationPreferences: {},
+    schedule: {},
+    alertRules: [],
+    defaults: {},
+  };
   let betaHistory = [];
   let betaSelectedTrackerId = null;
   let betaSelectedCalendarDay = new Date().toISOString().slice(0, 10);
@@ -3075,6 +3058,54 @@
     });
   }
 
+  function renderBetaScheduleSettings() {
+    const container = document.getElementById('beta-schedule-settings');
+    if (!container) return;
+    const schedule = betaSettings.schedule || {};
+    const weekdays = new Set(schedule.weekdays || []);
+    const dayLabels = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+    container.innerHTML = `
+      <div class="beta-form-row" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+        <div class="beta-field"><label>Planification active</label><select id="beta-schedule-enabled"><option value="true" ${schedule.enabled ? 'selected' : ''}>Oui</option><option value="false" ${!schedule.enabled ? 'selected' : ''}>Non</option></select></div>
+        <div class="beta-field"><label>Mode</label><select id="beta-schedule-mode" onchange="updateBetaScheduleMode()"><option value="hours" ${schedule.mode === 'hours' ? 'selected' : ''}>Toutes les X heures</option><option value="days" ${schedule.mode !== 'hours' && schedule.mode !== 'weekdays' ? 'selected' : ''}>Tous les X jours à heure fixe</option><option value="weekdays" ${schedule.mode === 'weekdays' ? 'selected' : ''}>Certains jours de la semaine</option></select></div>
+      </div>
+      <div id="beta-schedule-hours" class="beta-form-row"><div class="beta-field"><label>Intervalle en heures</label><input id="beta-schedule-interval-hours" type="number" min="1" max="168" value="${escapeHtml(schedule.intervalHours || 6)}"></div></div>
+      <div id="beta-schedule-days" class="beta-form-row">
+        <div class="beta-field"><label>Intervalle en jours</label><input id="beta-schedule-interval-days" type="number" min="1" max="30" value="${escapeHtml(schedule.intervalDays || 1)}"></div>
+        <div class="beta-field"><label>Heure</label><input id="beta-schedule-time" type="time" value="${String(schedule.hour ?? 3).padStart(2, '0')}:${String(schedule.minute ?? 0).padStart(2, '0')}"></div>
+      </div>
+      <div id="beta-schedule-weekdays" class="beta-form-row" style="grid-template-columns:1fr">
+        <div class="beta-field"><label>Jours</label><div style="display:flex;gap:8px;flex-wrap:wrap">${dayLabels.map((label, day) => `<label><input type="checkbox" data-beta-weekday="${day}" ${weekdays.has(day) ? 'checked' : ''}> ${label}</label>`).join('')}</div></div>
+      </div>
+      <p class="beta-note">Prochaine exécution : ${schedule.nextRunAt ? escapeHtml(new Date(schedule.nextRunAt).toLocaleString('fr-FR')) : 'non planifiée'}${schedule.lastRunAt ? ` · Dernière : ${escapeHtml(new Date(schedule.lastRunAt).toLocaleString('fr-FR'))}` : ''}</p>
+    `;
+    updateBetaScheduleMode();
+  }
+
+  function updateBetaScheduleMode() {
+    const mode = document.getElementById('beta-schedule-mode')?.value || betaSettings.schedule?.mode || 'days';
+    const hours = document.getElementById('beta-schedule-hours');
+    const days = document.getElementById('beta-schedule-days');
+    const weekdays = document.getElementById('beta-schedule-weekdays');
+    if (hours) hours.style.display = mode === 'hours' ? '' : 'none';
+    if (days) days.style.display = mode === 'hours' ? 'none' : '';
+    if (weekdays) weekdays.style.display = mode === 'weekdays' ? '' : 'none';
+  }
+
+  function renderBetaNotificationPreferences() {
+    const container = document.getElementById('beta-notification-preferences');
+    if (!container) return;
+    const preferences = betaSettings.notificationPreferences || {};
+    container.innerHTML = `
+      <div class="beta-form-row" style="grid-template-columns:repeat(2,minmax(0,1fr));margin-bottom:10px">
+        <label><input id="beta-notify-error" type="checkbox" ${preferences.notifyError !== false ? 'checked' : ''}> Échecs</label>
+        <label><input id="beta-notify-success" type="checkbox" ${preferences.notifySuccess ? 'checked' : ''}> Succès</label>
+        <label><input id="beta-notify-recovery" type="checkbox" ${preferences.notifySuccessAfterFailure !== false ? 'checked' : ''}> Rétablissement après échec</label>
+        <label><input id="beta-notify-stats" type="checkbox" ${preferences.notifyStats ? 'checked' : ''}> Inclure les statistiques</label>
+      </div>
+    `;
+  }
+
   function renderBetaNotificationTargets() {
     const container = document.getElementById('beta-notification-targets');
     if (!container) return;
@@ -3082,8 +3113,9 @@
     container.innerHTML = targets.map((target, idx) => `
       <div class="beta-form-row" data-beta-target="${idx}">
         <div class="beta-field"><label>Nom</label><input data-field="label" value="${escapeHtml(target.label || '')}"></div>
-        <div class="beta-field"><label>Type</label><select data-field="type"><option value="discord" ${target.type !== 'apprise' ? 'selected' : ''}>Discord</option><option value="apprise" ${target.type === 'apprise' ? 'selected' : ''}>Apprise</option></select></div>
-        <div class="beta-field" style="grid-column:span 2"><label>Webhook / endpoint</label><input data-field="url" value="${escapeHtml(target.url || '')}" placeholder="https://..."></div>
+        <div class="beta-field"><label>Type</label><select data-field="type" onchange="changeBetaNotificationType(${idx}, this.value)"><option value="discord" ${target.type !== 'apprise' ? 'selected' : ''}>Discord</option><option value="apprise" ${target.type === 'apprise' ? 'selected' : ''}>Apprise</option></select></div>
+        <div class="beta-field" style="grid-column:span 2"><label>${target.type === 'apprise' ? 'URL du serveur Apprise' : 'Webhook Discord'}</label><input data-field="url" value="${escapeHtml(target.url || '')}" placeholder="https://..."></div>
+        ${target.type === 'apprise' ? `<div class="beta-field" style="grid-column:span 2"><label>URLs Apprise (une par ligne)</label><textarea data-field="urls" rows="3" placeholder="pover://...&#10;discord://...">${escapeHtml((target.urls || []).join('\n'))}</textarea></div>` : ''}
         <div class="beta-field"><label>Actif</label><select data-field="enabled"><option value="true" ${target.enabled !== false ? 'selected' : ''}>Oui</option><option value="false" ${target.enabled === false ? 'selected' : ''}>Non</option></select></div>
         <div style="display:flex; gap:6px"><button class="beta-icon-btn" onclick="testBetaNotification('${escapeHtml(target.id)}')" type="button">Tester</button><button class="beta-icon-btn" onclick="removeBetaNotificationTarget(${idx})" type="button">X</button></div>
       </div>
@@ -3131,6 +3163,8 @@
     drawBetaHistoryChart();
     renderBetaQbitClients();
     renderBetaAnnounceMappings();
+    renderBetaScheduleSettings();
+    renderBetaNotificationPreferences();
     renderBetaNotificationTargets();
     renderBetaAlertRules();
   }
@@ -3154,6 +3188,7 @@
       label: row.querySelector('[data-field="label"]').value.trim(),
       type: row.querySelector('[data-field="type"]').value,
       url: row.querySelector('[data-field="url"]').value.trim(),
+      urls: row.querySelector('[data-field="urls"]')?.value.split('\n').map(value => value.trim()).filter(Boolean) || [],
       enabled: row.querySelector('[data-field="enabled"]').value === 'true',
     })).filter(target => target.url);
     const alertRules = Array.from(document.querySelectorAll('[data-beta-rule]')).map((row, idx) => ({
@@ -3165,11 +3200,30 @@
       enabled: row.querySelector('[data-field="enabled"]').value === 'true',
       targetIds: notificationTargets.filter(target => target.enabled).map(target => target.id),
     })).filter(rule => rule.trackerId);
+    const [hour, minute] = (document.getElementById('beta-schedule-time')?.value || '03:00').split(':').map(Number);
+    const schedule = {
+      ...(betaSettings.schedule || {}),
+      enabled: document.getElementById('beta-schedule-enabled')?.value === 'true',
+      mode: document.getElementById('beta-schedule-mode')?.value || 'days',
+      intervalHours: Number(document.getElementById('beta-schedule-interval-hours')?.value || 6),
+      intervalDays: Number(document.getElementById('beta-schedule-interval-days')?.value || 1),
+      hour,
+      minute,
+      weekdays: Array.from(document.querySelectorAll('[data-beta-weekday]:checked')).map(input => Number(input.dataset.betaWeekday)),
+    };
+    const notificationPreferences = {
+      notifyError: document.getElementById('beta-notify-error')?.checked !== false,
+      notifySuccess: document.getElementById('beta-notify-success')?.checked === true,
+      notifySuccessAfterFailure: document.getElementById('beta-notify-recovery')?.checked !== false,
+      notifyStats: document.getElementById('beta-notify-stats')?.checked === true,
+    };
     return {
       ...betaSettings,
       qbitClients,
       announceMappings,
       notificationTargets,
+      schedule,
+      notificationPreferences,
       alertRules,
     };
   }
@@ -3209,7 +3263,14 @@
 
   function addBetaNotificationTarget(type) {
     betaSettings = collectBetaSettingsFromDom();
-    betaSettings.notificationTargets.push({ id: genId(), type, label: type === 'apprise' ? 'Apprise' : 'Discord', url: '', enabled: true });
+    betaSettings.notificationTargets.push({ id: genId(), type, label: type === 'apprise' ? 'Apprise' : 'Discord', url: '', urls: [], enabled: true });
+    renderBetaNotificationTargets();
+  }
+
+  function changeBetaNotificationType(index, type) {
+    betaSettings = collectBetaSettingsFromDom();
+    if (!betaSettings.notificationTargets[index]) return;
+    betaSettings.notificationTargets[index].type = type;
     renderBetaNotificationTargets();
   }
 
@@ -3537,7 +3598,6 @@
           </div>
           ${reachabilityLine}
           ${incidentBox}
-          ${scheduleControls(stat)}
           <div class="card-footer">Derniere connexion : ${lastLoginText(stat)}</div>
         </div>`;
     }
@@ -3583,7 +3643,6 @@
           ${bottomCells}
         </div>
         ${stat.stale ? renderIncidentBox(stat) : ''}
-        ${scheduleControls(stat)}
         <div class="card-footer">Derniere connexion : ${lastLoginText(stat)}</div>
       </div>`;
   }
@@ -3600,26 +3659,10 @@
   }
 
   function rowScheduleCell(stat) {
-    const schedule = trackerSchedule(stat);
-    const enabled = Boolean(schedule.enabled);
-    const interval = schedule.intervalHours || 24;
-    const next = schedule.nextRunAt ? `Prochaine ${relativeTime(schedule.nextRunAt)}` : 'Non planifiee';
-    const id = escapeHtml(stat.id);
-    return `
-      <div class="row-sched" title="${enabled ? escapeHtml(next) : 'Desactivee'}">
-        <label class="toggle-switch" title="Activer la connexion automatique">
-          <input type="checkbox" ${enabled ? 'checked' : ''} onchange="saveSchedule('${id}', this.checked)">
-          <div class="toggle-track"><div class="toggle-knob"></div></div>
-        </label>
-        <select id="schedule-${id}" onchange="saveSchedule('${id}', true)">
-          <option value="6" ${interval === 6 ? 'selected' : ''}>6h</option>
-          <option value="12" ${interval === 12 ? 'selected' : ''}>12h</option>
-          <option value="24" ${interval === 24 ? 'selected' : ''}>24h</option>
-          <option value="48" ${interval === 48 ? 'selected' : ''}>48h</option>
-          <option value="168" ${interval === 168 ? 'selected' : ''}>7j</option>
-          <option value="504" ${interval === 504 ? 'selected' : ''}>21j</option>
-        </select>
-      </div>`;
+    const schedule = betaSettings.schedule || {};
+    return schedule.enabled
+      ? `<span class="cell-muted" title="Planification globale">Global</span>`
+      : '<span class="cell-muted">Désactivée</span>';
   }
 
   function rowStatusBadges(stat) {
@@ -4251,22 +4294,6 @@
         body: JSON.stringify({ enabled }),
       });
     } catch (e) { console.warn('saveFastFetch:', e.message); }
-  }
-
-  async function saveSchedule(trackerId, enabled) {
-    const select = document.getElementById(`schedule-${trackerId}`);
-    const r = await fetch(`/api/schedules/${trackerId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        enabled,
-        intervalHours: Number(select.value),
-      }),
-    });
-    const d = await r.json();
-    if (!d.ok) console.warn(d.error || 'Schedule save failed');
-    await loadConfig();
-    await loadStats();
   }
 
   async function saveSettings() {
