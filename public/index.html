@@ -915,7 +915,14 @@
       font-size: 11px;
       font-weight: 700;
     }
-    .card-refresh:hover { border-color: var(--blue); color: var(--text); }
+    .card-refresh:hover { border-color: var(--accent); color: var(--text); }
+    .card-edit-btn {
+      border-color: color-mix(in srgb, var(--muted) 40%, transparent);
+      background: transparent;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .card-edit-btn:hover { border-color: var(--accent); color: var(--accent); }
     .card-refresh:disabled { opacity: .5; cursor: default; }
 
     .badge {
@@ -1439,11 +1446,6 @@
       object-fit: cover;
       border: 1px solid var(--border);
     }
-    .site-footer .author {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-    }
     .site-footer a {
       color: var(--text);
       text-decoration: none;
@@ -1452,59 +1454,6 @@
       color: #fff;
       text-decoration: underline;
       text-underline-offset: 3px;
-    }
-    .migration-modal {
-      position: fixed;
-      inset: 0;
-      z-index: 1000;
-      display: none;
-      place-items: center;
-      padding: 20px;
-      background: rgba(5, 7, 12, .82);
-      backdrop-filter: blur(4px);
-    }
-    .migration-modal.visible { display: grid; }
-    .migration-dialog {
-      width: min(100%, 620px);
-      padding: 24px;
-      border: 1px solid color-mix(in srgb, var(--yellow) 55%, var(--border));
-      border-radius: var(--radius);
-      background: var(--surface);
-      box-shadow: 0 24px 70px rgba(0, 0, 0, .45);
-    }
-    .migration-dialog h2 { margin-bottom: 12px; color: var(--yellow); }
-    .migration-dialog p { margin-top: 10px; line-height: 1.55; }
-    .migration-command {
-      display: block;
-      margin-top: 14px;
-      padding: 12px;
-      overflow-wrap: anywhere;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      background: var(--bg);
-      color: var(--text);
-      font-family: Consolas, monospace;
-      font-size: 13px;
-    }
-    .migration-actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 10px;
-      margin-top: 18px;
-      flex-wrap: wrap;
-    }
-    .migration-actions button {
-      padding: 8px 14px;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      background: var(--bg);
-      color: var(--text);
-      cursor: pointer;
-    }
-    .migration-actions .primary {
-      border-color: var(--blue);
-      background: var(--blue);
-      color: #fff;
     }
   </style>
   <link rel="stylesheet" href="/responsive.css">
@@ -1845,32 +1794,13 @@
 </main>
 
 <footer class="site-footer">
-  <span><a href="https://github.com/Tracker-Dashboard/tracker-dashboard" target="_blank" rel="noreferrer noopener">Tracker Dashboard</a> créé avec ❤️ par</span>
-  <a class="author" href="https://github.com/Aerya" target="_blank" rel="noreferrer noopener">
-    <img src="/aerya.webp" alt="Avatar Aerya" />
-    <span>Aerya</span>
-  </a>
-  <span>et</span>
-  <a class="author" href="https://github.com/Gusdezup" target="_blank" rel="noreferrer noopener">
-    <img src="/zup.jpg" alt="Avatar Zup" />
-    <span>Zup</span>
-  </a>
+  <span>Aerya</span>
+  <img src="/avatar.webp" alt="Avatar Aerya" />
+  <a href="https://github.com/Tracker-Dashboard/tracker-dashboard" target="_blank" rel="noreferrer noopener">GitHub</a>
+  <a href="https://upandclear.org" target="_blank" rel="noreferrer noopener">Blog</a>
+  <a href="https://ko-fi.com/upandclear" target="_blank" rel="noreferrer noopener">Ko-fi</a>
+  <span>❤️</span>
 </footer>
-
-<div id="migration-modal" class="migration-modal" role="dialog" aria-modal="true" aria-labelledby="migration-title">
-  <div class="migration-dialog">
-    <h2 id="migration-title">Migration de l'image Docker requise</h2>
-    <p>Tracker Dashboard a été transféré vers l'organisation GitHub <strong>Tracker-Dashboard</strong>.</p>
-    <p>Cette ancienne image ne recevra plus de mises à jour. Dans votre fichier Compose, remplacez :</p>
-    <code class="migration-command">ghcr.io/aerya/tracker-dashboard:latest</code>
-    <p>par :</p>
-    <code id="migration-new-image" class="migration-command">ghcr.io/tracker-dashboard/tracker-dashboard:latest</code>
-    <div class="migration-actions">
-      <button type="button" onclick="dismissMigrationNotice()">Fermer pour cette session</button>
-      <button id="migration-copy" class="primary" type="button" onclick="copyMigrationImage()">Copier la nouvelle image</button>
-    </div>
-  </div>
-</div>
 
 <script>
   // ─── Formatage ─────────────────────────────────────────────────────────────
@@ -2194,6 +2124,24 @@
 
   function lastLoginText(stat) {
     return formatDateTime(stat.lastLoginAt || stat.lastUpdated);
+  }
+
+  function editTrackerButton(stat) {
+    return `
+      <button class="card-refresh card-edit-btn" data-tracker="${escapeHtml(stat.id)}" onclick="openTrackerEdit(this.dataset.tracker)" title="Éditer ce tracker" aria-label="Éditer ce tracker">
+        ✎
+      </button>`;
+  }
+
+  function openTrackerEdit(trackerId) {
+    // Ouvrir le panneau Trackers
+    const panel = document.getElementById('tracker-definitions-panel');
+    if (panel && !panel.open) panel.open = true;
+    // Scroller vers la ligne du tracker
+    setTimeout(() => {
+      const row = document.getElementById('tracker-def-' + trackerId);
+      if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
   }
 
   function cardRefreshButton(stat) {
@@ -3493,6 +3441,7 @@
           <div class="card-header">
             ${trackerName(stat)}
             <div class="card-header-actions">
+              ${editTrackerButton(stat)}
               ${cardRefreshButton(stat)}
             </div>
           </div>
@@ -3537,6 +3486,7 @@
         <div class="card-header">
           ${trackerName(stat)}
           <div class="card-header-actions">
+            ${editTrackerButton(stat)}
             ${cardRefreshButton(stat)}
           </div>
         </div>
@@ -3801,7 +3751,7 @@
               ? `<span class="credential-badge ${credential.hasCookie ? 'credential-ok' : 'credential-missing'}">${credential.hasCookie ? 'Cookie OK' : 'Cookie requis'}</span>`
               : `<span class="credential-badge ${credential.hasPassword ? 'credential-ok' : 'credential-missing'}">${credential.hasPassword ? 'Configuré' : 'Manquant'}</span>`;
             return `
-              <div class="definition-row">
+              <div class="definition-row" id="tracker-def-${escapeHtml(definition.id)}">
                 <div class="definition-info">
                   <strong>${trackerLogo(definition.id)}${escapeHtml(definition.name)}${cookieOnly ? ' <span class="definition-badge definition-badge-cookie" title="Login automatique désactivé : ce tracker nécessite un cookie de session (CAPTCHA/anti-bot). Renseigne-le dans Options avancées.">Cookie uniquement</span>' : ''}</strong>
                   <small>${escapeHtml(definition.file)} · <a href="${escapeHtml(definition.baseUrl)}" target="_blank" rel="noreferrer noopener">${escapeHtml(definition.baseUrl)}</a></small>
@@ -4471,7 +4421,6 @@
 
   async function init() {
     loadTheme();
-    await showMigrationNoticeIfNeeded();
     loadViewMode();
     loadBetaSettings();
     loadActiveTab();
@@ -4487,34 +4436,6 @@
     await loadStats();
     // Polling léger toutes les 60s pour mettre à jour l'heure relative
     setInterval(loadStats, 60_000);
-  }
-
-  async function showMigrationNoticeIfNeeded() {
-    if (sessionStorage.getItem('tracker-dashboard-migration-dismissed') === 'true') return;
-    try {
-      const response = await fetch('/api/build-info');
-      const buildInfo = await response.json();
-      if (buildInfo.legacyImage) {
-        document.getElementById('migration-modal').classList.add('visible');
-      }
-    } catch (error) {
-      console.warn('Unable to check the Docker image source', error);
-    }
-  }
-
-  function dismissMigrationNotice() {
-    sessionStorage.setItem('tracker-dashboard-migration-dismissed', 'true');
-    document.getElementById('migration-modal').classList.remove('visible');
-  }
-
-  async function copyMigrationImage() {
-    const image = document.getElementById('migration-new-image').textContent.trim();
-    try {
-      await navigator.clipboard.writeText(image);
-      document.getElementById('migration-copy').textContent = 'Image copiée';
-    } catch {
-      window.prompt('Copiez la nouvelle image :', image);
-    }
   }
 
   init();
