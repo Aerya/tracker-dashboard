@@ -6,29 +6,41 @@
   <title>Tracker Dashboard</title>
   <style>
     :root {
-      --bg:       #0f1117;
-      --surface:  #1a1d27;
-      --border:   #2a2d3a;
-      --text:     #e2e4ed;
-      --muted:    #6b7280;
-      --green:    #22c55e;
+      --bg:       #0d0f12;
+      --bg2:      #13161b;
+      --surface:  #13161b;
+      --border:   #252a35;
+      --border2:  #2f3645;
+      --text:     #c8d0de;
+      --text2:    #6b7a95;
+      --muted:    #6b7a95;
+      --accent:   #4ade80;
+      --accent2:  #22c55e;
+      --green:    #4ade80;
       --yellow:   #eab308;
       --red:      #ef4444;
-      --blue:     #3b82f6;
+      --blue:     #4ade80;
       --purple:   #a855f7;
-      --radius:   12px;
+      --radius:   10px;
+      --mono:     'JetBrains Mono', 'Fira Code', monospace;
+      --sans:     'Segoe UI', system-ui, sans-serif;
     }
 
     :root[data-theme="light"] {
       --bg:       #f4f6fb;
+      --bg2:      #eef1f7;
       --surface:  #ffffff;
       --border:   #d8dee9;
+      --border2:  #c8d0de;
       --text:     #172033;
+      --text2:    #64748b;
       --muted:    #64748b;
-      --green:    #15803d;
+      --accent:   #16a34a;
+      --accent2:  #15803d;
+      --green:    #16a34a;
       --yellow:   #ca8a04;
       --red:      #dc2626;
-      --blue:     #2563eb;
+      --blue:     #16a34a;
       --purple:   #7c3aed;
     }
 
@@ -37,72 +49,53 @@
     body {
       background: var(--bg);
       color: var(--text);
-      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-family: var(--sans);
       font-size: 14px;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      grid-template-rows: 48px 1fr;
+      height: 100vh;
+      overflow: hidden;
     }
 
-    /* ── Header ─────────────────────────────────────────────────── */
+    /* ── Topbar ──────────────────────────────────────────────────── */
     header {
+      grid-column: 1 / -1;
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      height: 42px;
-      padding: 0 28px;
+      height: 48px;
+      padding: 0 20px;
       border-bottom: 1px solid var(--border);
-      background: var(--surface);
+      background: var(--bg2);
       position: sticky; top: 0; z-index: 10;
+      gap: 16px;
       overflow: visible;
     }
-    .header-logo {
-      display: block;
-      flex: 0 0 auto;
-      width: auto;
-      height: 34px;
-      max-width: 220px;
-      object-fit: contain;
-      object-position: center;
-    }
-
-    .header-right { display: flex; align-items: center; gap: 14px; margin-left: auto; }
-
-    .nav-tabs {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      margin-left: 18px;
-      padding: 3px;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      background: color-mix(in srgb, var(--bg) 72%, transparent);
-    }
-    .tab-button {
-      background: transparent;
-      border: 0;
-      color: var(--muted);
-      border-radius: 6px;
-      padding: 6px 12px;
-      font-size: 12px;
+    .header-logo { display: none; }
+    .header-logo-text {
+      font-family: var(--mono);
+      font-size: 15px;
       font-weight: 600;
-      cursor: pointer;
+      color: var(--accent);
+      letter-spacing: .04em;
+      white-space: nowrap;
+      flex: 0 0 auto;
     }
-    .tab-button:hover { color: var(--text); }
-    .tab-button.active {
-      background: color-mix(in srgb, var(--blue) 18%, transparent);
-      color: var(--blue);
-    }
+    .header-logo-text span { color: var(--text2); font-weight: 400; }
+
+    .header-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+    .nav-tabs { display: none; }
 
     #last-updated { font-size: 12px; color: var(--muted); }
 
     #refresh-btn {
-      background: var(--blue);
-      color: #fff;
+      background: var(--accent);
+      color: #000;
       border: none;
       border-radius: 8px;
       padding: 7px 16px;
       font-size: 13px;
+      font-weight: 600;
       cursor: pointer;
       display: flex; align-items: center; gap: 6px;
       transition: opacity .15s;
@@ -110,6 +103,81 @@
     #refresh-btn:hover { opacity: .85; }
     #refresh-btn:disabled { opacity: .5; cursor: default; }
     #refresh-btn svg { width: 14px; height: 14px; }
+
+    /* ── Sidebar ─────────────────────────────────────────────────── */
+    .sidebar {
+      grid-row: 2;
+      background: var(--bg2);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 16px 0;
+      overflow-y: auto;
+      z-index: 5;
+    }
+    .nav-section-label {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text2);
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      padding: 0 16px 6px;
+      margin-top: 8px;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 16px;
+      font-size: 13px;
+      color: var(--text2);
+      cursor: pointer;
+      border-left: 3px solid transparent;
+      background: none;
+      border-top: none; border-right: none; border-bottom: none;
+      width: 100%;
+      text-align: left;
+      transition: color .15s, background .15s;
+    }
+    .nav-item:hover { color: var(--text); background: color-mix(in srgb, var(--bg) 60%, transparent); }
+    .nav-item.active { color: var(--accent); border-left-color: var(--accent); background: rgba(74,222,128,.06); }
+    .nav-icon { width: 16px; text-align: center; font-size: 14px; flex-shrink: 0; }
+    .nav-spacer { flex: 1; }
+    .sidebar-run-btn {
+      margin: 12px 12px 0;
+      background: var(--accent);
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      padding: 9px 14px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: center;
+      transition: opacity .15s;
+    }
+    .sidebar-run-btn:hover { opacity: .85; }
+    .sidebar-logout {
+      margin: 8px 12px 0;
+      background: none;
+      color: var(--text2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 14px;
+      font-size: 12px;
+      cursor: pointer;
+      text-align: center;
+      transition: border-color .15s, color .15s;
+    }
+    .sidebar-logout:hover { border-color: var(--red); color: var(--red); }
+
+    /* ── Content area ────────────────────────────────────────────── */
+    .content-area {
+      grid-row: 2;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
 
     /* ── Grid ────────────────────────────────────────────────────── */
     main {
@@ -770,15 +838,20 @@
 
     /* ── Cards ───────────────────────────────────────────────────── */
     .card {
-      background: var(--surface);
+      background: var(--bg2);
       border: 1px solid var(--border);
+      border-left: 3px solid var(--border2);
       border-radius: var(--radius);
       overflow: hidden;
       transition: border-color .2s;
       display: flex;
       flex-direction: column;
     }
-    .card:hover { border-color: var(--blue); }
+    .card:hover { border-color: var(--accent); border-left-color: var(--accent); }
+    /* Couleur bord gauche selon état */
+    .card.card--ok   { border-left-color: var(--accent); }
+    .card.card--err  { border-left-color: var(--red); }
+    .card.card--warn { border-left-color: var(--yellow); }
     /* Pousse le footer en bas pour aligner les cartes de hauteurs proches */
     .card-footer { margin-top: auto; }
 
@@ -1001,7 +1074,7 @@
     }
     .proxyspin-promo a { color: var(--blue); font-weight: 600; text-decoration: none; }
     .proxyspin-promo a:hover { text-decoration: underline; }
-    #proxy-toggle, #theme-toggle, #presentation-toggle, #view-toggle, #logout-btn {
+    #proxy-toggle, #theme-toggle, #presentation-toggle, #view-toggle {
       background: none;
       border: 1px solid var(--border);
       color: var(--muted);
@@ -1012,17 +1085,20 @@
       display: flex; align-items: center; gap: 5px;
       transition: border-color .15s, color .15s;
     }
-    #proxy-toggle:hover, #theme-toggle:hover, #presentation-toggle:hover, #view-toggle:hover, #logout-btn:hover { border-color: var(--blue); color: var(--text); }
-    #proxy-toggle.active, #view-toggle.active { border-color: var(--blue); color: var(--blue); }
+    #proxy-toggle:hover, #theme-toggle:hover, #presentation-toggle:hover, #view-toggle:hover { border-color: var(--accent); color: var(--text); }
+    #proxy-toggle.active, #view-toggle.active { border-color: var(--accent); color: var(--accent); }
     #theme-toggle.active { border-color: var(--yellow); color: var(--yellow); }
     #presentation-toggle.active { border-color: var(--purple); color: var(--purple); }
     #presentation-toggle { display: none; }
+    /* logout migré dans sidebar */
+    #logout-btn { display: none; }
 
     #proxy-panel {
       display: none;
-      background: var(--surface);
+      background: var(--bg2);
       border-bottom: 1px solid var(--border);
       padding: 20px 28px;
+      flex-shrink: 0;
     }
     #proxy-panel.open { display: block; }
     .proxy-panel-inner {
@@ -1436,13 +1512,8 @@
 <body>
 
 <header>
-  <img class="header-logo" src="/logo.png" alt="Tracker Dashboard" />
-  <nav class="nav-tabs" aria-label="Vues">
-    <button id="dashboard-tab" class="tab-button active" onclick="setActiveTab('dashboard')" type="button">Dashboard</button>
-    <button id="beta-tab" class="tab-button" onclick="setActiveTab('beta')" type="button">Bêta</button>
-  </nav>
+  <span class="header-logo-text">tracker<span>.dashboard</span></span>
   <div class="header-right">
-
     <button id="proxy-toggle" onclick="toggleProxyPanel()">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
@@ -1454,7 +1525,6 @@
     <button id="presentation-toggle" onclick="togglePresentationMode()" title="Afficher toutes les cartes avec des données factices">
       Présentation
     </button>
-    <button id="logout-btn" onclick="logout()">Logout</button>
     <span id="last-updated">—</span>
     <button id="refresh-btn" onclick="refresh()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1465,6 +1535,20 @@
   </div>
 </header>
 
+<nav class="sidebar">
+  <span class="nav-section-label">Navigation</span>
+  <button class="nav-item active" id="sidebar-dashboard-tab" onclick="setActiveTab('dashboard')" type="button">
+    <span class="nav-icon">◈</span> Dashboard
+  </button>
+  <button class="nav-item" id="sidebar-beta-tab" onclick="setActiveTab('beta')" type="button">
+    <span class="nav-icon">⬡</span> Bêta
+  </button>
+  <span class="nav-spacer"></span>
+  <button class="sidebar-run-btn" id="sidebar-run-btn" onclick="refresh()">▶ Tout visiter</button>
+  <button class="sidebar-logout" onclick="logout()">⏻ Déconnexion</button>
+</nav>
+
+<div class="content-area">
 <div id="proxy-panel">
   <div class="proxy-panel-inner">
     <h2>🔀 Proxy</h2>
@@ -1572,6 +1656,7 @@
     </div>
   </div>
 </div>
+
 
 <main>
   <section id="dashboard-view" class="tab-view active">
@@ -2148,22 +2233,28 @@
   }
 
   function betaStats() {
-    if (betaStatusFilter === 'problems') return latestSortedStats.filter(hasTrackerProblem);
-    if (betaStatusFilter === 'healthy') return latestSortedStats.filter(stat => !hasTrackerProblem(stat));
-    return latestSortedStats;
+    const configured = latestSortedStats.filter(stat => !isUnconfigured(stat));
+    if (betaStatusFilter === 'problems') return configured.filter(hasTrackerProblem);
+    if (betaStatusFilter === 'healthy') return configured.filter(stat => !hasTrackerProblem(stat));
+    return configured;
+  }
+
+  function isUnconfigured(stat) {
+    return stat.status === 'error' && typeof stat.error === 'string' && stat.error.startsWith('Credentials manquants');
   }
 
   function dashboardStats() {
     const query = (document.getElementById('dashboard-tracker-search')?.value || '').trim().toLowerCase();
-    if (!query) return latestSortedStats;
-    return latestSortedStats.filter(stat => {
+    const configured = latestSortedStats.filter(stat => !isUnconfigured(stat));
+    if (!query) return configured;
+    return configured.filter(stat => {
       const tracker = trackerConfig.find(item => item.id === stat.id);
       const haystack = `${stat.name} ${stat.id} ${stat.status} ${tracker?.baseUrl || stat.trackerUrl || ''}`.toLowerCase();
       return haystack.includes(query);
     });
   }
 
-  function renderBetaSummary(stats = latestSortedStats) {
+  function renderBetaSummary(stats = latestSortedStats.filter(stat => !isUnconfigured(stat))) {
     const summary = document.getElementById('beta-summary');
     if (!summary) return;
     const total = stats.length;
@@ -2212,7 +2303,7 @@
     if (!list) return;
     const query = (document.getElementById('beta-tracker-search')?.value || '').toLowerCase();
     const statuses = new Map((betaOverview?.trackerStatuses || []).map(item => [item.id, item]));
-    const filtered = latestSortedStats.filter(stat => {
+    const filtered = latestSortedStats.filter(stat => !isUnconfigured(stat)).filter(stat => {
       const status = statuses.get(stat.id);
       const haystack = `${stat.name} ${stat.id} ${trackerModeLabel(status)} ${stat.trackerUrl || ''}`.toLowerCase();
       return !query || haystack.includes(query);
@@ -2349,7 +2440,7 @@
     const container = document.getElementById('beta-focus-incidents');
     if (!container) return;
     const statuses = new Map((betaOverview?.trackerStatuses || []).map(item => [item.id, item]));
-    const rows = latestSortedStats.filter(stat => {
+    const rows = latestSortedStats.filter(stat => !isUnconfigured(stat)).filter(stat => {
       const status = statuses.get(stat.id);
       const mode = trackerModeLabel(status);
       return hasTrackerProblem(stat) || mode === 'captcha' || mode === 'cookie-only' || status?.siteReachability?.reachable === false;
@@ -3232,8 +3323,9 @@
     localStorage.setItem('tracker-dashboard-tab', activeTab);
     document.getElementById('dashboard-view')?.classList.toggle('active', activeTab === 'dashboard');
     document.getElementById('beta-view')?.classList.toggle('active', activeTab === 'beta');
-    document.getElementById('dashboard-tab')?.classList.toggle('active', activeTab === 'dashboard');
-    document.getElementById('beta-tab')?.classList.toggle('active', activeTab === 'beta');
+    // Sync sidebar nav items
+    document.getElementById('sidebar-dashboard-tab')?.classList.toggle('active', activeTab === 'dashboard');
+    document.getElementById('sidebar-beta-tab')?.classList.toggle('active', activeTab === 'beta');
     renderGrid();
     loadBetaData();
   }
@@ -3397,7 +3489,7 @@
       `.trim();
       const incidentBox = renderIncidentBox(stat);
       return `
-        <div class="card">
+        <div class="card card--err">
           <div class="card-header">
             ${trackerName(stat)}
             <div class="card-header-actions">
@@ -3441,7 +3533,7 @@
          ${statCell('Bonus',   formatCount(f.seedBonus), '', '')}`;
 
     return `
-      <div class="card">
+      <div class="card card--ok">
         <div class="card-header">
           ${trackerName(stat)}
           <div class="card-header-actions">
@@ -3870,6 +3962,7 @@
       status.textContent = 'Identifiants enregistrés';
       await loadTrackerDefinitionsPanel();
       await loadConfig();
+      await refresh();
     } catch(e) {
       status.style.color = 'var(--red)';
       status.textContent = e.message;
@@ -4426,5 +4519,6 @@
 
   init();
 </script>
+</div>
 </body>
 </html>

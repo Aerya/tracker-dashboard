@@ -274,19 +274,19 @@ const knownTrackerFields: Record<string, {
     byteUnit: 'decimal',
     fields: {
       uploadedBytes: {
-        regex: 'Envoy[ée]\\s*:[\\s\\S]{0,160}?(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))',
+        regex: 'class="stat tooltip up" title="(?<value>[^"]+)"',
         transform: 'bytes',
       },
       downloadedBytes: {
-        regex: 'Re[çc]u\\s*:[\\s\\S]{0,160}?(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))',
+        regex: 'class="stat tooltip dl" title="(?<value>[^"]+)"',
         transform: 'bytes',
       },
       ratio: {
-        regex: 'Ratio\\s*:[\\s\\S]{0,120}?(?<value>\\d[\\d\\s.,]*)',
+        regex: 'stats_ratio[^>]*>Ratio[^<]*<[^>]*><span class="tooltip r\\d+" title="(?<value>[^"]+)"',
         transform: 'number',
       },
       seedBonus: {
-        regex: 'Magasin\\s*:[\\s\\S]{0,120}?(?<value>\\d[\\d\\s.,]*)',
+        regex: 'action=rate[^>]+>(?<value>[\\d,]+)<',
         transform: 'string',
       },
     },
