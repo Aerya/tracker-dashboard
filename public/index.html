@@ -3885,6 +3885,7 @@
       status.textContent = 'Identifiants enregistrés';
       await loadTrackerDefinitionsPanel();
       await loadConfig();
+      await refresh();
     } catch(e) {
       status.style.color = 'var(--red)';
       status.textContent = e.message;
