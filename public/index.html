@@ -848,6 +848,10 @@
       flex-direction: column;
     }
     .card:hover { border-color: var(--accent); border-left-color: var(--accent); }
+    .card[draggable="true"] { cursor: grab; }
+    .card[draggable="true"]:active { cursor: grabbing; }
+    .card.dragging { opacity: .4; }
+    .card.drag-over { outline: 2px dashed var(--accent); outline-offset: -2px; }
     /* Couleur bord gauche selon état */
     .card.card--ok   { border-left-color: var(--accent); }
     .card.card--err  { border-left-color: var(--red); }
@@ -2212,6 +2216,8 @@
 
   // Stats triees du dernier fetch + trackers dont l'editeur d'incident est deplie
   let latestSortedStats = [];
+  let dragReorderEnabled = false;
+  let dragSourceTrackerId = null;
   const expandedIncidents = new Set();
   let viewMode = 'cards'; // 'cards' | 'rows'
   let activeTab = 'dashboard'; // 'dashboard' | 'beta'
@@ -3458,6 +3464,11 @@
     renderBetaSummary();
     renderBetaControls();
 
+    // Le drag & drop des tuiles n'est propose que sur le dashboard, en vue
+    // cartes, et sans filtre actif (sinon l'ordre persiste serait ambigu).
+    const searchQuery = (document.getElementById('dashboard-tracker-search')?.value || '').trim();
+    dragReorderEnabled = activeTab === 'dashboard' && viewMode === 'cards' && !searchQuery;
+
     grid.classList.toggle('grid--rows', viewMode === 'rows');
     grid.innerHTML = stats.length === 0
       ? '<div class="error-body">Aucun tracker dans ce filtre.</div>'
@@ -3557,6 +3568,69 @@
     if (el) el.focus();
   }
 
+  // Attributs HTML drag & drop pour une tuile (vide si le reordering est desactive).
+  function cardDragAttrs(stat) {
+    if (!dragReorderEnabled) return '';
+    return ` draggable="true" data-tracker-id="${escapeHtml(stat.id)}"`
+      + ` ondragstart="handleCardDragStart(event)" ondragover="handleCardDragOver(event)"`
+      + ` ondragleave="handleCardDragLeave(event)" ondrop="handleCardDrop(event)"`
+      + ` ondragend="handleCardDragEnd(event)"`;
+  }
+
+  function handleCardDragStart(e) {
+    const card = e.currentTarget;
+    dragSourceTrackerId = card.dataset.trackerId;
+    card.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('text/plain', dragSourceTrackerId); } catch {}
+  }
+
+  function handleCardDragOver(e) {
+    if (!dragSourceTrackerId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const card = e.currentTarget;
+    if (card.dataset.trackerId === dragSourceTrackerId) return;
+    card.classList.add('drag-over');
+  }
+
+  function handleCardDragLeave(e) {
+    e.currentTarget.classList.remove('drag-over');
+  }
+
+  async function handleCardDrop(e) {
+    e.preventDefault();
+    const targetCard = e.currentTarget;
+    targetCard.classList.remove('drag-over');
+    const targetId = targetCard.dataset.trackerId;
+    const sourceId = dragSourceTrackerId;
+    if (!sourceId || sourceId === targetId) return;
+
+    const fromIndex = latestSortedStats.findIndex(s => s.id === sourceId);
+    const toIndex = latestSortedStats.findIndex(s => s.id === targetId);
+    if (fromIndex === -1 || toIndex === -1) return;
+
+    const [moved] = latestSortedStats.splice(fromIndex, 1);
+    latestSortedStats.splice(toIndex, 0, moved);
+    renderGrid();
+
+    try {
+      await fetch('/api/settings/tracker-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order: latestSortedStats.map(s => s.id) }),
+      });
+    } catch (err) {
+      console.error('Erreur sauvegarde ordre des tuiles', err);
+    }
+  }
+
+  function handleCardDragEnd(e) {
+    e.currentTarget.classList.remove('dragging');
+    document.querySelectorAll('.card.drag-over').forEach(el => el.classList.remove('drag-over'));
+    dragSourceTrackerId = null;
+  }
+
   function renderCard(stat) {
     const f = stat.fields;
     const ratioless = isRatiolessTracker(stat);
@@ -3581,7 +3655,7 @@
       `.trim();
       const incidentBox = renderIncidentBox(stat);
       return `
-        <div class="card card--err">
+        <div class="card card--err"${cardDragAttrs(stat)}>
           <div class="card-header">
             ${trackerName(stat)}
             <div class="card-header-actions">
@@ -3625,7 +3699,7 @@
          ${statCell('Bonus',   formatCount(f.seedBonus), '', '')}`;
 
     return `
-      <div class="card card--ok">
+      <div class="card card--ok"${cardDragAttrs(stat)}>
         <div class="card-header">
           ${trackerName(stat)}
           <div class="card-header-actions">
@@ -4155,7 +4229,9 @@
       return;
     }
 
-    latestSortedStats = [...data.stats].sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
+    // L'ordre est determine cote serveur (alphabetique par defaut, ou ordre
+    // personnalise enregistre via le drag & drop des tuiles).
+    latestSortedStats = [...data.stats];
     renderGrid();
     await loadBetaData();
     document.getElementById('last-updated').textContent =
