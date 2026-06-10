@@ -2229,6 +2229,14 @@ export async function start(): Promise<void> {
   });
   app.use(express.static(PUBLIC_DIR, { index: false }));
 
+  app.get('/api/build-info', (_req, res) => {
+    const imageSource = process.env.APP_IMAGE_SOURCE?.trim() || 'local';
+    res.json({
+      imageSource,
+      legacyImage: imageSource.toLowerCase() === 'ghcr.io/aerya/tracker-dashboard',
+    });
+  });
+
   // ── Stats ──────────────────────────────────────────────────────────────────
   app.get('/api/stats', (_req, res) => {
     if (isPresentationMode()) {
