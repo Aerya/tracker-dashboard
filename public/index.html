@@ -2177,7 +2177,7 @@
     });
   }
 
-  function renderBetaSummary(stats = latestSortedStats) {
+  function renderBetaSummary(stats = latestSortedStats.filter(stat => !isUnconfigured(stat))) {
     const summary = document.getElementById('beta-summary');
     if (!summary) return;
     const total = stats.length;
@@ -2226,7 +2226,7 @@
     if (!list) return;
     const query = (document.getElementById('beta-tracker-search')?.value || '').toLowerCase();
     const statuses = new Map((betaOverview?.trackerStatuses || []).map(item => [item.id, item]));
-    const filtered = latestSortedStats.filter(stat => {
+    const filtered = latestSortedStats.filter(stat => !isUnconfigured(stat)).filter(stat => {
       const status = statuses.get(stat.id);
       const haystack = `${stat.name} ${stat.id} ${trackerModeLabel(status)} ${stat.trackerUrl || ''}`.toLowerCase();
       return !query || haystack.includes(query);
@@ -2363,7 +2363,7 @@
     const container = document.getElementById('beta-focus-incidents');
     if (!container) return;
     const statuses = new Map((betaOverview?.trackerStatuses || []).map(item => [item.id, item]));
-    const rows = latestSortedStats.filter(stat => {
+    const rows = latestSortedStats.filter(stat => !isUnconfigured(stat)).filter(stat => {
       const status = statuses.get(stat.id);
       const mode = trackerModeLabel(status);
       return hasTrackerProblem(stat) || mode === 'captcha' || mode === 'cookie-only' || status?.siteReachability?.reachable === false;
