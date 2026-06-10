@@ -2156,15 +2156,21 @@
   }
 
   function betaStats() {
-    if (betaStatusFilter === 'problems') return latestSortedStats.filter(hasTrackerProblem);
-    if (betaStatusFilter === 'healthy') return latestSortedStats.filter(stat => !hasTrackerProblem(stat));
-    return latestSortedStats;
+    const configured = latestSortedStats.filter(stat => !isUnconfigured(stat));
+    if (betaStatusFilter === 'problems') return configured.filter(hasTrackerProblem);
+    if (betaStatusFilter === 'healthy') return configured.filter(stat => !hasTrackerProblem(stat));
+    return configured;
+  }
+
+  function isUnconfigured(stat) {
+    return stat.status === 'error' && typeof stat.error === 'string' && stat.error.startsWith('Credentials manquants');
   }
 
   function dashboardStats() {
     const query = (document.getElementById('dashboard-tracker-search')?.value || '').trim().toLowerCase();
-    if (!query) return latestSortedStats;
-    return latestSortedStats.filter(stat => {
+    const configured = latestSortedStats.filter(stat => !isUnconfigured(stat));
+    if (!query) return configured;
+    return configured.filter(stat => {
       const tracker = trackerConfig.find(item => item.id === stat.id);
       const haystack = `${stat.name} ${stat.id} ${stat.status} ${tracker?.baseUrl || stat.trackerUrl || ''}`.toLowerCase();
       return haystack.includes(query);
