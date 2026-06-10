@@ -14,9 +14,9 @@ import { getJsonSetting } from './db.js';
 
 const STATUS_MARKER = '\n__CURL_HTTP_STATUS__:';
 
-function binaryName(): string {
+function binaryName(override?: string): string {
   // Wrapper par defaut fourni par curl-impersonate (positionne ciphers + en-tetes).
-  return process.env.CURL_IMPERSONATE_BIN || 'curl_chrome116';
+  return override || process.env.CURL_IMPERSONATE_BIN || 'curl_chrome116';
 }
 
 /** Fast-path actif ? (reglage global, defaut: actif) */
@@ -121,9 +121,11 @@ export interface CurlRequestOptions {
 export class CurlSession {
   private readonly trackerId: string;
   private readonly jarPath: string;
+  private readonly binary?: string;
 
-  constructor(trackerId: string) {
+  constructor(trackerId: string, binary?: string) {
     this.trackerId = trackerId;
+    this.binary = binary;
     this.jarPath = path.join(os.tmpdir(), `td-curl-${trackerId}-${process.pid}-${Date.now()}.jar`);
   }
 
@@ -134,6 +136,7 @@ export class CurlSession {
   async request(url: string, opts: CurlRequestOptions = {}): Promise<{ status: number; body: string } | null> {
     if (!(await checkAvailable())) return null;
     const timeoutMs = opts.timeoutMs ?? 30_000;
+    const bin = binaryName(this.binary);
     const args = [
       '-sS', '-L', '--max-time', String(Math.ceil(timeoutMs / 1000)),
       '-c', this.jarPath, '-b', this.jarPath,
@@ -145,7 +148,22 @@ export class CurlSession {
     const proxy = curlProxyArg(this.trackerId);
     if (proxy) args.push('--proxy', proxy);
     args.push(url);
-    return execCurl(args, timeoutMs);
+    return new Promise(resolve => {
+      execFile(
+        bin,
+        args,
+        { timeout: timeoutMs + 2_000, maxBuffer: 20 * 1024 * 1024, encoding: 'utf8' },
+        (err, stdout) => {
+          const out = typeof stdout === 'string' ? stdout : '';
+          if (err && !out) { resolve(null); return; }
+          const idx = out.lastIndexOf(STATUS_MARKER);
+          if (idx === -1) { resolve({ status: 0, body: out }); return; }
+          const body = out.slice(0, idx);
+          const status = Number.parseInt(out.slice(idx + STATUS_MARKER.length).trim(), 10) || 0;
+          resolve({ status, body });
+        },
+      );
+    });
   }
 
   dispose(): void {

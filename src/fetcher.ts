@@ -694,10 +694,13 @@ export async function fetchTracker(
     const totpSecret = getTrackerTotpSecret(tracker.id);
     if (totpSecret) {
       const code = generateTotp(totpSecret);
-      if (code) cvars.otp = code;
+      if (code) {
+        cvars.otp = code;
+        cvars.totp = code; // alias pour {{totp}} dans le body
+      }
     }
 
-    const sess = new CurlSession(tracker.id);
+    const sess = new CurlSession(tracker.id, (tracker as any).curlBinary);
     try {
       let referer = resolveUrl(base, cfg.url);
       let hiddenInputs: Record<string, string> = {};
@@ -781,6 +784,10 @@ export async function fetchTracker(
       if (!isRetry) {
         const fast = await tryCurlFastPath();
         if (fast) return fast;
+        // Si pas de cookie sauvegardé, tenter le login complet via curl-impersonate
+        // avant de lancer le navigateur (plus léger, contourne Cloudflare passif)
+        const viaCurlFull = await attemptHttpViaCurl();
+        if (viaCurlFull) return viaCurlFull;
       }
       const browserResult = await fetchWithBrowser(tracker, creds);
       // Si on a confirme la session via un indicateur DOM specifique (TR4KER : RATIO/UPLOAD/DOWNLOAD
