@@ -97,7 +97,7 @@ function startupBanner(port: number): string {
     `Build ref: ${imageRef}`,
     `Build revision: ${revisionShort}`,
     `Comparable GHCR tag: ${comparableTag}`,
-    'GHCR: https://github.com/Aerya/tracker-dashboard/pkgs/container/tracker-dashboard',
+    'GHCR: https://github.com/Tracker-Dashboard/tracker-dashboard/pkgs/container/tracker-dashboard',
     `🚀  Dashboard → http://localhost:${port}`,
     '',
   ].join('\n');

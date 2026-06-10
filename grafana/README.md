@@ -7,7 +7,7 @@ L'endpoint `/metrics` est protege par token. Ajoute la variable d'environnement 
 ```yaml
 services:
   tracker-dashboard:
-    image: ghcr.io/aerya/tracker-dashboard:latest
+    image: ghcr.io/tracker-dashboard/tracker-dashboard:latest
     environment:
       METRICS_TOKEN: change-moi-en-un-truc-long-et-aleatoire
     ports:

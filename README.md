@@ -2,9 +2,14 @@
   <img src="public/logo.png" alt="Tracker Dashboard" width="260">
 </p>
 
-> **Tu l'utilises ? Tu l'aimes ? [⭐ Mets une étoile !](https://github.com/Aerya/tracker-dashboard/stargazers)** — ça prend deux secondes.
+> **Tu l'utilises ? Tu l'aimes ? [⭐ Mets une étoile !](https://github.com/Tracker-Dashboard/tracker-dashboard/stargazers)** — ça prend deux secondes.
 
-> Besoin uniquement d'un outil avec WebUI pour faire du login automatique sur les sites et garder les comptes actifs ? Regardez aussi [Gusdezup/Autovisit-Web](https://github.com/Gusdezup/Autovisit-Web) de Zup.
+> [!IMPORTANT]
+> Le projet est désormais porté par l'organisation GitHub [Tracker-Dashboard](https://github.com/Tracker-Dashboard).
+>
+> Tracker Dashboard évolue en collaboration avec [Zup](https://github.com/Gusdezup) afin de réunir Tracker Dashboard et son projet [Autovisit-Web](https://github.com/Gusdezup/Autovisit-Web) au sein d'un projet unifié.
+>
+> Les pull requests sont les bienvenues. Le projet va évoluer dans les semaines à venir avec l'intégration de davantage de sites et de statistiques.
 
 > [!WARNING]
 > Lors d’un rafraîchissement général ou du premier lancement, certains trackers peuvent temporairement afficher une erreur ou prendre du temps à se mettre à jour.

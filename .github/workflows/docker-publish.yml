@@ -12,7 +12,8 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: aerya/tracker-dashboard
+  IMAGE_NAME: tracker-dashboard/tracker-dashboard
+  LEGACY_IMAGE_NAME: aerya/tracker-dashboard
 
 jobs:
   build-and-push:
@@ -36,7 +37,9 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+            ${{ env.REGISTRY }}/${{ env.LEGACY_IMAGE_NAME }}
           tags: |
             # latest sur chaque push sur main
             type=raw,value=latest,enable={{is_default_branch}}
