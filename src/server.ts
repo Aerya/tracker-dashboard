@@ -146,6 +146,14 @@ interface BetaNotificationPreferences {
   notifyStats: boolean;
 }
 
+interface BetaTrackerScheduleOverride {
+  trackerId: string;
+  mode: 'global' | 'disabled' | 'interval';
+  intervalHours: number;
+  nextRunAt: string | null;
+  lastRunAt: string | null;
+}
+
 interface BetaAlertRule {
   id: string;
   trackerId: string;
@@ -166,6 +174,7 @@ interface BetaSettings {
   announceMappings: BetaAnnounceMapping[];
   notificationTargets: BetaNotificationTarget[];
   schedule: BetaScheduleSettings;
+  scheduleOverrides: BetaTrackerScheduleOverride[];
   notificationPreferences: BetaNotificationPreferences;
   alertRules: BetaAlertRule[];
   defaults: {
@@ -1485,7 +1494,10 @@ async function runBetaScheduledCycle(): Promise<void> {
   if (!settings.schedule.enabled) return;
 
   const credentials = loadCredentialsFromDb();
-  const trackers = loadTrackerConfigsFromDb().filter(tracker => tracker.enabled !== false && credentials[tracker.id]);
+  const overridden = new Set(settings.scheduleOverrides.map(override => override.trackerId));
+  const trackers = loadTrackerConfigsFromDb().filter(tracker => (
+    tracker.enabled !== false && credentials[tracker.id] && !overridden.has(tracker.id)
+  ));
   const previousFailures = new Set(settings.schedule.lastFailedTrackerIds);
   pendingScheduledRuns.add('__global__');
   try {
@@ -1502,6 +1514,28 @@ async function runBetaScheduledCycle(): Promise<void> {
   }
 }
 
+async function runBetaTrackerSchedule(override: BetaTrackerScheduleOverride): Promise<void> {
+  if (isRefreshing || pendingScheduledRuns.has(override.trackerId)) return;
+  const settings = loadBetaSettings();
+  const tracker = loadTrackerConfigsFromDb().find(item => item.id === override.trackerId && item.enabled !== false);
+  if (!tracker || !loadCredentialsFromDb()[tracker.id]) return;
+  const previousFailures = new Set(cachedStats.filter(stat => stat.status === 'error').map(stat => stat.id));
+  pendingScheduledRuns.add(tracker.id);
+  try {
+    const result = await refreshOneTracker(tracker);
+    await notifyScheduledResult(settings, [result], previousFailures);
+  } finally {
+    const current = loadBetaSettings();
+    const saved = current.scheduleOverrides.find(item => item.trackerId === override.trackerId);
+    if (saved?.mode === 'interval') {
+      saved.lastRunAt = new Date().toISOString();
+      saved.nextRunAt = new Date(Date.now() + saved.intervalHours * 3600_000).toISOString();
+      setJsonSetting(BETA_SETTINGS_KEY, current);
+    }
+    pendingScheduledRuns.delete(tracker.id);
+  }
+}
+
 function startScheduler(): void {
   const tick = () => {
     const settings = loadBetaSettings();
@@ -1511,6 +1545,14 @@ function startScheduler(): void {
         setJsonSetting(BETA_SETTINGS_KEY, settings);
       } else if (Date.parse(settings.schedule.nextRunAt) <= Date.now()) {
         void runBetaScheduledCycle().catch(err => console.error('[Beta Scheduler] cycle en erreur :', err));
+      }
+    }
+
+    for (const override of settings.scheduleOverrides) {
+      if (override.mode === 'interval' && override.nextRunAt && Date.parse(override.nextRunAt) <= Date.now()) {
+        void runBetaTrackerSchedule(override).catch(err => {
+          console.error(`[Beta Scheduler] ${override.trackerId} en erreur :`, err);
+        });
       }
     }
 
@@ -1643,6 +1685,7 @@ function defaultBetaSettings(): BetaSettings {
     qbitClients: [],
     announceMappings: [],
     notificationTargets: [],
+    scheduleOverrides: [],
     schedule: {
       enabled: false,
       mode: 'days',
@@ -1680,6 +1723,7 @@ function loadBetaSettings(): BetaSettings {
     qbitClients: Array.isArray(settings.qbitClients) ? settings.qbitClients : [],
     announceMappings: Array.isArray(settings.announceMappings) ? settings.announceMappings : [],
     notificationTargets: Array.isArray(settings.notificationTargets) ? settings.notificationTargets : [],
+    scheduleOverrides: Array.isArray(settings.scheduleOverrides) ? settings.scheduleOverrides : [],
     schedule: { ...defaultBetaSettings().schedule, ...(settings.schedule ?? {}) },
     notificationPreferences: {
       ...defaultBetaSettings().notificationPreferences,
@@ -1810,6 +1854,31 @@ function saveBetaSettingsPayload(raw: unknown): BetaSettings {
   }
   if (!schedule.enabled) schedule.nextRunAt = null;
 
+  const previousOverrides = new Map(current.scheduleOverrides.map(override => [override.trackerId, override]));
+  const scheduleOverrides: BetaTrackerScheduleOverride[] = Array.isArray(body.scheduleOverrides)
+    ? body.scheduleOverrides.map(rawOverride => {
+      const override = rawOverride as Partial<BetaTrackerScheduleOverride>;
+      const trackerId = String(override.trackerId || '').trim();
+      const previous = previousOverrides.get(trackerId);
+      const overrideMode: BetaTrackerScheduleOverride['mode'] = ['disabled', 'interval'].includes(String(override.mode))
+        ? override.mode as BetaTrackerScheduleOverride['mode']
+        : 'global';
+      const intervalHours = [6, 12, 24, 48, 168, 504].includes(Number(override.intervalHours))
+        ? Number(override.intervalHours)
+        : 24;
+      const changed = !previous || previous.mode !== overrideMode || previous.intervalHours !== intervalHours;
+      return {
+        trackerId,
+        mode: overrideMode,
+        intervalHours,
+        nextRunAt: overrideMode === 'interval'
+          ? (changed || !previous?.nextRunAt ? new Date(Date.now() + intervalHours * 3600_000).toISOString() : previous.nextRunAt)
+          : null,
+        lastRunAt: previous?.lastRunAt ?? null,
+      };
+    }).filter(override => override.trackerId && override.mode !== 'global')
+    : current.scheduleOverrides;
+
   const rawPreferences = body.notificationPreferences ?? current.notificationPreferences;
   const notificationPreferences: BetaNotificationPreferences = {
     notifyError: rawPreferences.notifyError !== false,
@@ -1818,7 +1887,7 @@ function saveBetaSettingsPayload(raw: unknown): BetaSettings {
     notifyStats: rawPreferences.notifyStats === true,
   };
 
-  const next = { qbitClients, announceMappings, notificationTargets, schedule, notificationPreferences, alertRules, defaults };
+  const next = { qbitClients, announceMappings, notificationTargets, schedule, scheduleOverrides, notificationPreferences, alertRules, defaults };
   setJsonSetting(BETA_SETTINGS_KEY, next);
   return next;
 }
