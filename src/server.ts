@@ -20,10 +20,8 @@ import {
   resolveLogoPath, refreshAllLogos, listTrackersWithoutLogo,
 } from './logos.js';
 import {
-  ensureTrackerSchedules,
   deleteTrackerCredentials,
   getTrackerCredentials,
-  getTrackerSchedule,
   importLegacyCredentialsIfNeeded,
   importLegacySettingsIfNeeded,
   importLegacyTrackersIfNeeded,
@@ -32,15 +30,12 @@ import {
   listStatSnapshots,
   listTrackerCredentialSummaries,
   listTrackerDefinitionFiles,
-  listTrackerSchedules,
   loadCredentialsFromDb,
   loadTrackerConfigsFromDb,
   loadTrackerDefinitionFile,
-  markTrackerScheduleRun,
   saveStatSnapshots,
   saveTrackerCredentials,
   saveTrackerConfig,
-  saveTrackerSchedule,
   setJsonSetting,
   hasTrackerCookie,
   setTrackerCookie,
@@ -61,6 +56,7 @@ const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const SESSION_COOKIE = 'tracker_dashboard_session';
 const TRACKER_DEFINITIONS_SEEN_KEY = 'trackerDefinitionsSeen';
 const PRESENTATION_MODE_KEY = 'presentationMode';
+const TRACKER_ORDER_KEY = 'trackerOrder';
 
 function readAppVersion(): string {
   try {
@@ -127,7 +123,36 @@ interface BetaNotificationTarget {
   type: 'discord' | 'apprise';
   label: string;
   url: string;
+  urls?: string[];
   enabled: boolean;
+}
+
+interface BetaScheduleSettings {
+  enabled: boolean;
+  mode: 'hours' | 'days' | 'weekdays';
+  intervalHours: number;
+  intervalDays: number;
+  hour: number;
+  minute: number;
+  weekdays: number[];
+  nextRunAt: string | null;
+  lastRunAt: string | null;
+  lastFailedTrackerIds: string[];
+}
+
+interface BetaNotificationPreferences {
+  notifyError: boolean;
+  notifySuccess: boolean;
+  notifySuccessAfterFailure: boolean;
+  notifyStats: boolean;
+}
+
+interface BetaTrackerScheduleOverride {
+  trackerId: string;
+  mode: 'global' | 'disabled' | 'interval';
+  intervalHours: number;
+  nextRunAt: string | null;
+  lastRunAt: string | null;
 }
 
 interface BetaAlertRule {
@@ -149,6 +174,9 @@ interface BetaSettings {
   qbitClients: BetaQbitClient[];
   announceMappings: BetaAnnounceMapping[];
   notificationTargets: BetaNotificationTarget[];
+  schedule: BetaScheduleSettings;
+  scheduleOverrides: BetaTrackerScheduleOverride[];
+  notificationPreferences: BetaNotificationPreferences;
   alertRules: BetaAlertRule[];
   defaults: {
     ratioEnabled: boolean;
@@ -1072,9 +1100,16 @@ function upsertCachedStat(stat: TrackerStats): void {
 
 function visibleStats(trackers: TrackerConfig[]): TrackerStats[] {
   const cached = new Map(cachedStats.map(stat => [stat.id, stat]));
+  const savedOrder = getJsonSetting(TRACKER_ORDER_KEY, { ids: [] as string[] });
+  const order = new Map(
+    (Array.isArray(savedOrder.ids) ? savedOrder.ids : [])
+      .filter((id): id is string => typeof id === 'string')
+      .map((id, index) => [id, index]),
+  );
+
   return trackers
     .filter(tracker => tracker.enabled !== false)
-    .map(tracker => cached.get(tracker.id) ?? ({
+    .map<TrackerStats>(tracker => cached.get(tracker.id) ?? ({
       id:          tracker.id,
       name:        tracker.name,
       trackerUrl:  tracker.baseUrl,
@@ -1083,7 +1118,9 @@ function visibleStats(trackers: TrackerConfig[]): TrackerStats[] {
       lastUpdated: new Date().toISOString(),
       byteUnit:    tracker.dashboard?.byteUnit ?? 'binary',
       fields:      {},
-    }));
+    }))
+    .sort((a, b) => (order.get(a.id) ?? Number.MAX_SAFE_INTEGER)
+      - (order.get(b.id) ?? Number.MAX_SAFE_INTEGER));
 }
 
 function logStatResult(stat: TrackerStats): void {
@@ -1248,8 +1285,8 @@ function hydrateFromSnapshots(trackers: TrackerConfig[]): TrackerConfig[] {
   return stale;
 }
 
-async function refresh(trackers: TrackerConfig[]): Promise<void> {
-  if (isRefreshing) return;
+async function refresh(trackers: TrackerConfig[]): Promise<TrackerStats[]> {
+  if (isRefreshing) return [];
   isRefreshing = true;
   console.log(`\n[${new Date().toISOString()}] Refresh...`);
   try {
@@ -1257,14 +1294,14 @@ async function refresh(trackers: TrackerConfig[]): Promise<void> {
       cachedStats = fakeStatsForPresentation();
       lastRefresh = new Date().toISOString();
       console.log('  Mode presentation actif - donnees factices');
-      return;
+      return cachedStats;
     }
 
     if (!proxyAllowsTrackerConnections()) {
       cachedStats = blockedStats(trackers);
       lastRefresh = new Date().toISOString();
       console.warn('  Connexions trackers bloquees : proxy absent et connexion directe non autorisee');
-      return;
+      return cachedStats;
     }
 
     const credentials = loadCredentialsFromDb();
@@ -1310,6 +1347,7 @@ async function refresh(trackers: TrackerConfig[]): Promise<void> {
     console.log(`  ✅ ${ok} ok  ❌ ${err} erreur(s)`);
     results.filter(s => s.status === 'error')
       .forEach(s => console.log(`  ⚠️  ${s.name}: ${s.error}`));
+    return results;
   } finally {
     isRefreshing = false;
   }
@@ -1360,27 +1398,6 @@ async function refreshOneTracker(
 
 // ─── Serveur ──────────────────────────────────────────────────────────────────
 
-function nextRandomRun(intervalHours: number): string {
-  const next = new Date();
-  // Sous-journalier (6h/12h) : prochaine = maintenant + intervalle + jitter (0-30 min)
-  // pour eviter que tous les trackers tombent pile a la meme minute.
-  if (intervalHours < 24) {
-    const jitterMs = Math.floor(Math.random() * 30 * 60_000);
-    next.setTime(next.getTime() + intervalHours * 3600_000 + jitterMs);
-    return next.toISOString();
-  }
-  // >= 24h : on planifie a un jour futur, a une heure aleatoire (etalement journalier).
-  next.setHours(0, 0, 0, 0);
-  next.setDate(next.getDate() + Math.max(1, Math.round(intervalHours / 24)));
-  next.setHours(
-    Math.floor(Math.random() * 24),
-    Math.floor(Math.random() * 60),
-    Math.floor(Math.random() * 60),
-    0,
-  );
-  return next.toISOString();
-}
-
 function shuffled<T>(items: T[]): T[] {
   const copy = [...items];
   for (let i = copy.length - 1; i > 0; i -= 1) {
@@ -1396,7 +1413,6 @@ function randomSpacingMs(): number {
 
 async function refreshScheduledTracker(
   tracker: TrackerConfig,
-  markSchedule = true,
 ): Promise<void> {
   if (isRefreshing) return;
   if (!proxyAllowsTrackerConnections()) {
@@ -1410,8 +1426,6 @@ async function refreshScheduledTracker(
     return;
   }
 
-  const schedule = getTrackerSchedule(tracker.id);
-  const intervalHours = schedule?.intervalHours ?? 24;
   const fetched = await fetchTrackerBounded(tracker, creds);
   processIncidentStreak(fetched);
   const stat = preserveLastKnownOnTimeout(tracker, fetched);
@@ -1419,63 +1433,163 @@ async function refreshScheduledTracker(
   upsertCachedStat(stat);
   logStatResult(stat);
   if (!stat.stale) saveStatSnapshots([stat]);
-  if (markSchedule) markTrackerScheduleRun(tracker.id, nextRandomRun(intervalHours));
+}
+
+function nextBetaScheduleRun(schedule: BetaScheduleSettings, from = new Date()): string | null {
+  if (!schedule.enabled) return null;
+  const next = new Date(from);
+  next.setSeconds(0, 0);
+
+  if (schedule.mode === 'hours') {
+    next.setTime(from.getTime() + schedule.intervalHours * 3600_000);
+    return next.toISOString();
+  }
+
+  next.setHours(schedule.hour, schedule.minute, 0, 0);
+  if (schedule.mode === 'days') {
+    if (next <= from) next.setDate(next.getDate() + schedule.intervalDays);
+    return next.toISOString();
+  }
+
+  const weekdays = new Set(schedule.weekdays);
+  if (weekdays.size === 0) return null;
+  for (let offset = 0; offset < 8; offset += 1) {
+    const candidate = new Date(next);
+    candidate.setDate(next.getDate() + offset);
+    if (weekdays.has(candidate.getDay()) && candidate > from) return candidate.toISOString();
+  }
+  return null;
+}
+
+async function notifyScheduledResult(
+  settings: BetaSettings,
+  results: TrackerStats[],
+  previousFailures: Set<string>,
+): Promise<void> {
+  const targets = settings.notificationTargets.filter(target => target.enabled && target.url);
+  if (targets.length === 0 || results.length === 0) return;
+
+  const errors = results.filter(result => result.status === 'error');
+  const recovered = results.filter(result => result.status === 'ok' && previousFailures.has(result.id));
+  const prefs = settings.notificationPreferences;
+  let title = '';
+  let lines: string[] = [];
+
+  if (errors.length > 0 && prefs.notifyError) {
+    title = `Tracker Dashboard : ${errors.length} echec(s)`;
+    lines = errors.map(result => `${result.name}: ${result.error || 'erreur inconnue'}`);
+  } else if (recovered.length > 0 && prefs.notifySuccessAfterFailure) {
+    title = 'Tracker Dashboard : retablissement';
+    lines = [`Sites retablis : ${recovered.map(result => result.name).join(', ')}`];
+  } else if (errors.length === 0 && prefs.notifySuccess) {
+    title = 'Tracker Dashboard : cycle termine';
+    lines = ['Tous les trackers configures sont accessibles.'];
+    if (prefs.notifyStats) {
+      lines.push(...results.map(result => `${result.name}: ${Object.entries(result.fields ?? {}).slice(0, 4).map(([key, value]) => `${key}=${String(value)}`).join(', ') || 'OK'}`));
+    }
+  }
+
+  if (!title) return;
+  const deliveries = await Promise.allSettled(targets.map(target => sendBetaNotification(target, lines.join('\n'), title)));
+  deliveries.forEach((delivery, index) => {
+    if (delivery.status === 'rejected') {
+      console.error(`[Beta Notifications] ${targets[index].label}:`, delivery.reason);
+    }
+  });
+}
+
+async function runBetaScheduledCycle(): Promise<void> {
+  if (isRefreshing || pendingScheduledRuns.has('__global__')) return;
+  const settings = loadBetaSettings();
+  if (!settings.schedule.enabled) return;
+
+  const credentials = loadCredentialsFromDb();
+  const overridden = new Set(settings.scheduleOverrides.map(override => override.trackerId));
+  const trackers = loadTrackerConfigsFromDb().filter(tracker => (
+    tracker.enabled !== false && credentials[tracker.id] && !overridden.has(tracker.id)
+  ));
+  const previousFailures = new Set(settings.schedule.lastFailedTrackerIds);
+  pendingScheduledRuns.add('__global__');
+  try {
+    const results = await refresh(trackers);
+    await notifyScheduledResult(settings, results, previousFailures);
+    settings.schedule.lastFailedTrackerIds = results.filter(result => result.status === 'error').map(result => result.id);
+  } finally {
+    const current = loadBetaSettings();
+    current.schedule.lastRunAt = new Date().toISOString();
+    current.schedule.nextRunAt = nextBetaScheduleRun(current.schedule);
+    current.schedule.lastFailedTrackerIds = settings.schedule.lastFailedTrackerIds;
+    setJsonSetting(BETA_SETTINGS_KEY, current);
+    pendingScheduledRuns.delete('__global__');
+  }
+}
+
+async function runBetaTrackerSchedule(override: BetaTrackerScheduleOverride): Promise<void> {
+  if (isRefreshing || pendingScheduledRuns.has(override.trackerId)) return;
+  const settings = loadBetaSettings();
+  const tracker = loadTrackerConfigsFromDb().find(item => item.id === override.trackerId && item.enabled !== false);
+  if (!tracker || !loadCredentialsFromDb()[tracker.id]) return;
+  const previousFailures = new Set(cachedStats.filter(stat => stat.status === 'error').map(stat => stat.id));
+  pendingScheduledRuns.add(tracker.id);
+  try {
+    const result = await refreshOneTracker(tracker);
+    await notifyScheduledResult(settings, [result], previousFailures);
+  } finally {
+    const current = loadBetaSettings();
+    const saved = current.scheduleOverrides.find(item => item.trackerId === override.trackerId);
+    if (saved?.mode === 'interval') {
+      saved.lastRunAt = new Date().toISOString();
+      saved.nextRunAt = new Date(Date.now() + saved.intervalHours * 3600_000).toISOString();
+      setJsonSetting(BETA_SETTINGS_KEY, current);
+    }
+    pendingScheduledRuns.delete(tracker.id);
+  }
 }
 
 function startScheduler(): void {
-  setInterval(() => {
-    const trackers = loadTrackerConfigsFromDb();
-    const now = Date.now();
-    const schedules = listTrackerSchedules().filter(schedule => {
-      if (!schedule.enabled || !schedule.nextRunAt) return false;
-      return new Date(schedule.nextRunAt).getTime() <= now;
-    });
-
-    let delay = 0;
-    for (const schedule of shuffled(schedules)) {
-      if (pendingScheduledRuns.has(schedule.trackerId)) continue;
-      const tracker = trackers.find(t => t.id === schedule.trackerId && t.enabled !== false);
-      if (!tracker) continue;
-      retryStates.delete(tracker.id);
-      pendingScheduledRuns.add(schedule.trackerId);
-      delay += randomSpacingMs();
-      setTimeout(() => {
-        refreshScheduledTracker(tracker)
-          .catch(err => {
-            console.error(`[${tracker.name}] Refresh planifie en erreur :`, err);
-          })
-          .finally(() => {
-            pendingScheduledRuns.delete(schedule.trackerId);
-          });
-      }, delay);
+  const tick = () => {
+    const settings = loadBetaSettings();
+    if (settings.schedule.enabled) {
+      if (!settings.schedule.nextRunAt) {
+        settings.schedule.nextRunAt = nextBetaScheduleRun(settings.schedule);
+        setJsonSetting(BETA_SETTINGS_KEY, settings);
+      } else if (Date.parse(settings.schedule.nextRunAt) <= Date.now()) {
+        void runBetaScheduledCycle().catch(err => console.error('[Beta Scheduler] cycle en erreur :', err));
+      }
     }
 
-    const retries = [...retryStates.entries()]
-      .filter(([, state]) => state.nextRunAt <= now);
+    for (const override of settings.scheduleOverrides) {
+      if (override.mode === 'interval' && override.nextRunAt && Date.parse(override.nextRunAt) <= Date.now()) {
+        void runBetaTrackerSchedule(override).catch(err => {
+          console.error(`[Beta Scheduler] ${override.trackerId} en erreur :`, err);
+        });
+      }
+    }
+
+    const trackers = loadTrackerConfigsFromDb();
+    const now = Date.now();
+    let delay = 0;
+    const retries = [...retryStates.entries()].filter(([, state]) => state.nextRunAt <= now);
     for (const [trackerId] of shuffled(retries)) {
       if (pendingScheduledRuns.has(trackerId)) continue;
       if (getIncident(trackerId)?.acknowledged) {
         retryStates.delete(trackerId);
         continue;
       }
-      const tracker = trackers.find(t => t.id === trackerId && t.enabled !== false);
-      if (!tracker) {
-        retryStates.delete(trackerId);
-        continue;
-      }
+      const tracker = trackers.find(item => item.id === trackerId && item.enabled !== false);
+      if (!tracker) continue;
       pendingScheduledRuns.add(trackerId);
       delay += randomSpacingMs();
       setTimeout(() => {
-        refreshScheduledTracker(tracker, false)
-          .catch(err => {
-            console.error(`[${tracker.name}] Retry timeout en erreur :`, err);
-          })
-          .finally(() => {
-            pendingScheduledRuns.delete(trackerId);
-          });
+        refreshScheduledTracker(tracker)
+          .catch(err => console.error(`[${tracker.name}] Retry timeout en erreur :`, err))
+          .finally(() => pendingScheduledRuns.delete(trackerId));
       }, delay);
     }
-  }, 60_000);
+  };
+
+  tick();
+  setInterval(tick, 60_000);
 }
 
 // ─── Prometheus metrics ───────────────────────────────────────────────────────
@@ -1581,6 +1695,25 @@ function defaultBetaSettings(): BetaSettings {
     qbitClients: [],
     announceMappings: [],
     notificationTargets: [],
+    scheduleOverrides: [],
+    schedule: {
+      enabled: false,
+      mode: 'days',
+      intervalHours: 6,
+      intervalDays: 1,
+      hour: 3,
+      minute: 0,
+      weekdays: [],
+      nextRunAt: null,
+      lastRunAt: null,
+      lastFailedTrackerIds: [],
+    },
+    notificationPreferences: {
+      notifyError: true,
+      notifySuccess: false,
+      notifySuccessAfterFailure: true,
+      notifyStats: false,
+    },
     alertRules: [],
     defaults: {
       ratioEnabled: true,
@@ -1600,6 +1733,12 @@ function loadBetaSettings(): BetaSettings {
     qbitClients: Array.isArray(settings.qbitClients) ? settings.qbitClients : [],
     announceMappings: Array.isArray(settings.announceMappings) ? settings.announceMappings : [],
     notificationTargets: Array.isArray(settings.notificationTargets) ? settings.notificationTargets : [],
+    scheduleOverrides: Array.isArray(settings.scheduleOverrides) ? settings.scheduleOverrides : [],
+    schedule: { ...defaultBetaSettings().schedule, ...(settings.schedule ?? {}) },
+    notificationPreferences: {
+      ...defaultBetaSettings().notificationPreferences,
+      ...(settings.notificationPreferences ?? {}),
+    },
     alertRules: Array.isArray(settings.alertRules) ? settings.alertRules : [],
   };
 }
@@ -1614,6 +1753,7 @@ function sanitizeBetaSettings(settings: BetaSettings): BetaSettings {
     announceMappings: settings.announceMappings,
     notificationTargets: settings.notificationTargets.map(target => ({
       ...target,
+      urls: target.urls?.map(() => '********'),
       url: target.url ? '••••••••' : '',
     })),
   };
@@ -1653,6 +1793,11 @@ function saveBetaSettingsPayload(raw: unknown): BetaSettings {
       type,
       label: String(target.label || (type === 'discord' ? 'Discord' : 'Apprise')).trim().slice(0, 80),
       url: String(url || '').trim(),
+      urls: Array.isArray(target.urls)
+        ? (target.urls.every(value => value === '********')
+          ? (previous?.urls ?? [])
+          : target.urls.map(value => String(value).trim()).filter(Boolean))
+        : (previous?.urls ?? []),
       enabled: target.enabled !== false,
     };
   }).filter(target => target.url) : current.notificationTargets;
@@ -1687,7 +1832,72 @@ function saveBetaSettingsPayload(raw: unknown): BetaSettings {
     siteDownEnabled: body.defaults?.siteDownEnabled !== false,
   };
 
-  const next = { qbitClients, announceMappings, notificationTargets, alertRules, defaults };
+  const rawSchedule = body.schedule ?? current.schedule;
+  const mode: BetaScheduleSettings['mode'] = ['hours', 'weekdays'].includes(String(rawSchedule.mode))
+    ? rawSchedule.mode as BetaScheduleSettings['mode']
+    : 'days';
+  const schedule: BetaScheduleSettings = {
+    enabled: rawSchedule.enabled === true,
+    mode,
+    intervalHours: Math.min(168, Math.max(1, Number(rawSchedule.intervalHours) || 6)),
+    intervalDays: Math.min(30, Math.max(1, Number(rawSchedule.intervalDays) || 1)),
+    hour: Math.min(23, Math.max(0, Number(rawSchedule.hour) || 0)),
+    minute: Math.min(59, Math.max(0, Number(rawSchedule.minute) || 0)),
+    weekdays: Array.isArray(rawSchedule.weekdays)
+      ? [...new Set(rawSchedule.weekdays.map(Number).filter(day => Number.isInteger(day) && day >= 0 && day <= 6))]
+      : [],
+    nextRunAt: current.schedule.nextRunAt,
+    lastRunAt: current.schedule.lastRunAt,
+    lastFailedTrackerIds: Array.isArray(current.schedule.lastFailedTrackerIds)
+      ? current.schedule.lastFailedTrackerIds
+      : [],
+  };
+  const scheduleChanged = schedule.enabled !== current.schedule.enabled
+    || schedule.mode !== current.schedule.mode
+    || schedule.intervalHours !== current.schedule.intervalHours
+    || schedule.intervalDays !== current.schedule.intervalDays
+    || schedule.hour !== current.schedule.hour
+    || schedule.minute !== current.schedule.minute
+    || schedule.weekdays.join(',') !== current.schedule.weekdays.join(',');
+  if (scheduleChanged || (schedule.enabled && !schedule.nextRunAt)) {
+    schedule.nextRunAt = nextBetaScheduleRun(schedule);
+  }
+  if (!schedule.enabled) schedule.nextRunAt = null;
+
+  const previousOverrides = new Map(current.scheduleOverrides.map(override => [override.trackerId, override]));
+  const scheduleOverrides: BetaTrackerScheduleOverride[] = Array.isArray(body.scheduleOverrides)
+    ? body.scheduleOverrides.map(rawOverride => {
+      const override = rawOverride as Partial<BetaTrackerScheduleOverride>;
+      const trackerId = String(override.trackerId || '').trim();
+      const previous = previousOverrides.get(trackerId);
+      const overrideMode: BetaTrackerScheduleOverride['mode'] = ['disabled', 'interval'].includes(String(override.mode))
+        ? override.mode as BetaTrackerScheduleOverride['mode']
+        : 'global';
+      const intervalHours = [6, 12, 24, 48, 168, 504].includes(Number(override.intervalHours))
+        ? Number(override.intervalHours)
+        : 24;
+      const changed = !previous || previous.mode !== overrideMode || previous.intervalHours !== intervalHours;
+      return {
+        trackerId,
+        mode: overrideMode,
+        intervalHours,
+        nextRunAt: overrideMode === 'interval'
+          ? (changed || !previous?.nextRunAt ? new Date(Date.now() + intervalHours * 3600_000).toISOString() : previous.nextRunAt)
+          : null,
+        lastRunAt: previous?.lastRunAt ?? null,
+      };
+    }).filter(override => override.trackerId && override.mode !== 'global')
+    : current.scheduleOverrides;
+
+  const rawPreferences = body.notificationPreferences ?? current.notificationPreferences;
+  const notificationPreferences: BetaNotificationPreferences = {
+    notifyError: rawPreferences.notifyError !== false,
+    notifySuccess: rawPreferences.notifySuccess === true,
+    notifySuccessAfterFailure: rawPreferences.notifySuccessAfterFailure !== false,
+    notifyStats: rawPreferences.notifyStats === true,
+  };
+
+  const next = { qbitClients, announceMappings, notificationTargets, schedule, scheduleOverrides, notificationPreferences, alertRules, defaults };
   setJsonSetting(BETA_SETTINGS_KEY, next);
   return next;
 }
@@ -2133,12 +2343,23 @@ async function refreshBetaQbitStats(settings = loadBetaSettings()): Promise<Qbit
   return results;
 }
 
-async function sendBetaNotification(target: BetaNotificationTarget, message: string): Promise<void> {
+async function sendBetaNotification(
+  target: BetaNotificationTarget,
+  message: string,
+  title = 'Tracker Dashboard Beta',
+): Promise<void> {
   if (target.type === 'discord') {
-    await axios.post(target.url, { content: message }, { timeout: 8000 });
+    const content = `**${title}**\n${message}`.slice(0, 2000);
+    await axios.post(target.url, { content }, { timeout: 8000 });
     return;
   }
-  await axios.post(target.url, { title: 'Tracker Dashboard Beta', body: message }, { timeout: 8000 });
+  if (!target.urls?.length) throw new Error('Aucune URL de destination Apprise configuree');
+  const endpoint = `${target.url.replace(/\/$/, '')}/notify/`;
+  await axios.post(endpoint, {
+    title,
+    body: message,
+    urls: (target.urls ?? []).join('\n'),
+  }, { timeout: 10_000 });
 }
 
 export async function start(): Promise<void> {
@@ -2146,7 +2367,6 @@ export async function start(): Promise<void> {
   importLegacyCredentialsIfNeeded();
   importLegacyTrackersIfNeeded();
   let trackers = normalizeTrackerConfigs();
-  ensureTrackerSchedules(trackers);
 
   const app = express();
   app.use(express.json());
@@ -2277,7 +2497,6 @@ export async function start(): Promise<void> {
 
   app.get('/api/config', (_req, res) => {
     trackers = normalizeTrackerConfigs();
-    const schedules = new Map(listTrackerSchedules().map(s => [s.trackerId, s]));
     const safe = trackers.map(({ id, name, baseUrl, enabled, dashboard, ratioless }) => ({
       id,
       name,
@@ -2285,7 +2504,6 @@ export async function start(): Promise<void> {
       enabled: enabled !== false,
       byteUnit: dashboard?.byteUnit ?? 'binary',
       ratioless: Boolean(ratioless),
-      schedule: schedules.get(id) ?? null,
     }));
     res.json({ trackers: safe });
   });
@@ -2433,7 +2651,6 @@ export async function start(): Promise<void> {
   app.get('/api/tracker-definitions', (_req, res) => {
     importLegacyTrackersIfNeeded();
     trackers = normalizeTrackerConfigs();
-    ensureTrackerSchedules(trackers);
     const configured = new Map(trackers.map(tracker => [tracker.id, tracker]));
     const definitions = listTrackerDefinitionFiles()
       .map(definition => {
@@ -2459,6 +2676,18 @@ export async function start(): Promise<void> {
     res.json({ ok: true });
   });
 
+  app.post('/api/settings/tracker-order', (req, res) => {
+    const order = req.body?.order;
+    if (!Array.isArray(order) || order.some(id => typeof id !== 'string')) {
+      return res.status(400).json({ ok: false, error: 'Ordre des trackers invalide' });
+    }
+
+    const knownIds = new Set(normalizeTrackerConfigs().map(tracker => tracker.id));
+    const ids = [...new Set(order)].filter(id => knownIds.has(id));
+    setJsonSetting(TRACKER_ORDER_KEY, { ids });
+    res.json({ ok: true, order: ids });
+  });
+
   app.post('/api/trackers/:trackerId/enabled', (req, res) => {
     importLegacyTrackersIfNeeded();
     trackers = normalizeTrackerConfigs();
@@ -2469,7 +2698,6 @@ export async function start(): Promise<void> {
     tracker.enabled = Boolean(req.body.enabled);
     saveTrackerConfig(tracker);
     trackers = normalizeTrackerConfigs();
-    ensureTrackerSchedules(trackers);
     res.json({ ok: true, tracker });
   });
 
@@ -2481,7 +2709,6 @@ export async function start(): Promise<void> {
       }
       saveTrackerConfig(config);
       trackers = loadTrackerConfigsFromDb();
-      ensureTrackerSchedules(trackers);
       res.json({ ok: true, tracker: config });
     } catch (err: unknown) {
       res.status(400).json({
@@ -2504,10 +2731,6 @@ export async function start(): Promise<void> {
       lastRefresh = new Date().toISOString();
     }
     res.json({ ok: true, enabled });
-  });
-
-  app.get('/api/schedules', (_req, res) => {
-    res.json({ schedules: listTrackerSchedules() });
   });
 
   app.get('/api/credentials', (_req, res) => {
@@ -2565,27 +2788,6 @@ export async function start(): Promise<void> {
     deleteTrackerCredentials(tracker.id);
     invalidateSession(tracker.id);
     res.json({ ok: true });
-  });
-
-  app.post('/api/schedules/:trackerId', (req, res) => {
-    trackers = loadTrackerConfigsFromDb();
-    const tracker = trackers.find(t => t.id === req.params.trackerId);
-    if (!tracker) return res.status(404).json({ ok: false, error: 'Tracker introuvable' });
-
-    const intervalHours = Number(req.body.intervalHours);
-    const allowed = [6, 12, 24, 48, 168, 504];
-    if (!allowed.includes(intervalHours)) {
-      return res.status(400).json({ ok: false, error: 'Intervalle invalide' });
-    }
-
-    const enabled = Boolean(req.body.enabled);
-    saveTrackerSchedule(
-      tracker.id,
-      enabled,
-      intervalHours,
-      enabled ? nextRandomRun(intervalHours) : null,
-    );
-    res.json({ ok: true, schedule: getTrackerSchedule(tracker.id) });
   });
 
   app.get('/api/settings/proxy', (_req, res) => {
