@@ -11,9 +11,9 @@
     "axios": "^1.16.1",
     "cheerio": "^1.0.0",
     "express": "^5.2.1",
-    "https-proxy-agent": "^9.0.0",
+    "https-proxy-agent": "^9.1.0",
     "playwright": "^1.60.0",
-    "socks-proxy-agent": "^10.0.0",
+    "socks-proxy-agent": "^10.1.0",
     "ssh2": "^1.17.0",
     "top-user-agents": "^2.1.115",
     "tough-cookie": "^6.0.1"
