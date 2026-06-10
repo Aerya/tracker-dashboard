@@ -2230,6 +2230,7 @@
     notificationTargets: [],
     notificationPreferences: {},
     schedule: {},
+    scheduleOverrides: [],
     alertRules: [],
     defaults: {},
   };
@@ -3084,6 +3085,19 @@
         <div class="beta-field"><label>Jours</label><div style="display:flex;gap:8px;flex-wrap:wrap">${dayLabels.map((label, day) => `<label><input type="checkbox" data-beta-weekday="${day}" ${weekdays.has(day) ? 'checked' : ''}> ${label}</label>`).join('')}</div></div>
       </div>
       <p class="beta-note">Prochaine exécution : ${schedule.nextRunAt ? escapeHtml(new Date(schedule.nextRunAt).toLocaleString('fr-FR')) : 'non planifiée'}${schedule.lastRunAt ? ` · Dernière : ${escapeHtml(new Date(schedule.lastRunAt).toLocaleString('fr-FR'))}` : ''}</p>
+      <h4 style="margin:16px 0 8px">Fréquences individuelles</h4>
+      <p class="beta-note" style="margin-bottom:8px">Une valeur individuelle remplace la planification globale pour le tracker concerné.</p>
+      <div id="beta-schedule-overrides">
+        ${trackerConfig.filter(tracker => tracker.enabled !== false).map(tracker => {
+          const override = (betaSettings.scheduleOverrides || []).find(item => item.trackerId === tracker.id) || { mode: 'global', intervalHours: 24 };
+          const value = override.mode === 'interval' ? String(override.intervalHours) : override.mode;
+          const next = override.nextRunAt ? ` · prochaine ${escapeHtml(new Date(override.nextRunAt).toLocaleString('fr-FR'))}` : '';
+          return `<div class="beta-form-row" data-beta-schedule-override="${escapeHtml(tracker.id)}" style="grid-template-columns:2fr 1fr">
+            <div class="beta-field"><label>${escapeHtml(tracker.name)}</label><span class="beta-note">${value === 'global' ? 'Suit le calendrier global' : value === 'disabled' ? 'Login planifié désactivé' : `Toutes les ${value}h${next}`}</span></div>
+            <div class="beta-field"><label>Fréquence</label><select data-field="scheduleMode"><option value="global" ${value === 'global' ? 'selected' : ''}>Global</option><option value="disabled" ${value === 'disabled' ? 'selected' : ''}>Désactivé</option>${[6,12,24,48,168,504].map(hours => `<option value="${hours}" ${value === String(hours) ? 'selected' : ''}>${hours < 168 ? `${hours}h` : `${hours / 24}j`}</option>`).join('')}</select></div>
+          </div>`;
+        }).join('') || '<p class="beta-note">Aucun tracker actif.</p>'}
+      </div>
     `;
     updateBetaScheduleMode();
   }
@@ -3223,12 +3237,21 @@
       notifySuccessAfterFailure: document.getElementById('beta-notify-recovery')?.checked !== false,
       notifyStats: document.getElementById('beta-notify-stats')?.checked === true,
     };
+    const scheduleOverrides = Array.from(document.querySelectorAll('[data-beta-schedule-override]')).map(row => {
+      const value = row.querySelector('[data-field="scheduleMode"]').value;
+      return {
+        trackerId: row.dataset.betaScheduleOverride,
+        mode: value === 'global' || value === 'disabled' ? value : 'interval',
+        intervalHours: Number(value) || 24,
+      };
+    }).filter(override => override.mode !== 'global');
     return {
       ...betaSettings,
       qbitClients,
       announceMappings,
       notificationTargets,
       schedule,
+      scheduleOverrides,
       notificationPreferences,
       alertRules,
     };
