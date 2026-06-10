@@ -1,0 +1,44 @@
+name: Publish Legacy Migration Notice
+
+on:
+  workflow_dispatch:
+
+jobs:
+  publish-legacy-image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.3.1
+
+      - name: Log in to the personal GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: Aerya
+          password: ${{ secrets.AERYA_GHCR_TOKEN }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build and publish the legacy migration image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/aerya/tracker-dashboard:latest
+            ghcr.io/aerya/tracker-dashboard:migration-notice
+          build-args: |
+            APP_IMAGE_SOURCE=ghcr.io/aerya/tracker-dashboard
+            APP_IMAGE_VERSION=migration-notice
+            APP_IMAGE_REVISION=${{ github.sha }}
+            APP_IMAGE_REF=${{ github.ref_name }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

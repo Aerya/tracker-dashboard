@@ -1,0 +1,56 @@
+name: Discord - Zup activity
+
+on:
+  push:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+
+jobs:
+  notify-discord:
+    if: github.actor == 'Gusdezup'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Build notification
+        id: message
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REPOSITORY: ${{ github.repository }}
+          ACTOR: ${{ github.actor }}
+          REF_NAME: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          SERVER_URL: ${{ github.server_url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          if [ "$EVENT_NAME" = "push" ]; then
+            short_sha="${SHA:0:7}"
+            message="Zup a pousse une mise a jour sur **${REPOSITORY}**\nBranche : \`${REF_NAME}\`\nCommit : [\`${short_sha}\`](${SERVER_URL}/${REPOSITORY}/commit/${SHA})"
+          else
+            message="Zup a mis a jour la PR **#${PR_NUMBER} - ${PR_TITLE}** sur **${REPOSITORY}**\n${PR_URL}"
+          fi
+
+          {
+            echo 'content<<EOF'
+            echo -e "$message"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Send Discord notification
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          MESSAGE: ${{ steps.message.outputs.content }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "DISCORD_WEBHOOK_URL is not configured."
+            exit 1
+          fi
+
+          payload=$(jq -n --arg content "$MESSAGE" '{content: $content}')
+          curl --fail-with-body \
+            --header 'Content-Type: application/json' \
+            --data "$payload" \
+            "$DISCORD_WEBHOOK_URL"
