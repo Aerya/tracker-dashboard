@@ -1292,6 +1292,12 @@
       font-size: 13px;
     }
     .definition-row:first-child { border-top: 0; }
+    .definition-separator {
+      height: 1px;
+      background: var(--accent);
+      opacity: 0.25;
+      margin: 4px 0;
+    }
     .definition-info {
       min-width: 0;
     }
@@ -3675,7 +3681,7 @@
   let trackerCount = 4; // mise à jour dès que /api/config répond
   let trackerConfig = [];
   let presentationMode = false;
-  let trackerDefinitionsSort = 'name';
+  let trackerDefinitionsSort = 'configured';
 
   function escapeHtml(value) {
     return String(value ?? '')
@@ -3726,9 +3732,15 @@
       const sorted = [...definitions];
       if (trackerDefinitionsSort === 'configured') {
         sorted.sort((a, b) => {
-          if (a.enabled !== b.enabled) return b.enabled - a.enabled;
-          return a.name.localeCompare(b.name);
+          const aCred = credentials.get(a.id);
+          const bCred = credentials.get(b.id);
+          const aOk = Boolean(aCred?.hasPassword || aCred?.hasCookie);
+          const bOk = Boolean(bCred?.hasPassword || bCred?.hasCookie);
+          if (aOk !== bOk) return bOk - aOk;
+          return a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' });
         });
+      } else {
+        sorted.sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
       }
 
       const notice = newDefinitions.length
@@ -3738,19 +3750,27 @@
           </div>`
         : '';
 
+      // Ajouter un séparateur entre configurés et non configurés
+      let prevConfigured = null;
       list.innerHTML = `
         ${notice}
         <div class="definition-list">
-          ${sorted.map(definition => {
+          ${sorted.map((definition, idx) => {
             const isNew = newDefinitions.some(item => item.id === definition.id);
             const isEnabled = Boolean(definition.enabled);
             const credential = credentials.get(definition.id) || {};
+            const isConfigured = Boolean(credential.hasPassword || credential.hasCookie);
+            const separator = (idx > 0 && prevConfigured !== null && prevConfigured !== isConfigured)
+              ? '<div class="definition-separator"></div>'
+              : '';
+            prevConfigured = isConfigured;
             const safeId = escapeHtml(definition.id);
             const cookieOnly = Boolean(credential.cookieOnly);
             const statusBadge = cookieOnly
               ? `<span class="credential-badge ${credential.hasCookie ? 'credential-ok' : 'credential-missing'}">${credential.hasCookie ? 'Cookie OK' : 'Cookie requis'}</span>`
               : `<span class="credential-badge ${credential.hasPassword ? 'credential-ok' : 'credential-missing'}">${credential.hasPassword ? 'Configuré' : 'Manquant'}</span>`;
             return `
+              ${separator}
               <div class="definition-row" id="tracker-def-${escapeHtml(definition.id)}">
                 <div class="definition-info">
                   <strong>${trackerLogo(definition.id)}${escapeHtml(definition.name)}${cookieOnly ? ' <span class="definition-badge definition-badge-cookie" title="Login automatique désactivé : ce tracker nécessite un cookie de session (CAPTCHA/anti-bot). Renseigne-le dans Options avancées.">Cookie uniquement</span>' : ''}</strong>
