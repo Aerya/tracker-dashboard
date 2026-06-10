@@ -1,6 +1,6 @@
 services:
   tracker-dashboard:
-    image: ghcr.io/aerya/tracker-dashboard:latest
+    image: ghcr.io/Tracker-Dashboard/tracker-dashboard:latest
     container_name: tracker-dashboard
     restart: always
     ports:
