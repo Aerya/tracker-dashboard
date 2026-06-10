@@ -56,6 +56,7 @@ const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const SESSION_COOKIE = 'tracker_dashboard_session';
 const TRACKER_DEFINITIONS_SEEN_KEY = 'trackerDefinitionsSeen';
 const PRESENTATION_MODE_KEY = 'presentationMode';
+const TRACKER_ORDER_KEY = 'trackerOrder';
 
 function readAppVersion(): string {
   try {
@@ -1099,9 +1100,16 @@ function upsertCachedStat(stat: TrackerStats): void {
 
 function visibleStats(trackers: TrackerConfig[]): TrackerStats[] {
   const cached = new Map(cachedStats.map(stat => [stat.id, stat]));
+  const savedOrder = getJsonSetting(TRACKER_ORDER_KEY, { ids: [] as string[] });
+  const order = new Map(
+    (Array.isArray(savedOrder.ids) ? savedOrder.ids : [])
+      .filter((id): id is string => typeof id === 'string')
+      .map((id, index) => [id, index]),
+  );
+
   return trackers
     .filter(tracker => tracker.enabled !== false)
-    .map(tracker => cached.get(tracker.id) ?? ({
+    .map<TrackerStats>(tracker => cached.get(tracker.id) ?? ({
       id:          tracker.id,
       name:        tracker.name,
       trackerUrl:  tracker.baseUrl,
@@ -1110,7 +1118,9 @@ function visibleStats(trackers: TrackerConfig[]): TrackerStats[] {
       lastUpdated: new Date().toISOString(),
       byteUnit:    tracker.dashboard?.byteUnit ?? 'binary',
       fields:      {},
-    }));
+    }))
+    .sort((a, b) => (order.get(a.id) ?? Number.MAX_SAFE_INTEGER)
+      - (order.get(b.id) ?? Number.MAX_SAFE_INTEGER));
 }
 
 function logStatResult(stat: TrackerStats): void {
@@ -2664,6 +2674,18 @@ export async function start(): Promise<void> {
     const ids = listTrackerDefinitionFiles().map(definition => definition.id);
     setJsonSetting(TRACKER_DEFINITIONS_SEEN_KEY, { ids });
     res.json({ ok: true });
+  });
+
+  app.post('/api/settings/tracker-order', (req, res) => {
+    const order = req.body?.order;
+    if (!Array.isArray(order) || order.some(id => typeof id !== 'string')) {
+      return res.status(400).json({ ok: false, error: 'Ordre des trackers invalide' });
+    }
+
+    const knownIds = new Set(normalizeTrackerConfigs().map(tracker => tracker.id));
+    const ids = [...new Set(order)].filter(id => knownIds.has(id));
+    setJsonSetting(TRACKER_ORDER_KEY, { ids });
+    res.json({ ok: true, order: ids });
   });
 
   app.post('/api/trackers/:trackerId/enabled', (req, res) => {
