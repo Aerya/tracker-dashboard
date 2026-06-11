@@ -3629,13 +3629,32 @@
     const sourceId = dragSourceTrackerId;
     if (!sourceId || sourceId === targetId) return;
 
-    const fromIndex = latestSortedStats.findIndex(s => s.id === sourceId);
-    const toIndex = latestSortedStats.findIndex(s => s.id === targetId);
+    // Travailler uniquement sur les stats affichées
+    const displayed = dashboardStats();
+    const fromIndex = displayed.findIndex(s => s.id === sourceId);
+    const toIndex = displayed.findIndex(s => s.id === targetId);
     if (fromIndex === -1 || toIndex === -1) return;
 
-    const [moved] = latestSortedStats.splice(fromIndex, 1);
-    latestSortedStats.splice(toIndex, 0, moved);
-    renderGrid();
+    // Réordonner les stats affichées
+    const [moved] = displayed.splice(fromIndex, 1);
+    displayed.splice(toIndex, 0, moved);
+
+    // Reconstruire latestSortedStats sans toucher aux non-affichés
+    const displayedIds = new Set(displayed.map(s => s.id));
+    const rest = latestSortedStats.filter(s => !displayedIds.has(s.id));
+    latestSortedStats = [...displayed, ...rest];
+
+    // Déplacer le nœud DOM directement sans re-render
+    const grid = getActiveGrid();
+    const sourceEl = grid.querySelector(`[data-tracker-id="${sourceId}"]`);
+    const targetEl = grid.querySelector(`[data-tracker-id="${targetId}"]`);
+    if (sourceEl && targetEl) {
+      const allCards = [...grid.children];
+      const si = allCards.indexOf(sourceEl);
+      const ti = allCards.indexOf(targetEl);
+      if (si < ti) targetEl.after(sourceEl);
+      else targetEl.before(sourceEl);
+    }
 
     try {
       await fetch('/api/settings/tracker-order', {
