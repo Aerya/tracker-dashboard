@@ -687,8 +687,9 @@ export async function fetchTracker(
   // d'echec/binaire absent -> null, et la voie axios prouvee prend le relais.
   const attemptHttpViaCurl = async (): Promise<TrackerStats | null> => {
     if (!fastFetchEnabled()) return null;
-    if (!(await CurlSession.available())) return null;
     const cfg = tracker.login;
+    if (cfg.cookieOnly) return null;
+    if (!(await CurlSession.available(tracker.curlBinary))) return null;
     const base = tracker.baseUrl;
     const cvars: Record<string, string> = { username: creds.username, password: creds.password };
     const totpSecret = getTrackerTotpSecret(tracker.id);
@@ -700,7 +701,7 @@ export async function fetchTracker(
       }
     }
 
-    const sess = new CurlSession(tracker.id, (tracker as any).curlBinary);
+    const sess = new CurlSession(tracker.id, tracker.curlBinary);
     try {
       let referer = resolveUrl(base, cfg.url);
       let hiddenInputs: Record<string, string> = {};
