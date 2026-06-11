@@ -14,9 +14,9 @@ import { getJsonSetting } from './db.js';
 
 const STATUS_MARKER = '\n__CURL_HTTP_STATUS__:';
 
-function binaryName(): string {
+function binaryName(override?: string): string {
   // Wrapper par defaut fourni par curl-impersonate (positionne ciphers + en-tetes).
-  return process.env.CURL_IMPERSONATE_BIN || 'curl_chrome116';
+  return override || process.env.CURL_IMPERSONATE_BIN || 'curl_chrome116';
 }
 
 /** Fast-path actif ? (reglage global, defaut: actif) */
@@ -24,19 +24,22 @@ export function fastFetchEnabled(): boolean {
   return getJsonSetting('fast_fetch', true as boolean) !== false;
 }
 
-let availablePromise: Promise<boolean> | null = null;
-function checkAvailable(): Promise<boolean> {
-  if (!availablePromise) {
-    availablePromise = new Promise(resolve => {
-      execFile(binaryName(), ['--version'], { timeout: 5000 }, err => resolve(!err));
+const availablePromises = new Map<string, Promise<boolean>>();
+function checkAvailable(binary?: string): Promise<boolean> {
+  const bin = binaryName(binary);
+  let promise = availablePromises.get(bin);
+  if (!promise) {
+    promise = new Promise(resolve => {
+      execFile(bin, ['--version'], { timeout: 5000 }, err => resolve(!err));
     });
+    availablePromises.set(bin, promise);
   }
-  return availablePromise;
+  return promise;
 }
 
 /** Reinitialise le cache de disponibilite (ex: apres changement d'env). */
 export function resetCurlAvailability(): void {
-  availablePromise = null;
+  availablePromises.clear();
 }
 
 function curlProxyArg(trackerId: string): string | null {
@@ -67,10 +70,14 @@ export interface CurlGetOptions {
  */
 // Execute curl-impersonate avec une liste d'arguments deja construite (sans le
 // marqueur de status ni le binaire). Renvoie { status, body } ou null si echec.
-function execCurl(args: string[], timeoutMs: number): Promise<{ status: number; body: string } | null> {
+function execCurl(
+  args: string[],
+  timeoutMs: number,
+  binary?: string,
+): Promise<{ status: number; body: string } | null> {
   return new Promise(resolve => {
     execFile(
-      binaryName(),
+      binaryName(binary),
       args,
       { timeout: timeoutMs + 2_000, maxBuffer: 20 * 1024 * 1024, encoding: 'utf8' },
       (err, stdout) => {
@@ -121,18 +128,20 @@ export interface CurlRequestOptions {
 export class CurlSession {
   private readonly trackerId: string;
   private readonly jarPath: string;
+  private readonly binary?: string;
 
-  constructor(trackerId: string) {
+  constructor(trackerId: string, binary?: string) {
     this.trackerId = trackerId;
+    this.binary = binary;
     this.jarPath = path.join(os.tmpdir(), `td-curl-${trackerId}-${process.pid}-${Date.now()}.jar`);
   }
 
-  static async available(): Promise<boolean> {
-    return checkAvailable();
+  static async available(binary?: string): Promise<boolean> {
+    return checkAvailable(binary);
   }
 
   async request(url: string, opts: CurlRequestOptions = {}): Promise<{ status: number; body: string } | null> {
-    if (!(await checkAvailable())) return null;
+    if (!(await checkAvailable(this.binary))) return null;
     const timeoutMs = opts.timeoutMs ?? 30_000;
     const args = [
       '-sS', '-L', '--max-time', String(Math.ceil(timeoutMs / 1000)),
@@ -145,7 +154,7 @@ export class CurlSession {
     const proxy = curlProxyArg(this.trackerId);
     if (proxy) args.push('--proxy', proxy);
     args.push(url);
-    return execCurl(args, timeoutMs);
+    return execCurl(args, timeoutMs, this.binary);
   }
 
   dispose(): void {
