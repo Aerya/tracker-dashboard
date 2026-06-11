@@ -63,6 +63,8 @@ export interface TrackerConfig {
   enabled?: boolean;
   /** Tracker sans systeme de ratio (HD-Only, Nostradamus, etc.) */
   ratioless?: boolean;
+  /** Profil curl-impersonate autorise pour le login HTTP complet. */
+  curlBinary?: 'curl_firefox133' | 'curl_firefox135';
   login: LoginConfig;
   fetch: FetchStep;
   dashboard?: {

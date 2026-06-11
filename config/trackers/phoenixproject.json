@@ -3,6 +3,7 @@
   "name": "Phoenix Project",
   "baseUrl": "https://phoenixproject.app",
   "enabled": false,
+  "curlBinary": "curl_firefox135",
   "login": {
     "url": "login.php",
     "method": "POST",
@@ -11,8 +12,7 @@
       "username": "{{username}}",
       "password": "{{password}}"
     },
-    "failurePatterns": ["login.php", "This is a mirage"],
-    "cookieOnly": true
+    "failurePatterns": ["login.php", "This is a mirage"]
   },
   "fetch": {
     "url": "index.php",

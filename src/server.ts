@@ -784,6 +784,16 @@ function normalizeTrackerConfigs(): TrackerConfig[] {
       ];
       changed = true;
     }
+    if (tracker.id === 'phoenixproject') {
+      if (tracker.curlBinary !== 'curl_firefox135') {
+        tracker.curlBinary = 'curl_firefox135';
+        changed = true;
+      }
+      if (tracker.login.cookieOnly) {
+        tracker.login.cookieOnly = false;
+        changed = true;
+      }
+    }
     if (tracker.id === 'torr9') {
       if (tracker.login.url !== 'login?redirect=%2Fstats') {
         tracker.login.url = 'login?redirect=%2Fstats';
