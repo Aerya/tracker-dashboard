@@ -61,6 +61,7 @@ const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const SESSION_COOKIE = 'tracker_dashboard_session';
 const TRACKER_DEFINITIONS_SEEN_KEY = 'trackerDefinitionsSeen';
 const PRESENTATION_MODE_KEY = 'presentationMode';
+const TRACKER_ORDER_KEY = 'trackerOrder';
 
 function readAppVersion(): string {
   try {
@@ -381,26 +382,6 @@ const knownTrackerFields: Record<string, {
       },
     },
   },
-  nexum: {
-    fetchUrl: 'activity',
-    mode: 'browser',
-    byteUnit: 'binary',
-    ratioless: true,
-    fields: {
-      uploadedBytes: {
-        regex: 'user-stat-up[^>]*>[\\s\\S]*?(?<value>\\d[\\d\\s.,]*\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))\\s*</span>',
-        transform: 'bytes',
-      },
-      seedTime: {
-        regex: 'user-stat-seed24[\\s\\S]{0,120}?</i>\\s*(?<value>[^<]+?)\\s*</span>',
-        transform: 'string',
-      },
-      dlQuota: {
-        regex: 'user-stat-dlday[\\s\\S]{0,160}?</i>\\s*(?<value>[^<]+?)\\s*</span>',
-        transform: 'string',
-      },
-    },
-  },
   yggreborn: {
     fetchUrl: 'account/',
     mode: 'browser',
@@ -469,44 +450,6 @@ const knownTrackerFields: Record<string, {
       },
       seedBonus: {
         regex: 'Crazy Bonus\\s*<a[^>]*>\\s*(?<value>[\\d\\s.,]+)',
-        transform: 'string',
-      },
-    },
-  },
-  c411: {
-    fetchUrl: 'user/profile',
-    mode: 'browser',
-    byteUnit: 'decimal',
-    fields: {
-      uploadedBytes: {
-        regex: '(?<value>\\d[\\d\\s.,]*\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))[\\s\\S]{0,260}?Envoy',
-        transform: 'bytes',
-      },
-      downloadedBytes: {
-        regex: '(?<value>\\d[\\d\\s.,]*\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))[\\s\\S]{0,260}?T(?:élé|ele|[ée]l[ée])charg',
-        transform: 'bytes',
-      },
-    },
-  },
-  torr9: {
-    fetchUrl: 'stats',
-    mode: 'browser',
-    byteUnit: 'decimal',
-    fields: {
-      ratio: {
-        regex: 'Ratio[\\s\\S]{0,320}?>\\s*(?<value>\\d[\\d\\s.,]*)\\s*<',
-        transform: 'number',
-      },
-      uploadedBytes: {
-        regex: 'Upload total[\\s\\S]{0,420}?>\\s*(?<value>\\d[\\d\\s.,]*\\s*(?:[KMGTPE](?:i?B|io|o)))\\s*<',
-        transform: 'bytes',
-      },
-      downloadedBytes: {
-        regex: 'Download total[\\s\\S]{0,420}?>\\s*(?<value>\\d[\\d\\s.,]*\\s*(?:[KMGTPE](?:i?B|io|o)))\\s*<',
-        transform: 'bytes',
-      },
-      seedBonus: {
-        regex: 'Score\\s*(?<value>[\\d\\s.,]+)',
         transform: 'string',
       },
     },
@@ -752,21 +695,6 @@ function normalizeTrackerConfigs(): TrackerConfig[] {
           'href="/login"',
           'aria-label="Connexion"',
           'Inscription',
-        ]),
-      ];
-      changed = true;
-    }
-    if (tracker.id === 'torr9') {
-      if (tracker.login.url !== 'login?redirect=%2Fstats') {
-        tracker.login.url = 'login?redirect=%2Fstats';
-      }
-      tracker.login.failurePatterns = [
-        ...new Set([
-          ...tracker.login.failurePatterns,
-          'Bon Retour',
-          'Nom d\'utilisateur ou adresse mail',
-          'type="password"',
-          'name="password"',
         ]),
       ];
       changed = true;
@@ -1070,6 +998,26 @@ function upsertCachedStat(stat: TrackerStats): void {
   lastRefresh = new Date().toISOString();
 }
 
+// Applique l'ordre de tuiles personnalise par l'utilisateur (drag & drop sur le
+// dashboard). Les trackers absents de l'ordre enregistre conservent leur position
+// relative et sont places apres ceux presents dans l'ordre.
+function applyTrackerOrder(stats: TrackerStats[]): TrackerStats[] {
+  const order = getJsonSetting<string[]>(TRACKER_ORDER_KEY, []);
+  if (!order.length) return stats;
+  const rank = new Map(order.map((id, i) => [id, i]));
+  return stats
+    .map((stat, index) => ({ stat, index }))
+    .sort((a, b) => {
+      const ra = rank.get(a.stat.id);
+      const rb = rank.get(b.stat.id);
+      if (ra !== undefined && rb !== undefined) return ra - rb;
+      if (ra !== undefined) return -1;
+      if (rb !== undefined) return 1;
+      return a.index - b.index;
+    })
+    .map(({ stat }) => stat);
+}
+
 function visibleStats(trackers: TrackerConfig[]): TrackerStats[] {
   const cached = new Map(cachedStats.map(stat => [stat.id, stat]));
   return trackers
@@ -1099,6 +1047,7 @@ function logStatResult(stat: TrackerStats): void {
     return;
   }
 
+  if (stat.error?.startsWith('Credentials manquants')) return;
   console.log(`  [${stat.name}] Stats ERREUR - ${stat.error ?? 'Erreur inconnue'}`);
 }
 
@@ -1308,7 +1257,7 @@ async function refresh(trackers: TrackerConfig[]): Promise<void> {
     const ok  = results.filter(s => s.status === 'ok').length;
     const err = results.filter(s => s.status === 'error').length;
     console.log(`  ✅ ${ok} ok  ❌ ${err} erreur(s)`);
-    results.filter(s => s.status === 'error')
+    results.filter(s => s.status === 'error' && !s.error?.startsWith('Credentials manquants'))
       .forEach(s => console.log(`  ⚠️  ${s.name}: ${s.error}`));
   } finally {
     isRefreshing = false;
@@ -2241,14 +2190,14 @@ export async function start(): Promise<void> {
   app.get('/api/stats', (_req, res) => {
     if (isPresentationMode()) {
       return res.json({
-        stats: fakeStatsForPresentation(),
+        stats: applyTrackerOrder(fakeStatsForPresentation()),
         lastRefresh: new Date().toISOString(),
         isRefreshing: false,
         presentationMode: true,
       });
     }
     trackers = normalizeTrackerConfigs();
-    res.json({ stats: visibleStats(trackers), lastRefresh, isRefreshing });
+    res.json({ stats: applyTrackerOrder(visibleStats(trackers)), lastRefresh, isRefreshing });
   });
 
   app.post('/api/refresh', (_req, res) => {
@@ -2504,6 +2453,19 @@ export async function start(): Promise<void> {
       lastRefresh = new Date().toISOString();
     }
     res.json({ ok: true, enabled });
+  });
+
+  // ── Ordre des tuiles (drag & drop dashboard) ───────────────────────────────
+  app.get('/api/settings/tracker-order', (_req, res) => {
+    res.json({ order: getJsonSetting<string[]>(TRACKER_ORDER_KEY, []) });
+  });
+
+  app.post('/api/settings/tracker-order', (req, res) => {
+    const order = Array.isArray(req.body?.order)
+      ? req.body.order.filter((id: unknown): id is string => typeof id === 'string')
+      : [];
+    setJsonSetting(TRACKER_ORDER_KEY, order);
+    res.json({ ok: true, order });
   });
 
   app.get('/api/schedules', (_req, res) => {

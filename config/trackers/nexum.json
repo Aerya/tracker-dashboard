@@ -8,9 +8,20 @@
     "method": "POST",
     "contentType": "form",
     "body": {
+      "_token": "{{_token}}",
       "username": "{{username}}",
       "email": "{{username}}",
       "password": "{{password}}"
+    },
+    "preStep": {
+      "url": "login",
+      "extract": {
+        "_token": { "regex": "name=\"_token\"\\s+value=\"(?<value>[^\"]+)\"" }
+      }
+    },
+    "otpStep": {
+      "urlContains": "login/2fa",
+      "field": "code"
     },
     "failurePatterns": [
       "type=\"password\"",
@@ -20,7 +31,7 @@
   "ratioless": true,
   "fetch": {
     "url": "activity",
-    "mode": "browser",
+    "mode": "http",
     "responseType": "html",
     "fields": {
       "uploadedBytes": { "regex": "user-stat-up[^>]*>[\\s\\S]*?(?<value>\\d[\\d\\s.,]*\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))\\s*</span>", "transform": "bytes" },
