@@ -10,6 +10,12 @@ export interface PreLoginStep {
 
 export interface LoginConfig {
   url: string;
+  /**
+   * Cible du POST de login si différente de `url` (ex: page HTML de login vs
+   * endpoint API). Si absent, on poste sur `url`. `url` reste utilisé comme
+   * Referer/CSRF.
+   */
+  postUrl?: string;
   method?: 'POST' | 'GET';
   /** 'form' = application/x-www-form-urlencoded  |  'json' = application/json */
   contentType?: 'form' | 'json';
@@ -19,6 +25,49 @@ export interface LoginConfig {
    * et {{nomClé}} pour les valeurs extraites dans preStep (ex: {{_csrf}}).
    */
   body: Record<string, string>;
+  /**
+   * GET préliminaires (best-effort) avant le login, pour initialiser des cookies
+   * (anti-bot, session). Ex: la page de login HTML, un endpoint public.
+   */
+  preVisitUrls?: string[];
+  /**
+   * Login API JSON en 2 étapes (ex: C411) : si la réponse JSON du login
+   * contient `triggerField` à une valeur truthy, on poste le code TOTP en JSON
+   * vers `url` dans le champ `codeField`.
+   */
+  mfaStep?: {
+    url: string;
+    triggerField: string;
+    codeField: string;
+    /** Nom du champ indiquant le succès dans la réponse JSON du POST MFA (défaut: "success"). */
+    successField?: string;
+  };
+  /**
+   * Pour les logins API JSON (contentType: 'json') : nom du champ dans la
+   * réponse JSON du fetch (`fetch.url`) indiquant que la session est
+   * authentifiée. Si absent ou falsy, le login est considéré en échec.
+   */
+  successField?: string;
+  /**
+   * Nom du header HTTP à envoyer (sur le POST de login et l'éventuel POST MFA)
+   * contenant la valeur extraite par `preStep` dans la variable `_csrf`
+   * (ex: "csrf-token" pour C411, extrait de <meta name="csrf-token" content="...">).
+   */
+  csrfHeader?: string;
+  /**
+   * Nom du champ dans la réponse JSON de login (après mfaStep le cas échéant)
+   * contenant un jeton à injecter en "Authorization: Bearer <jeton>" pour le fetch.
+   */
+  tokenField?: string;
+  /**
+   * 2FA en 2 étapes via une page dédiée (ex: Nexum /login/2fa). Si l'URL
+   * atteinte après le POST de login contient `urlContains`, on injecte le code
+   * TOTP dans le champ `field` (+ token CSRF si présent) et on repost cette page.
+   */
+  otpStep?: {
+    urlContains: string;
+    field: string;
+  };
   /**
    * Nom du champ de formulaire recevant le code 2FA (TOTP).
    * Si défini et qu'un secret TOTP est enregistré pour le tracker, le code

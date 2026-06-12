@@ -117,6 +117,8 @@ export interface CurlRequestOptions {
   /** Corps brut (deja encode : form-urlencoded ou JSON selon Content-Type). */
   data?: string;
   timeoutMs?: number;
+  /** 0 = ne pas suivre les redirections (equivalent maxRedirects:0 axios). Par defaut, suit (-L). */
+  maxRedirects?: number;
 }
 
 /**
@@ -144,10 +146,11 @@ export class CurlSession {
     if (!(await checkAvailable(this.binary))) return null;
     const timeoutMs = opts.timeoutMs ?? 30_000;
     const args = [
-      '-sS', '-L', '--max-time', String(Math.ceil(timeoutMs / 1000)),
+      '-sS', '--max-time', String(Math.ceil(timeoutMs / 1000)),
       '-c', this.jarPath, '-b', this.jarPath,
       '-w', `${STATUS_MARKER}%{http_code}`,
     ];
+    if (opts.maxRedirects !== 0) args.push('-L');
     if (opts.method === 'POST') args.push('-X', 'POST');
     for (const [k, v] of Object.entries(opts.headers ?? {})) args.push('-H', `${k}: ${v}`);
     if (opts.data != null) args.push('--data-raw', opts.data);

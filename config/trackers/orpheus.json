@@ -1,0 +1,39 @@
+{
+  "id": "orpheus",
+  "name": "Orpheus",
+  "baseUrl": "https://orpheus.network",
+  "enabled": true,
+  "login": {
+    "url": "login.php",
+    "method": "POST",
+    "contentType": "form",
+    "preStep": {
+      "url": "login.php",
+      "extract": {},
+      "includeHiddenInputs": true
+    },
+    "body": {
+      "username": "{{username}}",
+      "password": "{{password}}",
+      "keeplogged": "1",
+      "login": "Log in"
+    },
+    "otpField": "mfa",
+    "failurePatterns": [
+      "type=\"password\"",
+      "name=\"password\""
+    ]
+  },
+  "fetch": {
+    "url": "index.php",
+    "mode": "browser",
+    "responseType": "html",
+    "fields": {
+      "downloadedBytes": { "regex": "id=\"stats_leeching\"[^>]*title=\"(?<value>[^\"]+)\"", "transform": "bytes" },
+      "uploadedBytes":   { "regex": "id=\"stats_seeding\"[^>]*title=\"(?<value>[^\"]+)\"",   "transform": "bytes" },
+      "ratio":           { "regex": "id=\"stats_ratio\"[^>]*title=\"(?<value>[^\"]+)\"",     "transform": "number" },
+      "seedBonus":       { "regex": "Bonus \\((?<value>[^)]+)\\)",                           "transform": "string" }
+    }
+  },
+  "dashboard": { "byteUnit": "binary" }
+}

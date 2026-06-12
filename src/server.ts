@@ -409,26 +409,6 @@ const knownTrackerFields: Record<string, {
       },
     },
   },
-  nexum: {
-    fetchUrl: 'activity',
-    mode: 'browser',
-    byteUnit: 'binary',
-    ratioless: true,
-    fields: {
-      uploadedBytes: {
-        regex: 'user-stat-up[^>]*>[\\s\\S]*?(?<value>\\d[\\d\\s.,]*\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))\\s*</span>',
-        transform: 'bytes',
-      },
-      seedTime: {
-        regex: 'user-stat-seed24[\\s\\S]{0,120}?</i>\\s*(?<value>[^<]+?)\\s*</span>',
-        transform: 'string',
-      },
-      dlQuota: {
-        regex: 'user-stat-dlday[\\s\\S]{0,160}?</i>\\s*(?<value>[^<]+?)\\s*</span>',
-        transform: 'string',
-      },
-    },
-  },
   yggreborn: {
     fetchUrl: 'account/',
     mode: 'browser',
@@ -497,44 +477,6 @@ const knownTrackerFields: Record<string, {
       },
       seedBonus: {
         regex: 'Crazy Bonus\\s*<a[^>]*>\\s*(?<value>[\\d\\s.,]+)',
-        transform: 'string',
-      },
-    },
-  },
-  c411: {
-    fetchUrl: 'user/profile',
-    mode: 'browser',
-    byteUnit: 'decimal',
-    fields: {
-      uploadedBytes: {
-        regex: '(?<value>\\d[\\d\\s.,]*\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))[\\s\\S]{0,260}?Envoy',
-        transform: 'bytes',
-      },
-      downloadedBytes: {
-        regex: '(?<value>\\d[\\d\\s.,]*\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))[\\s\\S]{0,260}?T(?:élé|ele|[ée]l[ée])charg',
-        transform: 'bytes',
-      },
-    },
-  },
-  torr9: {
-    fetchUrl: 'stats',
-    mode: 'browser',
-    byteUnit: 'decimal',
-    fields: {
-      ratio: {
-        regex: 'Ratio[\\s\\S]{0,320}?>\\s*(?<value>\\d[\\d\\s.,]*)\\s*<',
-        transform: 'number',
-      },
-      uploadedBytes: {
-        regex: 'Upload total[\\s\\S]{0,420}?>\\s*(?<value>\\d[\\d\\s.,]*\\s*(?:[KMGTPE](?:i?B|io|o)))\\s*<',
-        transform: 'bytes',
-      },
-      downloadedBytes: {
-        regex: 'Download total[\\s\\S]{0,420}?>\\s*(?<value>\\d[\\d\\s.,]*\\s*(?:[KMGTPE](?:i?B|io|o)))\\s*<',
-        transform: 'bytes',
-      },
-      seedBonus: {
-        regex: 'Score\\s*(?<value>[\\d\\s.,]+)',
         transform: 'string',
       },
     },
@@ -674,10 +616,34 @@ const COOKIE_ONLY_TRACKERS = new Set([
   'yggreborn',    // Cloudflare Turnstile
 ]);
 
+const CANONICAL_CONNECTION_TRACKERS = new Set([
+  'c411',
+  'nexum',
+  'phoenixproject',
+  'torr9',
+]);
+
 function normalizeTrackerConfigs(): TrackerConfig[] {
   const trackers = loadTrackerConfigsFromDb();
   for (const tracker of trackers) {
     let changed = false;
+    if (CANONICAL_CONNECTION_TRACKERS.has(tracker.id)) {
+      const definition = loadTrackerDefinitionFile(tracker.id);
+      if (definition) {
+        if (JSON.stringify(tracker.login) !== JSON.stringify(definition.login)) {
+          tracker.login = definition.login;
+          changed = true;
+        }
+        if (JSON.stringify(tracker.fetch) !== JSON.stringify(definition.fetch)) {
+          tracker.fetch = definition.fetch;
+          changed = true;
+        }
+        if (tracker.curlBinary !== definition.curlBinary) {
+          tracker.curlBinary = definition.curlBinary;
+          changed = true;
+        }
+      }
+    }
     const isHdOnlyLikeTracker = ['hdonly', 'hdforever'].includes(tracker.id);
     const isUnit3dTracker = ['theoldschool', 'generationfree', 'teamflix', 'g3mini', 'seedpool', 'bitporn', 'sextorrent'].includes(tracker.id);
     if (tracker.id === 'hdonly' && tracker.login.failurePatterns.includes('login.php')) {
@@ -793,21 +759,6 @@ function normalizeTrackerConfigs(): TrackerConfig[] {
         tracker.login.cookieOnly = false;
         changed = true;
       }
-    }
-    if (tracker.id === 'torr9') {
-      if (tracker.login.url !== 'login?redirect=%2Fstats') {
-        tracker.login.url = 'login?redirect=%2Fstats';
-      }
-      tracker.login.failurePatterns = [
-        ...new Set([
-          ...tracker.login.failurePatterns,
-          'Bon Retour',
-          'Nom d\'utilisateur ou adresse mail',
-          'type="password"',
-          'name="password"',
-        ]),
-      ];
-      changed = true;
     }
     if (tracker.id === 'tigersdl') {
       if (tracker.login.url !== 'account-login.php') {
@@ -1146,6 +1097,7 @@ function logStatResult(stat: TrackerStats): void {
     return;
   }
 
+  if (stat.error?.startsWith('Credentials manquants')) return;
   console.log(`  [${stat.name}] Stats ERREUR - ${stat.error ?? 'Erreur inconnue'}`);
 }
 
@@ -1355,7 +1307,7 @@ async function refresh(trackers: TrackerConfig[]): Promise<TrackerStats[]> {
     const ok  = results.filter(s => s.status === 'ok').length;
     const err = results.filter(s => s.status === 'error').length;
     console.log(`  ✅ ${ok} ok  ❌ ${err} erreur(s)`);
-    results.filter(s => s.status === 'error')
+    results.filter(s => s.status === 'error' && !s.error?.startsWith('Credentials manquants'))
       .forEach(s => console.log(`  ⚠️  ${s.name}: ${s.error}`));
     return results;
   } finally {

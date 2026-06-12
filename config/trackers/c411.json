@@ -4,32 +4,42 @@
   "baseUrl": "https://c411.org",
   "enabled": true,
   "login": {
-    "url": "login?redirect=/",
+    "url": "login",
+    "postUrl": "api/auth/login",
     "method": "POST",
-    "contentType": "form",
+    "contentType": "json",
+    "preStep": {
+      "url": "login",
+      "extract": {
+        "_csrf": { "regex": "<meta name=\"csrf-token\" content=\"(?<value>[^\"]+)\"" }
+      }
+    },
+    "preVisitUrls": ["api/settings/public"],
+    "csrfHeader": "csrf-token",
     "body": {
       "username": "{{username}}",
-      "email": "{{username}}",
       "password": "{{password}}"
     },
+    "mfaStep": {
+      "url": "api/auth/mfa/totp",
+      "triggerField": "mfaRequired",
+      "codeField": "code",
+      "successField": "success"
+    },
+    "successField": "authenticated",
     "failurePatterns": [
-      "type=\"password\"",
-      "name=\"password\""
+      "\"message\":\"Unauthenticated",
+      "\"authenticated\":false"
     ]
   },
   "fetch": {
-    "url": "user/profile",
-    "mode": "browser",
-    "responseType": "html",
+    "url": "api/auth/me",
+    "mode": "http",
+    "responseType": "json",
     "fields": {
-      "uploadedBytes": {
-        "regex": "(?<value>\\d[\\d\\s.,]*\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))[\\s\\S]{0,260}?Envoy",
-        "transform": "bytes"
-      },
-      "downloadedBytes": {
-        "regex": "(?<value>\\d[\\d\\s.,]*\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))[\\s\\S]{0,260}?T(?:?l?|ele|[?e]l[?e])charg",
-        "transform": "bytes"
-      }
+      "downloadedBytes": { "path": "user.downloaded", "transform": "bytes" },
+      "uploadedBytes":   { "path": "user.uploaded",   "transform": "bytes" },
+      "ratio":           { "path": "user.ratio",      "transform": "number" }
     }
   },
   "dashboard": {

@@ -4,30 +4,29 @@
   "baseUrl": "https://torr9.net",
   "enabled": true,
   "login": {
-    "url": "login?redirect=%2Fstats",
+    "url": "https://torr9.net/login",
+    "postUrl": "https://api.torr9.net/api/v1/auth/login",
     "method": "POST",
-    "contentType": "form",
+    "contentType": "json",
     "body": {
       "username": "{{username}}",
-      "email": "{{username}}",
       "password": "{{password}}"
     },
+    "successField": "token",
+    "tokenField": "token",
     "failurePatterns": [
-      "type=\"password\"",
-      "name=\"password\"",
-      "Bon Retour",
-      "Nom d'utilisateur ou adresse mail"
+      "\"message\":\"Unauthorized",
+      "\"statusCode\":401"
     ]
   },
   "fetch": {
-    "url": "stats",
-    "mode": "browser",
-    "responseType": "html",
+    "url": "https://api.torr9.net/api/v1/users/me",
+    "mode": "http",
+    "responseType": "json",
     "fields": {
-      "ratio":           { "regex": "Ratio[\\s\\S]{0,320}?>\\s*(?<value>\\d[\\d\\s.,]*)\\s*<",                              "transform": "number" },
-      "uploadedBytes":   { "regex": "Upload total[\\s\\S]{0,420}?>\\s*(?<value>\\d[\\d\\s.,]*\\s*(?:[KMGTPE](?:i?B|io|o)))\\s*<",   "transform": "bytes" },
-      "downloadedBytes": { "regex": "Download total[\\s\\S]{0,420}?>\\s*(?<value>\\d[\\d\\s.,]*\\s*(?:[KMGTPE](?:i?B|io|o)))\\s*<", "transform": "bytes" },
-      "seedBonus":       { "regex": "Score\\s*(?<value>[\\d\\s.,]+)",                                                   "transform": "string" }
+      "downloadedBytes": { "path": "total_downloaded_bytes", "transform": "bytes" },
+      "uploadedBytes":   { "path": "total_uploaded_bytes",   "transform": "bytes" },
+      "seedBonus":       { "path": "jeton_balance",          "transform": "integer" }
     }
   },
   "dashboard": { "byteUnit": "decimal" }

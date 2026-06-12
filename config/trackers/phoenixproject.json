@@ -2,7 +2,7 @@
   "id": "phoenixproject",
   "name": "Phoenix Project",
   "baseUrl": "https://phoenixproject.app",
-  "enabled": false,
+  "enabled": true,
   "curlBinary": "curl_firefox135",
   "login": {
     "url": "login.php",
@@ -10,9 +10,14 @@
     "contentType": "form",
     "body": {
       "username": "{{username}}",
-      "password": "{{password}}"
+      "password": "{{password}}",
+      "twofa": "{{totp}}",
+      "login": "Log in"
     },
-    "failurePatterns": ["login.php", "This is a mirage"]
+    "failurePatterns": [
+      "This is a mirage",
+      "Enter</a>"
+    ]
   },
   "fetch": {
     "url": "index.php",
@@ -20,19 +25,19 @@
     "responseType": "html",
     "fields": {
       "uploadedBytes": {
-        "regex": "stats_seeding[\\s\\S]{0,200}?title=\"(?<value>[\\d.]+ (?:TiB|GiB|MiB|KiB))\"",
+        "regex": "id=\"stats_seeding\"[\\s\\S]{0,200}?title=\"(?<value>[^\"]+)\"",
         "transform": "bytes"
       },
       "downloadedBytes": {
-        "regex": "stats_leeching[\\s\\S]{0,200}?title=\"(?<value>[\\d.]+ (?:TiB|GiB|MiB|KiB))\"",
+        "regex": "id=\"stats_leeching\"[\\s\\S]{0,200}?title=\"(?<value>[^\"]+)\"",
         "transform": "bytes"
       },
       "ratio": {
-        "regex": "stats_ratio[\\s\\S]{0,200}?title=\"(?<value>[\\d.]+)\"",
+        "regex": "id=\"stats_ratio\"[\\s\\S]{0,200}?title=\"(?<value>[^\"]+)\"",
         "transform": "number"
       },
       "seedBonus": {
-        "regex": "nav_bonus[\\s\\S]{0,200}?Bonus \\((?<value>[\\d,]+)\\)",
+        "regex": "Bonus \\((?<value>[^)]+)\\)",
         "transform": "string"
       }
     }
