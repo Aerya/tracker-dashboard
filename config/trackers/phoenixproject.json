@@ -3,11 +3,11 @@
   "name": "Phoenix Project",
   "baseUrl": "https://phoenixproject.app",
   "enabled": true,
+  "curlBinary": "curl_firefox135",
   "login": {
     "url": "login.php",
     "method": "POST",
     "contentType": "form",
-    "mode": "browser",
     "body": {
       "username": "{{username}}",
       "password": "{{password}}",

@@ -192,6 +192,17 @@ function interpolate(tpl: string, vars: Record<string, string>): string {
   return tpl.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? '');
 }
 
+function parseJsonRecord(raw: string): Record<string, unknown> | null {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 function extractHiddenInputs(html: string): Record<string, string> {
   const $ = cheerio.load(html);
   const fields: Record<string, string> = {};
@@ -465,14 +476,11 @@ async function doLogin(
 
     // ── 2bis. Login API JSON (C411/Torr9-style) : MFA en 2 etapes, champ de
     // succes, et jeton Bearer eventuel — flux entierement distinct du HTML.
-    let resultJson: any = null;
-    try { resultJson = JSON.parse(loginRes.data); } catch { resultJson = null; }
+    let resultJson = parseJsonRecord(loginRes.data);
 
     if (cfg.mfaStep && resultJson?.[cfg.mfaStep.triggerField]) {
       if (!vars.otp) {
-        const dumpPath = writeLoginDebugDump(tracker, loginUrl, loginRes.data, { reason: 'mfa-no-secret' });
-        const suffix = dumpPath ? ` - dump: ${dumpPath}` : '';
-        throw new Error(`2FA requise par le tracker mais aucun secret TOTP enregistre — renseigne le secret 2FA dans Options avancees${suffix}`);
+        throw new Error('2FA requise par le tracker mais aucun secret TOTP enregistre — renseigne le secret 2FA dans Options avancees');
       }
       const mfaUrl = resolveUrl(base, cfg.mfaStep.url);
       const mfaRes = await client.post<string>(mfaUrl, { [cfg.mfaStep.codeField]: vars.otp }, {
@@ -481,24 +489,14 @@ async function doLogin(
         headers: jsonHeaders,
       });
       await storeResponseCookies(jar, mfaRes);
-      try { resultJson = JSON.parse(mfaRes.data); } catch { resultJson = null; }
+      resultJson = parseJsonRecord(mfaRes.data);
       const mfaSuccessField = cfg.mfaStep.successField ?? 'success';
       if (!resultJson?.[mfaSuccessField]) {
-        const dumpPath = writeLoginDebugDump(tracker, mfaUrl, mfaRes.data, {
-          status: mfaRes.status,
-          reason: `champ JSON "${mfaSuccessField}" absent/false apres MFA`,
-        });
-        const suffix = dumpPath ? ` - dump: ${dumpPath}` : '';
-        throw new Error(`Login échoué — MFA: champ JSON "${mfaSuccessField}" absent/false${suffix}`);
+        throw new Error(`Login échoué — MFA: champ JSON "${mfaSuccessField}" absent/false`);
       }
     } else if (cfg.successField) {
       if (!resultJson?.[cfg.successField]) {
-        const dumpPath = writeLoginDebugDump(tracker, loginUrl, loginRes.data, {
-          status: loginRes.status,
-          reason: `champ JSON "${cfg.successField}" absent/false`,
-        });
-        const suffix = dumpPath ? ` - dump: ${dumpPath}` : '';
-        throw new Error(`Login échoué — champ JSON "${cfg.successField}" absent/false${suffix}`);
+        throw new Error(`Login échoué — champ JSON "${cfg.successField}" absent/false`);
       }
     } else if (loginRes.status >= 400) {
       throw new Error(`Login échoué — HTTP ${loginRes.status}`);
@@ -605,7 +603,6 @@ async function doLogin(
     if (landedUrl.includes(cfg.otpStep.urlContains)) {
       const dumpPath = writeLoginDebugDump(tracker, landedUrl, verificationHtml, {
         reason: 'otpStep-2fa-refusee',
-        otp: vars.otp,
         status: otpRes.status,
         location: otpRes.headers.location ?? null,
       });
@@ -788,13 +785,13 @@ export async function fetchTracker(
   // Rejoue tout le flux (page CSRF -> POST -> stats) avec un jar de cookies. En cas
   // d'echec/binaire absent -> null, et la voie axios prouvee prend le relais.
   const attemptHttpViaCurl = async (): Promise<TrackerStats | null> => {
-    if (!fastFetchEnabled()) { console.log(`  [${tracker.name}] curl: fast-fetch désactivé`); return null; }
-    if (!(await CurlSession.available())) { console.log(`  [${tracker.name}] curl: binaire indisponible`); return null; }
+    if (!fastFetchEnabled()) return null;
     const cfg = tracker.login;
     // 2FA via page dediee (Nexum) : non reproduit ici, on laisse la voie axios
     // (doLogin) gerer ce cas.
     if (cfg.otpStep) return null;
-    console.log(`  [${tracker.name}] curl: tentative login via ${(tracker as any).curlBinary || 'curl_chrome116'}`);
+    if (cfg.cookieOnly) return null;
+    if (!(await CurlSession.available(tracker.curlBinary))) return null;
     const base = tracker.baseUrl;
     const cvars: Record<string, string> = { username: creds.username, password: creds.password };
     const totpSecret = getTrackerTotpSecret(tracker.id);
@@ -806,7 +803,7 @@ export async function fetchTracker(
       }
     }
 
-    const sess = new CurlSession(tracker.id, (tracker as any).curlBinary);
+    const sess = new CurlSession(tracker.id, tracker.curlBinary);
     try {
       let referer = resolveUrl(base, cfg.url);
       let hiddenInputs: Record<string, string> = {};
@@ -816,7 +813,7 @@ export async function fetchTracker(
         referer = preUrl;
         const pre = await sess.request(preUrl, { timeoutMs: 30_000 });
         if (!pre || pre.status >= 400 || !pre.body) { console.log(`  [${tracker.name}] curl: preStep échoué status=${pre?.status}`); return null; }
-        console.log(`  [${tracker.name}] curl: preStep OK status=${pre.status} len=${pre.body.length} antibot=${isAntiBotPage(pre.body)} body=${pre.body.slice(0,300)}`);
+        console.log(`  [${tracker.name}] curl: preStep OK status=${pre.status} len=${pre.body.length} antibot=${isAntiBotPage(pre.body)}`);
         if (isAntiBotPage(pre.body)) { console.log(`  [${tracker.name}] curl: preStep anti-bot`); return null; }
         if (cfg.preStep.includeHiddenInputs) hiddenInputs = extractHiddenInputs(pre.body);
         for (const [key, ext] of Object.entries(cfg.preStep.extract)) {
@@ -852,13 +849,12 @@ export async function fetchTracker(
         maxRedirects: isJson ? 0 : undefined,
       });
       if (!postRes) { console.log(`  [${tracker.name}] curl: POST login null`); return null; }
-      console.log(`  [${tracker.name}] curl: POST status=${postRes.status} len=${postRes.body.length} 2fa=${isTwoFactorPage(postRes.body)} body=${postRes.body.slice(0,300)}`);
+      console.log(`  [${tracker.name}] curl: POST status=${postRes.status} len=${postRes.body.length} 2fa=${isTwoFactorPage(postRes.body)}`);
 
       // Flux JSON multi-etapes (MFA TOTP / jeton Bearer) : reponse API pure,
       // pas de page HTML a parser.
       if (isJson && (cfg.mfaStep || cfg.successField || cfg.tokenField)) {
-        let resultJson: any = null;
-        try { resultJson = JSON.parse(postRes.body); } catch { resultJson = null; }
+        let resultJson = parseJsonRecord(postRes.body);
 
         if (cfg.mfaStep && resultJson?.[cfg.mfaStep.triggerField]) {
           if (!cvars.otp) { console.log(`  [${tracker.name}] curl: MFA requise mais pas de TOTP configuré`); return null; }
@@ -877,11 +873,11 @@ export async function fetchTracker(
             maxRedirects: 0,
           });
           if (!mfaRes) { console.log(`  [${tracker.name}] curl: MFA POST null`); return null; }
-          console.log(`  [${tracker.name}] curl: MFA status=${mfaRes.status} len=${mfaRes.body.length} body=${mfaRes.body.slice(0,300)}`);
-          try { resultJson = JSON.parse(mfaRes.body); } catch { resultJson = null; }
+          console.log(`  [${tracker.name}] curl: MFA status=${mfaRes.status} len=${mfaRes.body.length}`);
+          resultJson = parseJsonRecord(mfaRes.body);
           const mfaSuccessField = cfg.mfaStep.successField ?? 'success';
           if (!resultJson?.[mfaSuccessField]) {
-            console.log(`  [${tracker.name}] curl: MFA échouée, champ "${mfaSuccessField}" absent/false - body=${mfaRes.body.slice(0,300)}`);
+            console.log(`  [${tracker.name}] curl: MFA échouée, champ "${mfaSuccessField}" absent/false`);
             return null;
           }
         }
@@ -898,13 +894,12 @@ export async function fetchTracker(
         const fetchRes = await sess.request(url, { headers: fetchHeaders, timeoutMs: 30_000 });
         if (!fetchRes || fetchRes.status >= 400 || !fetchRes.body) { console.log(`  [${tracker.name}] curl: fetch échoué status=${fetchRes?.status}`); return null; }
         console.log(`  [${tracker.name}] curl: fetch OK status=${fetchRes.status} bodyLen=${fetchRes.body.length}`);
-        if (hasFailurePattern(fetchRes.body, cfg.failurePatterns)) { console.log(`  [${tracker.name}] curl: failure pattern détecté - début body: ${fetchRes.body.slice(0,300)}`); return null; }
+        if (hasFailurePattern(fetchRes.body, cfg.failurePatterns)) { console.log(`  [${tracker.name}] curl: failure pattern détecté`); return null; }
 
         if (cfg.successField) {
-          let fetchJson: any = null;
-          try { fetchJson = JSON.parse(fetchRes.body); } catch { fetchJson = null; }
+          const fetchJson = parseJsonRecord(fetchRes.body);
           if (!fetchJson?.[cfg.successField]) {
-            console.log(`  [${tracker.name}] curl: champ JSON "${cfg.successField}" absent/false sur fetch - body=${fetchRes.body.slice(0,300)}`);
+            console.log(`  [${tracker.name}] curl: champ JSON "${cfg.successField}" absent/false sur fetch`);
             return null;
           }
         }
@@ -943,7 +938,7 @@ export async function fetchTracker(
       const fetchRes = await sess.request(url, { headers: { Referer: loginUrl }, timeoutMs: 30_000 });
       if (!fetchRes || fetchRes.status >= 400 || !fetchRes.body) { console.log(`  [${tracker.name}] curl: fetch échoué status=${fetchRes?.status}`); return null; }
       console.log(`  [${tracker.name}] curl: fetch OK status=${fetchRes.status} bodyLen=${fetchRes.body.length}`);
-      if (hasFailurePattern(fetchRes.body, cfg.failurePatterns)) { console.log(`  [${tracker.name}] curl: failure pattern détecté - début body: ${fetchRes.body.slice(0,300)}`); return null; }
+      if (hasFailurePattern(fetchRes.body, cfg.failurePatterns)) { console.log(`  [${tracker.name}] curl: failure pattern détecté`); return null; }
       if (isAnubisChallenge(fetchRes.body)) return null;
 
       try {
@@ -1024,8 +1019,7 @@ export async function fetchTracker(
     // Pour les logins API JSON multi-etapes (C411) : le champ de succes
     // ("authenticated") se verifie sur la reponse du fetch, pas sur celle du login.
     if (tracker.login.mfaStep && tracker.login.successField) {
-      let fetchJson: any = null;
-      try { fetchJson = JSON.parse(res.data); } catch { fetchJson = null; }
+      const fetchJson = parseJsonRecord(res.data);
       if (!fetchJson?.[tracker.login.successField]) {
         if (isRetry) {
           const dumpPath = writeDebugDump(tracker, url, res.data, {}, 'fetch-not-authenticated');

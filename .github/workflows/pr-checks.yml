@@ -30,6 +30,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Check frontend/backend integration contracts
+        run: npm run check:integration
+
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
 
