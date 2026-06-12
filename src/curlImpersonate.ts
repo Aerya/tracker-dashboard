@@ -145,6 +145,7 @@ export class CurlSession {
   async request(url: string, opts: CurlRequestOptions = {}): Promise<{ status: number; body: string } | null> {
     if (!(await checkAvailable(this.binary))) return null;
     const timeoutMs = opts.timeoutMs ?? 30_000;
+    const bin = binaryName(this.binary);
     const args = [
       '-sS', '--max-time', String(Math.ceil(timeoutMs / 1000)),
       '-c', this.jarPath, '-b', this.jarPath,

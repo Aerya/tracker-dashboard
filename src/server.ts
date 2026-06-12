@@ -30,6 +30,7 @@ import {
   listStatSnapshots,
   listTrackerCredentialSummaries,
   listTrackerDefinitionFiles,
+  listTrackerSchedules,
   loadCredentialsFromDb,
   loadTrackerConfigsFromDb,
   loadTrackerDefinitionFile,
@@ -1057,6 +1058,26 @@ function upsertCachedStat(stat: TrackerStats): void {
     annotated,
   ];
   lastRefresh = new Date().toISOString();
+}
+
+// Applique l'ordre de tuiles personnalise par l'utilisateur (drag & drop sur le
+// dashboard). Les trackers absents de l'ordre enregistre conservent leur position
+// relative et sont places apres ceux presents dans l'ordre.
+function applyTrackerOrder(stats: TrackerStats[]): TrackerStats[] {
+  const order = getJsonSetting<string[]>(TRACKER_ORDER_KEY, []);
+  if (!order.length) return stats;
+  const rank = new Map(order.map((id, i) => [id, i]));
+  return stats
+    .map((stat, index) => ({ stat, index }))
+    .sort((a, b) => {
+      const ra = rank.get(a.stat.id);
+      const rb = rank.get(b.stat.id);
+      if (ra !== undefined && rb !== undefined) return ra - rb;
+      if (ra !== undefined) return -1;
+      if (rb !== undefined) return 1;
+      return a.index - b.index;
+    })
+    .map(({ stat }) => stat);
 }
 
 function visibleStats(trackers: TrackerConfig[]): TrackerStats[] {
@@ -2456,7 +2477,7 @@ export async function start(): Promise<void> {
   app.get('/api/stats', (_req, res) => {
     if (isPresentationMode()) {
       return res.json({
-        stats: fakeStatsForPresentation(),
+        stats: applyTrackerOrder(fakeStatsForPresentation()),
         lastRefresh: new Date().toISOString(),
         isRefreshing: false,
         presentationMode: true,
@@ -2464,7 +2485,7 @@ export async function start(): Promise<void> {
     }
     trackers = normalizeTrackerConfigs();
     const qbitSeeding = qbitSeedingByTrackerId(trackers);
-    const stats = visibleStats(trackers).map(stat => {
+    const stats = applyTrackerOrder(visibleStats(trackers)).map(stat => {
       const entry = qbitSeeding.get(stat.id);
       return {
         ...stat,
@@ -2735,6 +2756,23 @@ export async function start(): Promise<void> {
       lastRefresh = new Date().toISOString();
     }
     res.json({ ok: true, enabled });
+  });
+
+  // ── Ordre des tuiles (drag & drop dashboard) ───────────────────────────────
+  app.get('/api/settings/tracker-order', (_req, res) => {
+    res.json({ order: getJsonSetting<string[]>(TRACKER_ORDER_KEY, []) });
+  });
+
+  app.post('/api/settings/tracker-order', (req, res) => {
+    const order = Array.isArray(req.body?.order)
+      ? req.body.order.filter((id: unknown): id is string => typeof id === 'string')
+      : [];
+    setJsonSetting(TRACKER_ORDER_KEY, order);
+    res.json({ ok: true, order });
+  });
+
+  app.get('/api/schedules', (_req, res) => {
+    res.json({ schedules: listTrackerSchedules() });
   });
 
   app.get('/api/credentials', (_req, res) => {

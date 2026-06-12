@@ -480,7 +480,9 @@ async function doLogin(
 
     if (cfg.mfaStep && resultJson?.[cfg.mfaStep.triggerField]) {
       if (!vars.otp) {
-        throw new Error('2FA requise par le tracker mais aucun secret TOTP enregistre — renseigne le secret 2FA dans Options avancees');
+        const dumpPath = writeLoginDebugDump(tracker, loginUrl, loginRes.data, { reason: 'mfa-no-secret' });
+        const suffix = dumpPath ? ` - dump: ${dumpPath}` : '';
+        throw new Error(`2FA requise par le tracker mais aucun secret TOTP enregistre — renseigne le secret 2FA dans Options avancees${suffix}`);
       }
       const mfaUrl = resolveUrl(base, cfg.mfaStep.url);
       const mfaRes = await client.post<string>(mfaUrl, { [cfg.mfaStep.codeField]: vars.otp }, {
@@ -492,11 +494,21 @@ async function doLogin(
       resultJson = parseJsonRecord(mfaRes.data);
       const mfaSuccessField = cfg.mfaStep.successField ?? 'success';
       if (!resultJson?.[mfaSuccessField]) {
-        throw new Error(`Login échoué — MFA: champ JSON "${mfaSuccessField}" absent/false`);
+        const dumpPath = writeLoginDebugDump(tracker, mfaUrl, mfaRes.data, {
+          status: mfaRes.status,
+          reason: `champ JSON "${mfaSuccessField}" absent/false apres MFA`,
+        });
+        const suffix = dumpPath ? ` - dump: ${dumpPath}` : '';
+        throw new Error(`Login échoué — MFA: champ JSON "${mfaSuccessField}" absent/false${suffix}`);
       }
     } else if (cfg.successField) {
       if (!resultJson?.[cfg.successField]) {
-        throw new Error(`Login échoué — champ JSON "${cfg.successField}" absent/false`);
+        const dumpPath = writeLoginDebugDump(tracker, loginUrl, loginRes.data, {
+          status: loginRes.status,
+          reason: `champ JSON "${cfg.successField}" absent/false`,
+        });
+        const suffix = dumpPath ? ` - dump: ${dumpPath}` : '';
+        throw new Error(`Login échoué — champ JSON "${cfg.successField}" absent/false${suffix}`);
       }
     } else if (loginRes.status >= 400) {
       throw new Error(`Login échoué — HTTP ${loginRes.status}`);
@@ -603,6 +615,7 @@ async function doLogin(
     if (landedUrl.includes(cfg.otpStep.urlContains)) {
       const dumpPath = writeLoginDebugDump(tracker, landedUrl, verificationHtml, {
         reason: 'otpStep-2fa-refusee',
+        otp: vars.otp,
         status: otpRes.status,
         location: otpRes.headers.location ?? null,
       });
@@ -785,13 +798,14 @@ export async function fetchTracker(
   // Rejoue tout le flux (page CSRF -> POST -> stats) avec un jar de cookies. En cas
   // d'echec/binaire absent -> null, et la voie axios prouvee prend le relais.
   const attemptHttpViaCurl = async (): Promise<TrackerStats | null> => {
-    if (!fastFetchEnabled()) return null;
+    if (!fastFetchEnabled()) { console.log(`  [${tracker.name}] curl: fast-fetch désactivé`); return null; }
     const cfg = tracker.login;
     // 2FA via page dediee (Nexum) : non reproduit ici, on laisse la voie axios
     // (doLogin) gerer ce cas.
     if (cfg.otpStep) return null;
     if (cfg.cookieOnly) return null;
-    if (!(await CurlSession.available(tracker.curlBinary))) return null;
+    if (!(await CurlSession.available(tracker.curlBinary))) { console.log(`  [${tracker.name}] curl: binaire indisponible`); return null; }
+    console.log(`  [${tracker.name}] curl: tentative login via ${tracker.curlBinary || 'curl_chrome116'}`);
     const base = tracker.baseUrl;
     const cvars: Record<string, string> = { username: creds.username, password: creds.password };
     const totpSecret = getTrackerTotpSecret(tracker.id);
@@ -813,7 +827,7 @@ export async function fetchTracker(
         referer = preUrl;
         const pre = await sess.request(preUrl, { timeoutMs: 30_000 });
         if (!pre || pre.status >= 400 || !pre.body) { console.log(`  [${tracker.name}] curl: preStep échoué status=${pre?.status}`); return null; }
-        console.log(`  [${tracker.name}] curl: preStep OK status=${pre.status} len=${pre.body.length} antibot=${isAntiBotPage(pre.body)}`);
+        console.log(`  [${tracker.name}] curl: preStep OK status=${pre.status} len=${pre.body.length} antibot=${isAntiBotPage(pre.body)} body=${pre.body.slice(0,300)}`);
         if (isAntiBotPage(pre.body)) { console.log(`  [${tracker.name}] curl: preStep anti-bot`); return null; }
         if (cfg.preStep.includeHiddenInputs) hiddenInputs = extractHiddenInputs(pre.body);
         for (const [key, ext] of Object.entries(cfg.preStep.extract)) {
@@ -849,7 +863,7 @@ export async function fetchTracker(
         maxRedirects: isJson ? 0 : undefined,
       });
       if (!postRes) { console.log(`  [${tracker.name}] curl: POST login null`); return null; }
-      console.log(`  [${tracker.name}] curl: POST status=${postRes.status} len=${postRes.body.length} 2fa=${isTwoFactorPage(postRes.body)}`);
+      console.log(`  [${tracker.name}] curl: POST status=${postRes.status} len=${postRes.body.length} 2fa=${isTwoFactorPage(postRes.body)} body=${postRes.body.slice(0,300)}`);
 
       if (!isJson && !cfg.mfaStep && hasFailurePattern(postRes.body, cfg.failurePatterns)) {
         const dumpPath = writeLoginDebugDump(tracker, loginUrl, postRes.body, {
@@ -883,11 +897,11 @@ export async function fetchTracker(
             maxRedirects: 0,
           });
           if (!mfaRes) { console.log(`  [${tracker.name}] curl: MFA POST null`); return null; }
-          console.log(`  [${tracker.name}] curl: MFA status=${mfaRes.status} len=${mfaRes.body.length}`);
+          console.log(`  [${tracker.name}] curl: MFA status=${mfaRes.status} len=${mfaRes.body.length} body=${mfaRes.body.slice(0,300)}`);
           resultJson = parseJsonRecord(mfaRes.body);
           const mfaSuccessField = cfg.mfaStep.successField ?? 'success';
           if (!resultJson?.[mfaSuccessField]) {
-            console.log(`  [${tracker.name}] curl: MFA échouée, champ "${mfaSuccessField}" absent/false`);
+            console.log(`  [${tracker.name}] curl: MFA échouée, champ "${mfaSuccessField}" absent/false - body=${mfaRes.body.slice(0,300)}`);
             return null;
           }
         }
@@ -904,12 +918,12 @@ export async function fetchTracker(
         const fetchRes = await sess.request(url, { headers: fetchHeaders, timeoutMs: 30_000 });
         if (!fetchRes || fetchRes.status >= 400 || !fetchRes.body) { console.log(`  [${tracker.name}] curl: fetch échoué status=${fetchRes?.status}`); return null; }
         console.log(`  [${tracker.name}] curl: fetch OK status=${fetchRes.status} bodyLen=${fetchRes.body.length}`);
-        if (hasFailurePattern(fetchRes.body, cfg.failurePatterns)) { console.log(`  [${tracker.name}] curl: failure pattern détecté`); return null; }
+        if (hasFailurePattern(fetchRes.body, cfg.failurePatterns)) { console.log(`  [${tracker.name}] curl: failure pattern détecté - début body: ${fetchRes.body.slice(0,300)}`); return null; }
 
         if (cfg.successField) {
           const fetchJson = parseJsonRecord(fetchRes.body);
           if (!fetchJson?.[cfg.successField]) {
-            console.log(`  [${tracker.name}] curl: champ JSON "${cfg.successField}" absent/false sur fetch`);
+            console.log(`  [${tracker.name}] curl: champ JSON "${cfg.successField}" absent/false sur fetch - body=${fetchRes.body.slice(0,300)}`);
             return null;
           }
         }
@@ -948,7 +962,7 @@ export async function fetchTracker(
       const fetchRes = await sess.request(url, { headers: { Referer: loginUrl }, timeoutMs: 30_000 });
       if (!fetchRes || fetchRes.status >= 400 || !fetchRes.body) { console.log(`  [${tracker.name}] curl: fetch échoué status=${fetchRes?.status}`); return null; }
       console.log(`  [${tracker.name}] curl: fetch OK status=${fetchRes.status} bodyLen=${fetchRes.body.length}`);
-      if (hasFailurePattern(fetchRes.body, cfg.failurePatterns)) { console.log(`  [${tracker.name}] curl: failure pattern détecté`); return null; }
+      if (hasFailurePattern(fetchRes.body, cfg.failurePatterns)) { console.log(`  [${tracker.name}] curl: failure pattern détecté - début body: ${fetchRes.body.slice(0,300)}`); return null; }
       if (isAnubisChallenge(fetchRes.body)) return null;
 
       try {
