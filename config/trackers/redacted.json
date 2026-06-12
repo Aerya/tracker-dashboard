@@ -1,0 +1,38 @@
+{
+  "id": "redacted",
+  "name": "Redacted",
+  "baseUrl": "https://redacted.sh",
+  "enabled": true,
+  "login": {
+    "url": "login.php",
+    "method": "POST",
+    "contentType": "form",
+    "preStep": {
+      "url": "login.php",
+      "extract": {},
+      "includeHiddenInputs": true
+    },
+    "body": {
+      "username": "{{username}}",
+      "password": "{{password}}",
+      "keeplogged": "1",
+      "login": "Log in"
+    },
+    "otpField": "qrcode_confirm",
+    "failurePatterns": [
+      "type=\"password\"",
+      "name=\"password\""
+    ]
+  },
+  "fetch": {
+    "url": "index.php",
+    "mode": "browser",
+    "responseType": "html",
+    "fields": {
+      "downloadedBytes": { "regex": "id=\"stats_leeching\"[^>]*title=\"Downloaded: (?<value>[^\"]+)\"", "transform": "bytes" },
+      "uploadedBytes":   { "regex": "id=\"stats_seeding\"[^>]*title=\"Uploaded: (?<value>[^\"]+)\"",     "transform": "bytes" },
+      "ratio":           { "regex": "id=\"stats_ratio\"[^>]*title=\"Ratio: (?<value>[^\"]+)\"",          "transform": "number" }
+    }
+  },
+  "dashboard": { "byteUnit": "binary" }
+}
