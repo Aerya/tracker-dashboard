@@ -152,6 +152,10 @@ export interface TrackerStats {
   lastLoginAt?: string;
   byteUnit: 'binary' | 'decimal';
   fields: Record<string, string | number>;
+  /** Nombre de torrents en seed remonte depuis qBittorrent (host d'annonce -> tracker). null si pas de client mappe. */
+  qbitSeeding?: number | null;
+  /** Types de clients BitTorrent ayant contribue au seeding ('qbittorrent' | 'rutorrent'), pour l'etiquette. */
+  qbitSeedingTypes?: string[];
   /** Incident "connu" manuellement signale par l'utilisateur (auto-clear sur status=ok) */
   incident?: { acknowledged: boolean; note: string };
   /** Dernieres donnees OK conservees apres un timeout ponctuel du refresh courant. */

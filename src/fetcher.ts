@@ -851,6 +851,16 @@ export async function fetchTracker(
       if (!postRes) { console.log(`  [${tracker.name}] curl: POST login null`); return null; }
       console.log(`  [${tracker.name}] curl: POST status=${postRes.status} len=${postRes.body.length} 2fa=${isTwoFactorPage(postRes.body)}`);
 
+      if (!isJson && !cfg.mfaStep && hasFailurePattern(postRes.body, cfg.failurePatterns)) {
+        const dumpPath = writeLoginDebugDump(tracker, loginUrl, postRes.body, {
+          reason: 'curl-login-failed',
+          status: postRes.status,
+          bodyFieldNames: Object.keys(bodyObj),
+        });
+        console.log(`  [${tracker.name}] curl: login échoué (formulaire de login retourné) - dump: ${dumpPath}`);
+        return null;
+      }
+
       // Flux JSON multi-etapes (MFA TOTP / jeton Bearer) : reponse API pure,
       // pas de page HTML a parser.
       if (isJson && (cfg.mfaStep || cfg.successField || cfg.tokenField)) {

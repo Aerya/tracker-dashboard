@@ -1926,6 +1926,39 @@ function betaClientLogName(client: BetaQbitClient): string {
   return `${client.label || client.id || 'Client BitTorrent'} (${client.type === 'rutorrent' ? 'ruTorrent/rTorrent' : 'qBittorrent'})`;
 }
 
+// Agrege le nombre de torrents en seed remonte par les clients BitTorrent, par trackerId, en
+// sommant tous les clients (qBittorrent et/ou rTorrent). On collecte aussi l'ensemble des types
+// de clients ayant contribue, pour l'etiquette (qBit / Rto / qBit Rto). On reutilise le meme
+// matching host d'annonce -> tracker que l'onglet beta (mappings manuels + heuristique).
+// Retourne une map vide si aucune synchro BitTorrent n'a encore tourne (betaQbitStats en memoire).
+function qbitSeedingByTrackerId(trackers: TrackerConfig[]): Map<string, { count: number; types: Set<string> }> {
+  const result = new Map<string, { count: number; types: Set<string> }>();
+  if (betaQbitStats.length === 0) return result;
+  const settings = loadBetaSettings();
+  const clientType = new Map(settings.qbitClients.map(client => [client.id, client.type === 'rutorrent' ? 'rutorrent' : 'qbittorrent']));
+  const trackerHosts = new Map<string, string>();
+  for (const tracker of trackers) {
+    const host = trackerHost(tracker.baseUrl);
+    trackerHosts.set(host, tracker.id);
+    trackerHosts.set(hostDomainKey(host), tracker.id);
+  }
+  for (const mapping of settings.announceMappings) {
+    const host = trackerHost(mapping.announceHost);
+    trackerHosts.set(host, mapping.trackerId);
+    trackerHosts.set(hostDomainKey(host), mapping.trackerId);
+  }
+  for (const item of betaQbitStats) {
+    const trackerId = betaTrackerIdForAnnounceHost(item.trackerHost, trackerHosts, trackers);
+    if (!trackerId) continue;
+    const entry = result.get(trackerId) ?? { count: 0, types: new Set<string>() };
+    entry.count += item.seedingCount;
+    const type = clientType.get(item.clientId);
+    if (type) entry.types.add(type);
+    result.set(trackerId, entry);
+  }
+  return result;
+}
+
 function betaLog(message: string): void {
   console.log(`[Beta BitTorrent] ${message}`);
 }
@@ -2430,7 +2463,16 @@ export async function start(): Promise<void> {
       });
     }
     trackers = normalizeTrackerConfigs();
-    res.json({ stats: visibleStats(trackers), lastRefresh, isRefreshing });
+    const qbitSeeding = qbitSeedingByTrackerId(trackers);
+    const stats = visibleStats(trackers).map(stat => {
+      const entry = qbitSeeding.get(stat.id);
+      return {
+        ...stat,
+        qbitSeeding: entry ? entry.count : null,
+        qbitSeedingTypes: entry ? [...entry.types] : [],
+      };
+    });
+    res.json({ stats, lastRefresh, isRefreshing });
   });
 
   app.post('/api/refresh', (_req, res) => {
@@ -3080,6 +3122,24 @@ export async function start(): Promise<void> {
       })
       .catch(() => { /* best-effort */ });
   }, 30_000);
+
+  // Synchro automatique des clients BitTorrent (beta) au demarrage. betaQbitStats etant
+  // en memoire, la liste est vide a chaque restart tant qu'aucune synchro manuelle n'a
+  // tourne. On la repeuple automatiquement, sans bloquer le boot et en best-effort. Petit
+  // delai pour ne pas concurrencer le refresh des stats trackers au tout debut.
+  setTimeout(() => {
+    const enabledClients = loadBetaSettings().qbitClients.filter(client => client.enabled);
+    if (enabledClients.length === 0) {
+      return;
+    }
+    betaLog(`synchro automatique au demarrage: ${enabledClients.length} client(s) actif(s)`);
+    refreshBetaQbitStats()
+      .then(stats => {
+        const torrentCount = stats.reduce((sum, item) => sum + item.torrentCount, 0);
+        betaLog(`synchro automatique terminee: ${torrentCount} torrent(s), ${stats.length} hote(s)`);
+      })
+      .catch(err => betaWarn(`synchro automatique au demarrage KO - ${err instanceof Error ? err.message : String(err)}`));
+  }, 15_000);
 
   startScheduler();
 }
