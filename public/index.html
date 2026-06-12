@@ -3717,6 +3717,9 @@
       const errorOrIncidentBadge = isIncident
         ? '<span class="badge badge-incident" title="Probleme connu signale manuellement">Incident connu</span>'
         : '<span class="badge badge-error">Erreur</span>';
+      const qbitSeeding = hasStatValue(stat.qbitSeeding)
+        ? `<div class="stats">${statCellQbitSeeding(stat.qbitSeeding, stat.qbitSeedingTypes)}</div>`
+        : '';
       const badges = `
         ${errorOrIncidentBadge}
         ${offlineBadge}
@@ -3740,6 +3743,7 @@
             ${stat.error ?? 'Erreur inconnue'}
           </div>
           ${reachabilityLine}
+          ${qbitSeeding}
           ${incidentBox}
           <div class="card-footer">Derniere connexion : ${lastLoginText(stat)}</div>
         </div>`;
@@ -3843,7 +3847,7 @@
     const buf = isError ? '<span class="cell-muted">—</span>'
       : `<span class="${bufferClass(formatBuffer(f, byteUnit))}">${bufferText(f, byteUnit)}</span>`;
     const seeding = isError ? '<span class="cell-muted">—</span>' : formatCount(f.seeding);
-    const qbitSeed = isError || !hasStatValue(stat.qbitSeeding)
+    const qbitSeed = !hasStatValue(stat.qbitSeeding)
       ? '<span class="cell-muted">—</span>'
       : `${formatCount(stat.qbitSeeding)} <span class="stat-source" title="Torrents en seed remontés depuis vos clients BitTorrent">${qbitSourceLabel(stat.qbitSeedingTypes)}</span>`;
     // Bonus : seedBonus pour les trackers a ratio, ou Points pour les ratioless
