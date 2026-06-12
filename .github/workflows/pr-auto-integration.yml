@@ -1,4 +1,4 @@
-name: PR Auto Integration
+name: PR Branch Preparation
 
 on:
   pull_request_target:
@@ -12,7 +12,6 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
 
 jobs:
   prepare:
@@ -23,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Update branch and enable auto-merge
+      - name: Update branch from main
         uses: actions/github-script@v8
         with:
           script: |
@@ -40,20 +39,4 @@ jobs:
             } catch (error) {
               if (error.status !== 422) throw error;
               core.info('Pull request branch is already up to date.');
-            }
-
-            if (!pull.auto_merge) {
-              await github.graphql(`
-                mutation EnableAutoMerge($pullRequestId: ID!) {
-                  enablePullRequestAutoMerge(input: {
-                    pullRequestId: $pullRequestId
-                    mergeMethod: SQUASH
-                  }) {
-                    pullRequest { number }
-                  }
-                }
-              `, { pullRequestId: pull.node_id });
-              core.info('Auto-merge enabled; required checks remain authoritative.');
-            } else {
-              core.info('Auto-merge is already enabled.');
             }
