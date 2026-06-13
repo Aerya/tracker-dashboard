@@ -3895,12 +3895,10 @@
       : `<span class="${ratioClass(ratio)}">${hasRatio ? formatRatio(ratio) : '-'}</span>`;
     const buf = isError ? '<span class="cell-muted">—</span>'
       : `<span class="${bufferClass(formatBuffer(f, byteUnit))}">${bufferText(f, byteUnit)}</span>`;
-    const seedingInf = isError ? null : seedingInfo(stat);
-    const seeding = isError
-      ? '<span class="cell-muted">—</span>'
-      : (seedingInf
-          ? `${seedingInf.value}${seedingBadgeHtml(seedingInf.badge)}`
-          : '<span class="cell-muted">—</span>');
+    const seedingInf = seedingInfo(stat);
+    const seeding = seedingInf
+      ? `${seedingInf.value}${seedingBadgeHtml(seedingInf.badge)}`
+      : '<span class="cell-muted">—</span>';
     // Bonus : seedBonus pour les trackers a ratio, ou Points pour les ratioless.
     // Si le tracker expose un ratio requis (ex: Redacted), on l'affiche a la place, avec un
     // badge "req." pour lever l'ambiguite sous l'en-tete generique.
