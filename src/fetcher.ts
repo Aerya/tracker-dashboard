@@ -52,7 +52,11 @@ function applyTransform(raw: unknown, tf?: string): string | number {
   if (raw === undefined || raw === null || raw === '') return '';
   switch (tf) {
     case 'bytes':   return parseBytes(raw);
-    case 'number':  return parseFloat(String(raw).replace(',', '.')) || 0;
+    case 'number': {
+      const s = String(raw).trim();
+      if (/^(infinite|infinity|inf|∞)$/i.test(s)) return '∞';
+      return parseFloat(s.replace(',', '.')) || 0;
+    }
     case 'integer': return parseInt(String(raw), 10) || 0;
     default:        return String(raw);
   }
