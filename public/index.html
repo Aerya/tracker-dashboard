@@ -2010,13 +2010,43 @@
     return parts.length ? parts.join(' ') : 'qBit';
   }
 
-  // Cellule pleine largeur dediee au seed remonte depuis les clients BitTorrent, distincte du
-  // seeding scrape sur le site. Badge (qBit / Rto / qBit Rto) + infobulle pour signaler la source.
-  function statCellQbitSeeding(value, types) {
+  // Seeding unifie : priorite a la valeur du site (sans badge). A defaut, on utilise le
+  // comptage remonte par les clients BitTorrent (qBittorrent/rTorrent), signale par un badge
+  // de source (qBit / Rto / qBit Rto). Une seule info, un seul endroit, source indiquee.
+  function seedingInfo(stat) {
+    const f = stat.fields || {};
+    if (hasStatValue(f.seeding)) return { value: formatCount(f.seeding), badge: '' };
+    if (hasStatValue(stat.qbitSeeding)) {
+      return { value: formatCount(stat.qbitSeeding), badge: qbitSourceLabel(stat.qbitSeedingTypes) };
+    }
+    return null;
+  }
+
+  function seedingBadgeHtml(badge) {
+    return badge
+      ? ` <span class="stat-source" title="Torrents en seed remontés depuis vos clients BitTorrent">${badge}</span>`
+      : '';
+  }
+
+  // Cellule "Seeding" pour la grille des cartes (inline, 1 colonne).
+  function seedingStatCell(stat) {
+    const info = seedingInfo(stat);
+    return `
+      <div class="stat">
+        <span class="stat-label">Seeding${info ? seedingBadgeHtml(info.badge) : ''}</span>
+        <span class="stat-value">${info ? info.value : '-'}</span>
+      </div>`;
+  }
+
+  // Cellule "Seeding" pleine largeur, pour les cartes dont le slot inline affiche deja autre
+  // chose (ratioless, ou trackers a "Seed time"). Rien si aucune valeur de seeding disponible.
+  function seedingStatCellFull(stat) {
+    const info = seedingInfo(stat);
+    if (!info) return '';
     return `
       <div class="stat stat--qbit">
-        <span class="stat-label">Seeding <span class="stat-source" title="Torrents en seed remontés depuis vos clients BitTorrent">${qbitSourceLabel(types)}</span></span>
-        <span class="stat-value">${formatCount(value)}</span>
+        <span class="stat-label">Seeding${seedingBadgeHtml(info.badge)}</span>
+        <span class="stat-value">${info.value}</span>
       </div>`;
   }
 
@@ -3577,8 +3607,7 @@
         }
         return 0;
       }
-      case 'seeding':  return toNum(f.seeding);
-      case 'qbitseeding': return toNum(stat.qbitSeeding);
+      case 'seeding':  return toNum(hasStatValue(f.seeding) ? f.seeding : stat.qbitSeeding);
       case 'bonus':    return toNum(hasStatValue(f.seedBonus) ? f.seedBonus : f.points);
       case 'status':   return stat.status === 'error' ? 1 : 0; // erreurs regroupees
       default:         return 0;
@@ -3717,8 +3746,8 @@
       const errorOrIncidentBadge = isIncident
         ? '<span class="badge badge-incident" title="Probleme connu signale manuellement">Incident connu</span>'
         : '<span class="badge badge-error">Erreur</span>';
-      const qbitSeeding = hasStatValue(stat.qbitSeeding)
-        ? `<div class="stats">${statCellQbitSeeding(stat.qbitSeeding, stat.qbitSeedingTypes)}</div>`
+      const qbitSeeding = seedingStatCellFull(stat)
+        ? `<div class="stats">${seedingStatCellFull(stat)}</div>`
         : '';
       const badges = `
         ${errorOrIncidentBadge}
@@ -3768,7 +3797,7 @@
       ? `${ratiolessCell1}${ratiolessCell2}`
       : `${hasStatValue(f.seedTimeDays)
           ? statCell('Seed time', [formatCount(f.seedTimeDays), 'j'], '', '')
-          : statCell('Seeding', formatCount(f.seeding), '', '')}
+          : seedingStatCell(stat)}
          ${statCell('Bonus',   formatCount(f.seedBonus), '', '')}`;
 
     return `
@@ -3788,7 +3817,7 @@
           ${statCell('Ratio', hasRatio ? formatRatio(ratio) : '-', '', ratioClass(ratio))}
           ${statCell('Buffer', buffer, '', bufferClass(buffer))}
           ${bottomCells}
-          ${hasStatValue(stat.qbitSeeding) ? statCellQbitSeeding(stat.qbitSeeding, stat.qbitSeedingTypes) : ''}
+          ${(ratioless || hasStatValue(f.seedTimeDays)) ? seedingStatCellFull(stat) : ''}
         </div>
         ${stat.stale ? renderIncidentBox(stat) : ''}
         <div class="card-footer">Derniere connexion : ${lastLoginText(stat)}</div>
@@ -3846,10 +3875,10 @@
       : `<span class="${ratioClass(ratio)}">${hasRatio ? formatRatio(ratio) : '-'}</span>`;
     const buf = isError ? '<span class="cell-muted">—</span>'
       : `<span class="${bufferClass(formatBuffer(f, byteUnit))}">${bufferText(f, byteUnit)}</span>`;
-    const seeding = isError ? '<span class="cell-muted">—</span>' : formatCount(f.seeding);
-    const qbitSeed = !hasStatValue(stat.qbitSeeding)
-      ? '<span class="cell-muted">—</span>'
-      : `${formatCount(stat.qbitSeeding)} <span class="stat-source" title="Torrents en seed remontés depuis vos clients BitTorrent">${qbitSourceLabel(stat.qbitSeedingTypes)}</span>`;
+    const seedingInf = seedingInfo(stat);
+    const seeding = seedingInf
+      ? `${seedingInf.value}${seedingBadgeHtml(seedingInf.badge)}`
+      : '<span class="cell-muted">—</span>';
     // Bonus : seedBonus pour les trackers a ratio, ou Points pour les ratioless
     const bonusRaw = hasStatValue(f.seedBonus) ? f.seedBonus : f.points;
     const bonus   = isError ? '<span class="cell-muted">—</span>' : formatCount(bonusRaw);
@@ -3869,7 +3898,6 @@
         <td class="num">${ratioCell}</td>
         <td class="num">${buf}</td>
         <td class="num">${seeding}</td>
-        <td class="num">${qbitSeed}</td>
         <td class="num">${bonus}</td>
         ${statusCell}
       </tr>`;
@@ -3883,7 +3911,7 @@
       : '';
     const subRow = `
       <tr class="row-expanded">
-        <td colspan="12">
+        <td colspan="11">
           <div class="row-expanded-inner">
             <div class="row-error-msg">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:1px">
@@ -3924,7 +3952,6 @@
             ${th('ratio', 'Ratio')}
             ${th('buffer', 'Buffer')}
             ${th('seeding', 'Seeding')}
-            ${th('qbitseeding', 'Seeding client')}
             ${th('bonus', 'Bonus')}
             ${th('status', 'Statut')}
           </tr>

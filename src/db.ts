@@ -312,6 +312,21 @@ export function loadTrackerDefinitionFile(trackerId: string): TrackerConfig | nu
   return null;
 }
 
+// Lit la definition par defaut EMBARQUEE DANS L'IMAGE (default-trackers/), donc toujours
+// a jour avec la version deployee — contrairement a loadTrackerDefinitionFile qui lit la
+// copie sur le volume (config/trackers/), jamais rafraichie une fois ecrite. A utiliser
+// pour les trackers "canoniques" dont la definition fait autorite cote application.
+export function loadDefaultTrackerDefinition(trackerId: string): TrackerConfig | null {
+  if (!fs.existsSync(DEFAULT_TRACKERS_DIR)) return null;
+  const target = path.join(DEFAULT_TRACKERS_DIR, `${trackerId}.json`);
+  if (!fs.existsSync(target)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(target, 'utf-8')) as TrackerConfig;
+  } catch {
+    return null;
+  }
+}
+
 export function loadTrackerConfigsFromDb(): TrackerConfig[] {
   return getDb()
     .prepare('SELECT config_json FROM tracker_configs ORDER BY name')

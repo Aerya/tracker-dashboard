@@ -29,10 +29,10 @@
     "mode": "browser",
     "responseType": "html",
     "fields": {
-      "downloadedBytes": { "regex": "id=\"stats_leeching\"[^>]*title=\"(?<value>[^\"]+)\"", "transform": "bytes" },
-      "uploadedBytes":   { "regex": "id=\"stats_seeding\"[^>]*title=\"(?<value>[^\"]+)\"",   "transform": "bytes" },
-      "ratio":           { "regex": "id=\"stats_ratio\"[^>]*title=\"(?<value>[^\"]+)\"",     "transform": "number" },
-      "seedBonus":       { "regex": "Bonus \\((?<value>[^)]+)\\)",                           "transform": "string" }
+      "downloadedBytes": { "regex": "id=\"stats_leeching\"[\\s\\S]*?title=\"(?<value>[^\"]+)\"", "transform": "bytes" },
+      "uploadedBytes":   { "regex": "id=\"stats_seeding\"[\\s\\S]*?title=\"(?<value>[^\"]+)\"",  "transform": "bytes" },
+      "ratio":           { "regex": "id=\"stats_ratio\"[\\s\\S]*?title=\"(?<value>[^\"]+)\"",    "transform": "number" },
+      "seedBonus":       { "regex": "Bonus \\((?<value>[^)]+)\\)",                              "transform": "string" }
     }
   },
   "dashboard": { "byteUnit": "binary" }
