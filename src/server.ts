@@ -622,6 +622,7 @@ const CANONICAL_CONNECTION_TRACKERS = new Set([
   'c411',
   'nexum',
   'phoenixproject',
+  'redacted',
   'torr9',
 ]);
 

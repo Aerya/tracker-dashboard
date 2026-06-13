@@ -2069,7 +2069,10 @@
   }
 
   function computedRatio(fields) {
-    if (hasStatValue(fields.ratio)) return fields.ratio;
+    if (hasStatValue(fields.ratio)) {
+      if (fields.ratio === '∞' || fields.ratio === Infinity) return Infinity;
+      return fields.ratio;
+    }
     if (!hasStatValue(fields.uploadedBytes) || !hasStatValue(fields.downloadedBytes)) return null;
     const downloaded = Number(fields.downloadedBytes);
     const uploaded = Number(fields.uploadedBytes);
@@ -3793,12 +3796,35 @@
       : (hasStatValue(f.dlQuota)
           ? statCell('DL jour', formatCount(f.dlQuota), '', '')
           : statCell('Taux', '-', '', ''));
+    const bonusOrRequired = hasStatValue(f.requiredRatio)
+      ? statCell('Req. ratio', formatRatio(f.requiredRatio), '', '')
+      : statCell('Bonus', formatCount(f.seedBonus), '', '');
     const bottomCells = ratioless
       ? `${ratiolessCell1}${ratiolessCell2}`
       : `${hasStatValue(f.seedTimeDays)
           ? statCell('Seed time', [formatCount(f.seedTimeDays), 'j'], '', '')
           : seedingStatCell(stat)}
-         ${statCell('Bonus',   formatCount(f.seedBonus), '', '')}`;
+         ${bonusOrRequired}`;
+
+    // Grille specifique aux ratioless exposant Niveau + XP (ex: Nexum). Ordre voulu :
+    //   Niveau | Upload        Strictement conditionne a la presence de level/xp : les
+    //   XP     | DL jour       autres ratioless (HDO, etc.) gardent leur grille standard.
+    //   Seeding| Seed 24h
+    const hasXpFields = ratioless && (hasStatValue(f.level) || hasStatValue(f.xp));
+    const xpGrid = `
+          ${statCell('Niveau', formatCount(f.level), '', '')}
+          ${statCell('Upload', formatBytes(f.uploadedBytes, byteUnit), '', '')}
+          ${statCell('XP', formatCount(f.xp), '', '')}
+          ${ratiolessCell2}
+          ${seedingStatCell(stat)}
+          ${ratiolessCell1}`;
+    const standardGrid = `
+          ${statCell('Download', formatBytes(f.downloadedBytes, byteUnit), '', '')}
+          ${statCell('Upload', formatBytes(f.uploadedBytes, byteUnit), '', '')}
+          ${statCell('Ratio', hasRatio ? formatRatio(ratio) : '-', '', ratioClass(ratio))}
+          ${statCell('Buffer', buffer, '', bufferClass(buffer))}
+          ${bottomCells}
+          ${(ratioless || hasStatValue(f.seedTimeDays)) ? seedingStatCellFull(stat) : ''}`;
 
     return `
       <div class="card card--ok"${cardDragAttrs(stat)}>
@@ -3811,13 +3837,7 @@
         </div>
         <div class="card-badges">${staleBadge(stat)}${ratiolessBadge(stat)}</div>
 
-        <div class="stats">
-          ${statCell('Download', formatBytes(f.downloadedBytes, byteUnit), '', '')}
-          ${statCell('Upload', formatBytes(f.uploadedBytes, byteUnit), '', '')}
-          ${statCell('Ratio', hasRatio ? formatRatio(ratio) : '-', '', ratioClass(ratio))}
-          ${statCell('Buffer', buffer, '', bufferClass(buffer))}
-          ${bottomCells}
-          ${(ratioless || hasStatValue(f.seedTimeDays)) ? seedingStatCellFull(stat) : ''}
+        <div class="stats">${hasXpFields ? xpGrid : standardGrid}
         </div>
         ${stat.stale ? renderIncidentBox(stat) : ''}
         <div class="card-footer">Derniere connexion : ${lastLoginText(stat)}</div>
@@ -3879,9 +3899,15 @@
     const seeding = seedingInf
       ? `${seedingInf.value}${seedingBadgeHtml(seedingInf.badge)}`
       : '<span class="cell-muted">—</span>';
-    // Bonus : seedBonus pour les trackers a ratio, ou Points pour les ratioless
+    // Bonus : seedBonus pour les trackers a ratio, ou Points pour les ratioless.
+    // Si le tracker expose un ratio requis (ex: Redacted), on l'affiche a la place, avec un
+    // badge "req." pour lever l'ambiguite sous l'en-tete generique.
     const bonusRaw = hasStatValue(f.seedBonus) ? f.seedBonus : f.points;
-    const bonus   = isError ? '<span class="cell-muted">—</span>' : formatCount(bonusRaw);
+    const bonus   = isError
+      ? '<span class="cell-muted">—</span>'
+      : (hasStatValue(f.requiredRatio)
+          ? `${formatRatio(f.requiredRatio)} <span class="stat-source" title="Ratio requis">req.</span>`
+          : formatCount(bonusRaw));
 
     const statusCell = hasProblem
       ? `<td class="cell-status" onclick="toggleIncidentEditor('${id}')">${rowStatusBadges(stat)}<span class="chevron">›</span></td>`

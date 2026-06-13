@@ -31,7 +31,8 @@
     "fields": {
       "downloadedBytes": { "regex": "id=\"stats_leeching\"[^>]*title=\"Downloaded: (?<value>[^\"]+)\"", "transform": "bytes" },
       "uploadedBytes":   { "regex": "id=\"stats_seeding\"[^>]*title=\"Uploaded: (?<value>[^\"]+)\"",     "transform": "bytes" },
-      "ratio":           { "regex": "id=\"stats_ratio\"[^>]*title=\"Ratio: (?<value>[^\"]+)\"",          "transform": "number" }
+      "ratio":           { "regex": "id=\"stats_ratio\"[^>]*title=\"Ratio: (?<value>[^\"]+)\"",          "transform": "number" },
+      "requiredRatio":   { "regex": "id=\"stats_required\"[^>]*title=\"Required Ratio: (?<value>[^\"]+)\"", "transform": "number" }
     }
   },
   "dashboard": { "byteUnit": "binary" }

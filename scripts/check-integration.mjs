@@ -4,8 +4,10 @@ import path from 'node:path';
 const root = process.cwd();
 const htmlPath = path.join(root, 'public', 'index.html');
 const serverPath = path.join(root, 'src', 'server.ts');
+const redactedPath = path.join(root, 'config', 'trackers', 'redacted.json');
 const html = fs.readFileSync(htmlPath, 'utf8');
 const server = fs.readFileSync(serverPath, 'utf8');
+const redacted = JSON.parse(fs.readFileSync(redactedPath, 'utf8'));
 const errors = [];
 
 function normalizeRoute(route) {
@@ -66,6 +68,17 @@ for (const [file, content] of [[htmlPath, html], [serverPath, server]]) {
   if (/^(<<<<<<<|=======|>>>>>>>)/m.test(content)) {
     errors.push(`Unresolved merge marker in ${path.relative(root, file)}`);
   }
+}
+
+if (!html.includes('<h2>🔀 Proxy</h2>')) {
+  errors.push('Proxy panel heading is missing or corrupted');
+}
+
+const canonicalTrackers = server.match(
+  /const CANONICAL_CONNECTION_TRACKERS = new Set\(\[([\s\S]*?)\]\);/,
+)?.[1] ?? '';
+if (redacted.fetch?.fields?.requiredRatio && !canonicalTrackers.includes("'redacted'")) {
+  errors.push('Redacted bundled fields are not synchronized to existing installations');
 }
 
 if (errors.length > 0) {
