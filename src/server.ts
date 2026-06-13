@@ -34,6 +34,7 @@ import {
   loadCredentialsFromDb,
   loadTrackerConfigsFromDb,
   loadTrackerDefinitionFile,
+  loadDefaultTrackerDefinition,
   saveStatSnapshots,
   saveTrackerCredentials,
   saveTrackerConfig,
@@ -629,7 +630,11 @@ function normalizeTrackerConfigs(): TrackerConfig[] {
   for (const tracker of trackers) {
     let changed = false;
     if (CANONICAL_CONNECTION_TRACKERS.has(tracker.id)) {
-      const definition = loadTrackerDefinitionFile(tracker.id);
+      // Lire la definition depuis l'image (toujours a jour) plutot que la copie sur le
+      // volume (config/trackers/), qui n'est jamais rafraichie apres la 1re ecriture.
+      // Fallback sur le fichier du volume si l'image ne fournit pas la definition.
+      const definition = loadDefaultTrackerDefinition(tracker.id)
+        ?? loadTrackerDefinitionFile(tracker.id);
       if (definition) {
         if (JSON.stringify(tracker.login) !== JSON.stringify(definition.login)) {
           tracker.login = definition.login;
