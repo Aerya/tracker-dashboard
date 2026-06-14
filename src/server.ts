@@ -2410,6 +2410,10 @@ export async function start(): Promise<void> {
     res.sendFile(path.join(PUBLIC_DIR, 'logo.png'));
   });
 
+  app.get('/favicon.png', (_req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'favicon.png'));
+  });
+
   app.get('/api/auth/status', (req, res) => {
     res.json({
       configured: isAuthConfigured(),
