@@ -253,6 +253,14 @@ function knownUnit3dFields(): Record<string, FieldExtractor> {
       regex: 'ratio-bar__tokens[\\s\\S]*?<i[^>]*>[\\s\\S]*?</i>\\s*(?<value>\\d+)',
       transform: 'integer',
     },
+    // MP non lus : UNIT3D affiche une sphère animée (<animate>) près de l'icône envelope
+    // dans le bloc "conversations" quand il y a des MP non lus, rien sinon.
+    // Pas de compteur disponible → on capture la durée de l'animation ("1s") comme
+    // signal de présence ; unreadMessagesCount() mappe toute string non vide → 1.
+    unreadMessages: {
+      regex: 'Boîte de réception(?:(?!<\\/a>)[\\s\\S])*?<animate[^>]*?dur="(?<value>[^"]+)"',
+      transform: 'string',
+    },
   };
 }
 
