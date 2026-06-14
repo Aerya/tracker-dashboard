@@ -171,6 +171,58 @@
     }
     .sidebar-logout:hover { border-color: var(--red); color: var(--red); }
 
+    /* ── Menus dépliants (accordéons) ────────────────────────────── */
+    .nav-group { display: flex; flex-direction: column; }
+    .nav-group-toggle { position: relative; }
+    .nav-caret {
+      margin-left: auto;
+      font-size: 11px;
+      color: var(--text2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: transform .15s, color .15s;
+    }
+    .nav-caret:hover { color: var(--text); }
+    .nav-group.open .nav-caret { transform: rotate(90deg); }
+    .nav-sub {
+      display: none;
+      flex-direction: column;
+      padding: 2px 0 6px;
+    }
+    .nav-group.open .nav-sub { display: flex; }
+    .nav-sub-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px 6px 38px;
+      font-size: 12px;
+      color: var(--text2);
+      cursor: pointer;
+      background: none;
+      border: none;
+      border-left: 3px solid transparent;
+      width: 100%;
+      text-align: left;
+      transition: color .15s, background .15s;
+    }
+    .nav-sub-item:hover { color: var(--text); background: color-mix(in srgb, var(--bg) 60%, transparent); }
+    .nav-sub-item.active { color: var(--accent); border-left-color: var(--accent); }
+    .nav-sub-item .nav-sub-dot {
+      width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: var(--muted);
+    }
+    .nav-sub-item .nav-sub-dot.ok { background: var(--green); }
+    .nav-sub-item .nav-sub-dot.warn { background: var(--yellow); }
+    .nav-sub-item .nav-sub-dot.bad { background: var(--red); }
+    .nav-sub-item .nav-sub-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .nav-sub-empty { padding: 6px 16px 6px 38px; font-size: 11px; color: var(--muted); }
+    .definition-row-highlight { box-shadow: 0 0 0 2px var(--accent); border-radius: 8px; transition: box-shadow .3s; }
+    .nav-item.proxy-on::after {
+      content: '';
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--green); margin-left: auto;
+    }
+    .nav-item.proxy-on.active::after { margin-left: 8px; }
+
     /* ── Content area ────────────────────────────────────────────── */
     .content-area {
       grid-row: 2;
@@ -1538,17 +1590,8 @@
 <header>
   <span class="header-logo-text">tracker<span>.dashboard</span></span>
   <div class="header-right">
-    <button id="proxy-toggle" onclick="toggleProxyPanel()">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
-      </svg>
-      Proxies
-    </button>
     <button id="view-toggle" onclick="toggleViewMode()" title="Basculer entre vue cartes et vue lignes">Vue lignes</button>
     <button id="theme-toggle" onclick="toggleTheme()">Jour</button>
-    <button id="presentation-toggle" onclick="togglePresentationMode()" title="Afficher toutes les cartes avec des données factices">
-      Présentation
-    </button>
     <span id="last-updated">—</span>
     <button id="refresh-btn" onclick="refresh()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1561,12 +1604,42 @@
 
 <nav class="sidebar">
   <span class="nav-section-label">Navigation</span>
-  <button class="nav-item active" id="sidebar-dashboard-tab" onclick="setActiveTab('dashboard')" type="button">
+  <button class="nav-item active" data-nav="dashboard" onclick="showView('dashboard')" type="button">
     <span class="nav-icon">◈</span> Dashboard
   </button>
-  <button class="nav-item" id="sidebar-beta-tab" onclick="setActiveTab('beta')" type="button">
-    <span class="nav-icon">⬡</span> Bêta
+
+  <div class="nav-group" data-nav-group="trackers">
+    <button class="nav-item nav-group-toggle" data-nav="trackers" onclick="onTrackersNavClick(event)" type="button">
+      <span class="nav-icon">⚙</span> Trackers
+      <span class="nav-caret" onclick="toggleNavGroup(event, 'trackers')">▸</span>
+    </button>
+    <div class="nav-sub" id="nav-sub-trackers"></div>
+  </div>
+
+  <button class="nav-item" data-nav="proxies" onclick="showView('proxies')" type="button">
+    <span class="nav-icon">⇄</span> Proxies
   </button>
+  <button class="nav-item" data-nav="incidents" onclick="showView('incidents')" type="button">
+    <span class="nav-icon">⚠</span> Focus incident
+  </button>
+  <button class="nav-item" data-nav="graphs" onclick="showView('graphs')" type="button">
+    <span class="nav-icon">▤</span> Graphiques
+  </button>
+  <button class="nav-item" data-nav="qbit" onclick="showView('qbit')" type="button">
+    <span class="nav-icon">⬇</span> Clients BitTorrent
+  </button>
+  <button class="nav-item" data-nav="alerts" onclick="showView('alerts')" type="button">
+    <span class="nav-icon">⚑</span> Alertes et Notifications
+  </button>
+
+  <div class="nav-group" data-nav-group="fiche">
+    <button class="nav-item nav-group-toggle" data-nav="fiche" onclick="onFicheNavClick(event)" type="button">
+      <span class="nav-icon">▦</span> Fiches de trackers
+      <span class="nav-caret" onclick="toggleNavGroup(event, 'fiche')">▸</span>
+    </button>
+    <div class="nav-sub" id="nav-sub-fiche"></div>
+  </div>
+
   <span class="nav-spacer"></span>
   <button class="sidebar-run-btn" id="sidebar-run-btn" onclick="refresh()">▶ Tout visiter</button>
   <button class="sidebar-logout" onclick="logout()">⏻ Déconnexion</button>
@@ -1683,7 +1756,7 @@
 
 
 <main>
-  <section id="dashboard-view" class="tab-view active">
+  <section class="tab-view active" data-view="dashboard">
   <div class="settings-layout">
     <div class="beta-panel" style="padding:10px 12px">
       <div class="beta-field">
@@ -1691,7 +1764,13 @@
         <input id="dashboard-tracker-search" type="search" placeholder="Filtrer les trackers affiches..." oninput="renderGrid()" />
       </div>
     </div>
-    <details id="tracker-definitions-panel">
+  </div>
+  <div id="schedule-panel"></div>
+  <div id="grid"></div>
+  </section>
+
+  <section class="tab-view" data-view="trackers">
+    <details id="tracker-definitions-panel" open>
       <summary>Trackers</summary>
       <div style="margin:0 0 10px; display:flex; gap:10px; align-items:center; flex-wrap:wrap">
         <button class="btn-test" onclick="refreshLogos()">Rafraîchir les logos</button>
@@ -1707,75 +1786,37 @@
       <div id="tracker-definitions-list" class="credential-status"></div>
       <div class="credential-status" id="credential-result"></div>
     </details>
-  </div>
-  <div id="schedule-panel"></div>
-  <div id="grid"></div>
   </section>
-  <section id="beta-view" class="tab-view">
-    <div id="beta-summary" class="beta-summary"></div>
-    <div class="beta-toolbar">
-      <div class="beta-title">
-        <strong>Laboratoire bêta</strong>
-        <span>Comparaison trackers, clients BitTorrent, historique et alertes expérimentales.</span>
-      </div>
-      <div class="beta-actions" aria-label="Contrôles bêta">
-        <button id="beta-filter-all" class="active" onclick="setBetaFilter('all')" type="button">Tous</button>
-        <button id="beta-filter-problems" onclick="setBetaFilter('problems')" type="button">Problèmes</button>
-        <button id="beta-filter-healthy" onclick="setBetaFilter('healthy')" type="button">OK</button>
-        <button id="beta-refresh-clients" onclick="refreshBetaQbit()" type="button">Synchroniser les clients BitTorrent</button>
+
+  <section class="tab-view" data-view="fiche">
+    <div class="beta-stack" style="width:100%">
+      <section class="beta-panel">
+        <h3>Fiche de tracker</h3>
+        <div id="beta-tracker-page"></div>
+      </section>
+      <div class="beta-grid-2">
+        <section class="beta-panel">
+          <h3>Comparaison tracker / client BitTorrent</h3>
+          <div id="beta-comparison"></div>
+        </section>
+        <section class="beta-panel">
+          <h3>Statut de fonctionnement</h3>
+          <div id="beta-operation-status"></div>
+        </section>
       </div>
     </div>
-    <div class="beta-section-tabs" aria-label="Sections bêta">
-      <button id="beta-section-overview" class="active" onclick="setBetaSection('overview')" type="button">Fiche de tracker</button>
-      <button id="beta-section-table" onclick="setBetaSection('table')" type="button">Tableau compact</button>
-      <button id="beta-section-incidents" onclick="setBetaSection('incidents')" type="button">Focus incidents</button>
-      <button id="beta-section-graphs" onclick="setBetaSection('graphs')" type="button">Graphiques</button>
-      <button id="beta-section-qbit" onclick="setBetaSection('qbit')" type="button">Clients BitTorrent</button>
-      <button id="beta-section-alerts" onclick="setBetaSection('alerts')" type="button">Alertes</button>
-      <button id="beta-section-classic" onclick="setBetaSection('classic')" type="button">Vue classique</button>
-    </div>
-    <div class="beta-workbench">
-      <aside class="beta-panel">
-        <h3>Trackers</h3>
-        <div class="beta-field" style="margin-bottom:10px">
-          <label for="beta-tracker-search">Recherche</label>
-          <input id="beta-tracker-search" type="search" placeholder="Nom, statut, domaine..." oninput="renderBetaTrackerList()" />
-        </div>
-        <div id="beta-tracker-list" class="beta-list"></div>
-      </aside>
-      <div class="beta-stack">
-        <section class="beta-section active" data-beta-section="overview">
-        <section class="beta-panel" style="margin-bottom:12px">
-          <h3>Fiche de tracker</h3>
-          <div id="beta-tracker-page"></div>
-        </section>
-        <div class="beta-grid-2">
-          <section class="beta-panel">
-            <h3>Comparaison tracker / client BitTorrent</h3>
-            <div id="beta-comparison"></div>
-          </section>
-          <section class="beta-panel">
-            <h3>Statut de fonctionnement</h3>
-            <div id="beta-operation-status"></div>
-          </section>
-        </div>
-        </section>
-        <section class="beta-section" data-beta-section="table">
-        <section class="beta-panel">
-          <h3>Tableau compact</h3>
-          <div class="beta-note" style="margin-bottom:10px">Tri par colonne, lignes colorées par état, actions rapides et valeurs alignées pour comparer les trackers actifs.</div>
-          <div id="beta-compact-table"></div>
-        </section>
-        </section>
-        <section class="beta-section" data-beta-section="incidents">
-        <section class="beta-panel">
-          <h3>Focus incidents</h3>
-          <div class="beta-note" style="margin-bottom:10px">Trackers en erreur, données anciennes, captcha, cookie-only ou site difficile à joindre.</div>
-          <div id="beta-focus-incidents"></div>
-        </section>
-        </section>
-        <section class="beta-section" data-beta-section="graphs">
-        <div class="beta-stack">
+  </section>
+
+  <section class="tab-view" data-view="incidents">
+    <section class="beta-panel" style="width:100%">
+      <h3>Focus incidents</h3>
+      <div class="beta-note" style="margin-bottom:10px">Trackers en erreur, données anciennes, captcha, cookie-only ou site difficile à joindre.</div>
+      <div id="beta-focus-incidents"></div>
+    </section>
+  </section>
+
+  <section class="tab-view" data-view="graphs">
+        <div class="beta-stack" style="width:100%">
         <section class="beta-panel">
           <h3>Graphique global</h3>
           <div class="beta-chart-controls">
@@ -1815,11 +1856,15 @@
           <div id="beta-calendar-detail" class="beta-calendar-detail"></div>
         </section>
         </div>
-        </section>
-        <section class="beta-section" data-beta-section="qbit">
-        <div class="beta-stack">
+  </section>
+
+  <section class="tab-view" data-view="qbit">
+        <div class="beta-stack" style="width:100%">
           <section class="beta-panel">
             <h3>Clients BitTorrent</h3>
+            <div class="beta-actions" style="margin-bottom:10px">
+              <button id="beta-refresh-clients" class="beta-icon-btn" onclick="refreshBetaQbit()" type="button">Synchroniser les clients BitTorrent</button>
+            </div>
             <div id="beta-qbit-clients"></div>
             <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap">
               <button class="beta-icon-btn" onclick="addBetaQbitClient()" type="button">Ajouter</button>
@@ -1835,9 +1880,10 @@
           </div>
         </section>
         </div>
-        </section>
-        <section class="beta-section" data-beta-section="alerts">
-        <div class="beta-grid-2">
+  </section>
+
+  <section class="tab-view" data-view="alerts">
+        <div class="beta-grid-2" style="width:100%">
           <section class="beta-panel">
             <h3>Planification des logins</h3>
             <p class="beta-note" style="margin-bottom:10px">Planification globale inspirée d'Autovisit. Chaque cycle visite tous les trackers actifs disposant de credentials.</p>
@@ -1865,15 +1911,6 @@
             </div>
           </section>
         </div>
-        </section>
-        <section class="beta-section" data-beta-section="classic">
-        <section class="beta-panel">
-          <h3>Vue classique bêta</h3>
-          <div id="beta-grid"></div>
-        </section>
-        </section>
-      </div>
-    </div>
   </section>
 </main>
 
@@ -2279,9 +2316,12 @@
   let dragSourceTrackerId = null;
   const expandedIncidents = new Set();
   let viewMode = 'cards'; // 'cards' | 'rows'
-  let activeTab = 'dashboard'; // 'dashboard' | 'beta'
+  // Vue active pilotée par la barre latérale.
+  // 'dashboard' | 'trackers' | 'proxies' | 'incidents' | 'graphs' | 'qbit' | 'alerts' | 'fiche'
+  let currentView = 'dashboard';
+  // Vues alimentées par les données bêta (overview + historique).
+  const BETA_VIEWS = ['incidents', 'graphs', 'qbit', 'alerts', 'fiche'];
   let betaStatusFilter = 'all'; // 'all' | 'problems' | 'healthy'
-  let betaSection = 'overview';
   let betaCalendarMonth = new Date();
   let betaOverview = null;
   let betaSettings = {
@@ -2305,7 +2345,11 @@
   };
 
   function getActiveGrid() {
-    return document.getElementById(activeTab === 'beta' ? 'beta-grid' : 'grid');
+    return document.getElementById('grid');
+  }
+
+  function isBetaView(view = currentView) {
+    return BETA_VIEWS.includes(view);
   }
 
   function hasTrackerProblem(stat) {
@@ -2350,7 +2394,7 @@
   }
 
   async function loadBetaData() {
-    if (activeTab !== 'beta') return;
+    if (!isBetaView()) return;
     try {
       const [overviewResponse, historyResponse] = await Promise.all([
         fetch('/api/beta/overview'),
@@ -2378,35 +2422,70 @@
     return status.mode || (status.status === 'ok' ? 'fonctionne' : 'cassé');
   }
 
-  function renderBetaTrackerList() {
-    const list = document.getElementById('beta-tracker-list');
-    if (!list) return;
-    const query = (document.getElementById('beta-tracker-search')?.value || '').toLowerCase();
-    const statuses = new Map((betaOverview?.trackerStatuses || []).map(item => [item.id, item]));
-    const filtered = latestSortedStats.filter(stat => !isUnconfigured(stat)).filter(stat => {
-      const status = statuses.get(stat.id);
-      const haystack = `${stat.name} ${stat.id} ${trackerModeLabel(status)} ${stat.trackerUrl || ''}`.toLowerCase();
-      return !query || haystack.includes(query);
+  // Trackers actifs (configurés et non désactivés), utilisés par les deux
+  // accordéons de la barre latérale (Trackers et Fiches de trackers).
+  function activeTrackerStats() {
+    return latestSortedStats.filter(stat => {
+      if (isUnconfigured(stat)) return false;
+      const tracker = trackerConfig.find(item => item.id === stat.id);
+      return tracker ? tracker.enabled !== false : true;
     });
-    if (!betaSelectedTrackerId && filtered[0]) betaSelectedTrackerId = filtered[0].id;
-    list.innerHTML = filtered.map(stat => {
-      const status = statuses.get(stat.id);
-      const mode = trackerModeLabel(status);
-      const dot = mode === 'fonctionne' ? 'ok' : (mode === 'cookie-only' || mode === 'captcha' ? 'warn' : 'bad');
-      return `
-        <button class="beta-tracker-button ${stat.id === betaSelectedTrackerId ? 'active' : ''}" onclick="selectBetaTracker('${escapeHtml(stat.id)}')" type="button">
-          <span>
-            <strong>${escapeHtml(stat.name)}</strong>
-            <span>${escapeHtml(mode)}${status?.ratioless ? ' · ratioless' : ''}</span>
-          </span>
-          <i class="beta-status-dot ${dot}"></i>
-        </button>`;
-    }).join('') || '<p class="beta-note">Aucun tracker.</p>';
+  }
+
+  // Remplit les deux sous-menus dépliants de la barre latérale.
+  function renderBetaTrackerList() {
+    const subFiche = document.getElementById('nav-sub-fiche');
+    const subTrackers = document.getElementById('nav-sub-trackers');
+    if (!subFiche && !subTrackers) return;
+    const statuses = new Map((betaOverview?.trackerStatuses || []).map(item => [item.id, item]));
+    const trackers = activeTrackerStats();
+    if (!betaSelectedTrackerId && trackers[0]) betaSelectedTrackerId = trackers[0].id;
+
+    if (subFiche) {
+      subFiche.innerHTML = trackers.map(stat => {
+        const status = statuses.get(stat.id);
+        const mode = trackerModeLabel(status);
+        const dot = mode === 'fonctionne' ? 'ok' : (mode === 'cookie-only' || mode === 'captcha' ? 'warn' : 'bad');
+        const active = currentView === 'fiche' && stat.id === betaSelectedTrackerId;
+        return `
+          <button class="nav-sub-item ${active ? 'active' : ''}" onclick="openTrackerFiche('${escapeHtml(stat.id)}')" type="button" title="${escapeHtml(mode)}">
+            <i class="nav-sub-dot ${dot}"></i>
+            <span class="nav-sub-name">${escapeHtml(stat.name)}</span>
+          </button>`;
+      }).join('') || '<p class="nav-sub-empty">Aucun tracker actif.</p>';
+    }
+
+    if (subTrackers) {
+      subTrackers.innerHTML = trackers.map(stat => `
+          <button class="nav-sub-item" onclick="openTrackerConfig('${escapeHtml(stat.id)}')" type="button">
+            <span class="nav-sub-name">${escapeHtml(stat.name)}</span>
+          </button>`).join('') || '<p class="nav-sub-empty">Aucun tracker actif.</p>';
+    }
   }
 
   function selectBetaTracker(trackerId) {
     betaSelectedTrackerId = trackerId;
     renderBetaLab();
+  }
+
+  // Ouvre la fiche d'un tracker depuis l'accordéon « Fiches de trackers ».
+  function openTrackerFiche(trackerId) {
+    betaSelectedTrackerId = trackerId;
+    setNavGroupOpen('fiche', true);
+    showView('fiche');
+  }
+
+  // Ouvre la gestion d'un tracker depuis l'accordéon « Trackers » et défile
+  // jusqu'à sa carte de configuration.
+  function openTrackerConfig(trackerId) {
+    setNavGroupOpen('trackers', true);
+    showView('trackers');
+    const row = document.getElementById('tracker-def-' + trackerId);
+    if (row) {
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      row.classList.add('definition-row-highlight');
+      setTimeout(() => row.classList.remove('definition-row-highlight'), 2000);
+    }
   }
 
   function betaTrackerUrl(stat) {
@@ -2496,7 +2575,7 @@
                 <td class="num">${formatCount(bonusRaw)}</td>
                 <td>
                   <div class="beta-table-actions">
-                    <button class="beta-icon-btn" onclick="selectBetaTracker('${escapeHtml(stat.id)}'); setBetaSection('overview')" type="button">Fiche</button>
+                    <button class="beta-icon-btn" onclick="openTrackerFiche('${escapeHtml(stat.id)}')" type="button">Fiche</button>
                     <button class="beta-icon-btn" onclick="refreshTracker('${escapeHtml(stat.id)}', this)" type="button">MàJ</button>
                   </div>
                 </td>
@@ -3478,56 +3557,65 @@
     alert(data.ok ? 'Notification envoyée' : `Notification KO: ${data.error}`);
   }
 
-  function renderBetaControls() {
-    ['all', 'problems', 'healthy'].forEach(filter => {
-      const btn = document.getElementById(`beta-filter-${filter}`);
-      if (btn) btn.classList.toggle('active', betaStatusFilter === filter);
-    });
-    document.querySelectorAll('[id^="beta-section-"]').forEach(btn => {
-      btn.classList.toggle('active', btn.id === `beta-section-${betaSection}`);
-    });
-    document.querySelectorAll('[data-beta-section]').forEach(section => {
-      section.classList.toggle('active', section.getAttribute('data-beta-section') === betaSection);
-    });
-  }
+  const ALL_VIEWS = ['dashboard', 'trackers', 'proxies', 'incidents', 'graphs', 'qbit', 'alerts', 'fiche'];
 
-  function setBetaSection(section) {
-    betaSection = ['table', 'incidents', 'graphs', 'qbit', 'alerts', 'classic'].includes(section) ? section : 'overview';
-    localStorage.setItem('tracker-dashboard-beta-section', betaSection);
-    renderBetaControls();
-    renderBetaLab();
-  }
+  // Affiche la vue demandée : bascule les sections de <main>, le panneau proxy
+  // (sibling de <main>) et l'état actif de la barre latérale.
+  function showView(view) {
+    currentView = ALL_VIEWS.includes(view) ? view : 'dashboard';
+    localStorage.setItem('tracker-dashboard-view-active', currentView);
 
-  function setActiveTab(tab) {
-    activeTab = tab === 'beta' ? 'beta' : 'dashboard';
-    localStorage.setItem('tracker-dashboard-tab', activeTab);
-    document.getElementById('dashboard-view')?.classList.toggle('active', activeTab === 'dashboard');
-    document.getElementById('beta-view')?.classList.toggle('active', activeTab === 'beta');
-    // Sync sidebar nav items
-    document.getElementById('sidebar-dashboard-tab')?.classList.toggle('active', activeTab === 'dashboard');
-    document.getElementById('sidebar-beta-tab')?.classList.toggle('active', activeTab === 'beta');
+    const proxyPanel = document.getElementById('proxy-panel');
+    const mainEl = document.querySelector('main');
+    if (proxyPanel) proxyPanel.classList.toggle('open', currentView === 'proxies');
+    if (mainEl) mainEl.style.display = currentView === 'proxies' ? 'none' : '';
+
+    document.querySelectorAll('main [data-view]').forEach(section => {
+      section.classList.toggle('active', section.getAttribute('data-view') === currentView);
+    });
+    document.querySelectorAll('.sidebar [data-nav]').forEach(btn => {
+      btn.classList.toggle('active', btn.getAttribute('data-nav') === currentView);
+    });
+
+    if (isBetaView()) loadBetaData();
     renderGrid();
-    loadBetaData();
+    renderBetaTrackerList();
   }
 
-  function loadActiveTab() {
+  function loadActiveView() {
     const params = new URLSearchParams(window.location.search);
-    setActiveTab(params.get('tab') || localStorage.getItem('tracker-dashboard-tab') || 'dashboard');
+    const stored = params.get('view') || localStorage.getItem('tracker-dashboard-view-active') || 'dashboard';
+    showView(stored);
   }
 
-  function setBetaFilter(filter) {
-    betaStatusFilter = ['problems', 'healthy'].includes(filter) ? filter : 'all';
-    localStorage.setItem('tracker-dashboard-beta-filter', betaStatusFilter);
-    renderBetaControls();
-    renderGrid();
+  // ── Accordéons de la barre latérale ──────────────────────────────────────
+  function setNavGroupOpen(name, open) {
+    const group = document.querySelector(`.nav-group[data-nav-group="${name}"]`);
+    if (group) group.classList.toggle('open', open);
+  }
+
+  function toggleNavGroup(event, name) {
+    if (event) event.stopPropagation();
+    const group = document.querySelector(`.nav-group[data-nav-group="${name}"]`);
+    if (group) group.classList.toggle('open');
+  }
+
+  // Clic sur l'entête « Trackers » : ouvre la vue de gestion et déplie le menu.
+  function onTrackersNavClick(event) {
+    setNavGroupOpen('trackers', true);
+    showView('trackers');
+  }
+
+  // Clic sur l'entête « Fiches de trackers » : ouvre la vue fiche et déplie le menu.
+  function onFicheNavClick(event) {
+    setNavGroupOpen('fiche', true);
+    showView('fiche');
   }
 
   function loadBetaSettings() {
     const params = new URLSearchParams(window.location.search);
     betaStatusFilter = localStorage.getItem('tracker-dashboard-beta-filter') || 'all';
-    betaSection = params.get('section') || localStorage.getItem('tracker-dashboard-beta-section') || 'overview';
     betaSelectedTrackerId = params.get('tracker') || betaSelectedTrackerId;
-    renderBetaControls();
   }
 
   // Re-rend la grille a partir des dernieres stats (sans re-fetch), en preservant
@@ -3542,20 +3630,18 @@
       ? { id: active.id, start: active.selectionStart, end: active.selectionEnd }
       : null;
 
-    const stats = activeTab === 'beta' ? betaStats() : dashboardStats();
-    renderBetaSummary();
-    renderBetaControls();
+    const stats = dashboardStats();
 
     // Le drag & drop des tuiles n'est propose que sur le dashboard, en vue
     // cartes, et sans filtre actif (sinon l'ordre persiste serait ambigu).
     const searchQuery = (document.getElementById('dashboard-tracker-search')?.value || '').trim();
-    dragReorderEnabled = activeTab === 'dashboard' && viewMode === 'cards' && !searchQuery;
+    dragReorderEnabled = currentView === 'dashboard' && viewMode === 'cards' && !searchQuery;
 
     grid.classList.toggle('grid--rows', viewMode === 'rows');
     grid.innerHTML = stats.length === 0
       ? '<div class="error-body">Aucun tracker dans ce filtre.</div>'
       : (viewMode === 'rows' ? renderRowsView(stats) : stats.map(renderCard).join(''));
-    if (activeTab === 'beta') renderBetaLab();
+    if (isBetaView()) renderBetaLab();
 
     if (focusSnap) {
       const el = document.getElementById(focusSnap.id);
@@ -4303,7 +4389,10 @@
   }
 
   function renderPresentationToggle() {
+    // Le bouton « Présentation » a été retiré de l'interface ; on conserve la
+    // lecture du flag côté serveur sans contrôle d'UI associé.
     const btn = document.getElementById('presentation-toggle');
+    if (!btn) return;
     btn.classList.toggle('active', presentationMode);
     btn.textContent = presentationMode ? 'Présentation ON' : 'Présentation';
   }
@@ -4365,6 +4454,7 @@
     // personnalise enregistre via le drag & drop des tuiles).
     latestSortedStats = [...data.stats];
     renderGrid();
+    renderBetaTrackerList();
     await loadBetaData();
     document.getElementById('last-updated').textContent =
       data.lastRefresh ? `Mis à jour ${relativeTime(data.lastRefresh)}` : '—';
@@ -4431,13 +4521,6 @@
     location.href = '/login.html';
   }
 
-  function toggleProxyPanel() {
-    const panel = document.getElementById('proxy-panel');
-    const btn   = document.getElementById('proxy-toggle');
-    panel.classList.toggle('open');
-    btn.classList.toggle('active', panel.classList.contains('open'));
-  }
-
   function syncProxyToggle() {
     // visuel uniquement — l'état réel est sauvegardé au clic "Enregistrer"
   }
@@ -4456,8 +4539,8 @@
       document.getElementById('proxy-passphrase').value  = d.passphrase || '';
       document.getElementById('proxy-direct-allowed').checked = Boolean(d.directConnectAllowed);
       syncProxySshRow();
-      // Refléter l'état dans le header
-      document.getElementById('proxy-toggle').classList.toggle('active', d.enabled);
+      // Refléter l'état sur l'entrée Proxies de la barre latérale
+      document.querySelector('.sidebar [data-nav="proxies"]')?.classList.toggle('proxy-on', d.enabled);
     } catch(e) { console.warn('Proxy settings unavailable', e); }
   }
 
@@ -4527,8 +4610,8 @@
       if (!d.ok) throw new Error(d.error || 'Erreur inconnue');
       result.style.color = 'var(--green)';
       result.textContent = '✅ Enregistré — les sessions seront renouvelées au prochain refresh';
-      document.getElementById('proxy-toggle').classList.toggle(
-        'active', document.getElementById('proxy-enabled').checked
+      document.querySelector('.sidebar [data-nav="proxies"]')?.classList.toggle(
+        'proxy-on', document.getElementById('proxy-enabled').checked
       );
     } catch(e) {
       result.style.color = 'var(--red)';
@@ -4756,7 +4839,7 @@
     await showMigrationNoticeIfNeeded();
     loadViewMode();
     loadBetaSettings();
-    loadActiveTab();
+    loadActiveView();
     await loadPresentationMode();
     await loadProxySettings();
     await loadBrowserEngine();
