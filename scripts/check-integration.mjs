@@ -74,10 +74,11 @@ if (!html.includes('<h2>🔀 Proxy</h2>')) {
   errors.push('Proxy panel heading is missing or corrupted');
 }
 
-const canonicalTrackers = server.match(
-  /const CANONICAL_CONNECTION_TRACKERS = new Set\(\[([\s\S]*?)\]\);/,
-)?.[1] ?? '';
-if (redacted.fetch?.fields?.requiredRatio && !canonicalTrackers.includes("'redacted'")) {
+const synchronizesAllBundledTrackers = (
+  server.includes('const definition = loadDefaultTrackerDefinition(tracker.id);')
+  && !server.includes('CANONICAL_CONNECTION_TRACKERS')
+);
+if (redacted.fetch?.fields?.requiredRatio && !synchronizesAllBundledTrackers) {
   errors.push('Redacted bundled fields are not synchronized to existing installations');
 }
 
