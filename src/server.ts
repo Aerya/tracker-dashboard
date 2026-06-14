@@ -297,6 +297,12 @@ const knownTrackerFields: Record<string, {
         regex: 'Re[\\s\\S]{0,160}?(?<value>[\\d\\s.,]+\\s*[KMGTPE]?i?B)',
         transform: 'bytes',
       },
+      // MP non lus : skin Gazelle identique à HDForever (gazelle-notification +
+      // data-notification-type="Inbox"). A confirmer par Aerya si skin différente.
+      unreadMessages: {
+        regex: 'data-notification-type=[\'"]Inbox[\'"][^>]*>[^<]*?(?<value>\\d+|\\bun) nouveau',
+        transform: 'string',
+      },
     },
   },
   hdforever: {
