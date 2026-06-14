@@ -38,7 +38,8 @@
       "seedTime":      { "regex": "user-stat-seed24[\\s\\S]{0,120}?</i>\\s*(?<value>[^<]+?)\\s*</span>", "transform": "string" },
       "dlQuota":       { "regex": "user-stat-dlday[\\s\\S]{0,160}?</i>\\s*(?<value>[^<]+?)\\s*</span>", "transform": "string" },
       "level":         { "regex": "Niveau\\s*(?<value>\\d+)", "transform": "integer" },
-      "xp":            { "regex": "Niveau\\s*\\d+\\s*·\\s*(?<value>[\\d\\s]+?)\\s*XP", "transform": "string" }
+      "xp":            { "regex": "Niveau\\s*\\d+\\s*·\\s*(?<value>[\\d\\s]+?)\\s*XP", "transform": "string" },
+      "unreadMessages": { "regex": "id=['\"]pm-badge['\"][^>]*>(?<value>\\d+)", "transform": "integer" }
     }
   },
   "dashboard": { "byteUnit": "binary" }

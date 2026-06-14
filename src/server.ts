@@ -297,6 +297,12 @@ const knownTrackerFields: Record<string, {
         regex: 'Re[\\s\\S]{0,160}?(?<value>[\\d\\s.,]+\\s*[KMGTPE]?i?B)',
         transform: 'bytes',
       },
+      // MP non lus : skin Gazelle identique à HDForever (gazelle-notification +
+      // data-notification-type="Inbox"). A confirmer par Aerya si skin différente.
+      unreadMessages: {
+        regex: 'data-notification-type=[\'"]Inbox[\'"][^>]*>[^<]*?(?<value>\\d+|\\bun) nouveau',
+        transform: 'string',
+      },
     },
   },
   hdforever: {
@@ -317,6 +323,15 @@ const knownTrackerFields: Record<string, {
       },
       seedBonus: {
         regex: 'action=rate[^>]+>(?<value>[\\d,]+)<',
+        transform: 'string',
+      },
+      // MP non lus : skin Gazelle "gazelle-notification" + data-notification-type="Inbox".
+      // FR : "Vous avez 2 nouveaux messages" mais "Vous avez un nouveau message" (singulier
+      // = mot, pas chiffre). On capte \d+ OU "un" UNIQUEMENT s'il est suivi de " nouveau"
+      // et precede d'une frontiere de mot (\b) -> evite "aucun" ou un "un" egare.
+      // transform 'string' pour preserver "un" ; le front mappe un/une -> 1.
+      unreadMessages: {
+        regex: 'data-notification-type=[\'"]Inbox[\'"][^>]*>[^<]*?(?<value>\\d+|\\bun) nouveau',
         transform: 'string',
       },
     },
@@ -407,6 +422,13 @@ const knownTrackerFields: Record<string, {
       },
       seedBonus: {
         regex: "Choco's\\s*:[\\s\\S]{0,360}?text-green[\\s\\S]{0,120}?(?<value>[\\d\\s.,]+)",
+        transform: 'string',
+      },
+      // MP : notification maison "Vous avez N nouveau(x) message(s)." (signal ephemere,
+      // efface une fois "Voir"/"Je m'en fous" clique cote ABN). Capte \d+ OU "un" (au cas
+      // ou ABN ecrit le singulier en lettres), ancre sur "nouveau(x) message", \b anti-"aucun".
+      unreadMessages: {
+        regex: '(?<value>\\d+|\\bun) nouveau\\(x\\) message',
         transform: 'string',
       },
     },

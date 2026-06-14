@@ -123,9 +123,79 @@ function missingExtractedFields(
     if (key === 'bufferBytes' && extractedFields.uploadedBytes !== '' && extractedFields.downloadedBytes !== '') {
       return false;
     }
+    // L'absence de MP non lu est le cas normal : pas de regex match attendu quand 0 message.
+    // On ne le compte donc jamais comme champ manquant (sinon log + dump 'partial' a chaque refresh).
+    if (key === 'unreadMessages') {
+      return false;
+    }
     const value = extractedFields[key];
     return value === '' || value === undefined || value === null;
   });
+}
+
+interface UnreadMessagesResponse {
+  status: number;
+  body: string;
+}
+
+type UnreadMessagesRequest = (
+  url: string,
+  headers: Record<string, string>,
+) => Promise<UnreadMessagesResponse | null>;
+
+// Requête secondaire optionnelle (fetch.unreadFetch) : récupère le compteur de MP
+// non lus depuis un endpoint dédié quand il n'est pas dans la réponse principale
+// (ex. C411). Le transport injecté réutilise la session authentifiée Axios ou curl.
+// Best-effort : toute erreur renvoie '' (badge masqué), sans invalider le tracker.
+export async function fetchUnreadMessages(
+  tracker: TrackerConfig,
+  request: UnreadMessagesRequest,
+  headers: Record<string, string>,
+): Promise<string | number> {
+  const uf = tracker.fetch.unreadFetch;
+  if (!uf) return '';
+  try {
+    const url = resolveUrl(tracker.baseUrl, uf.url);
+    const res = await request(url, headers);
+    if (!res || res.status >= 400) return '';
+    // On réutilise les extracteurs existants via un champ unique "unreadMessages".
+    const single: Record<string, FieldExtractor> = {
+      unreadMessages: { path: uf.path, regex: uf.regex, transform: uf.transform },
+    };
+    const rt = uf.responseType ?? (uf.path ? 'json' : 'html');
+    let out: Record<string, string | number>;
+    if (rt === 'json') {
+      let json: unknown;
+      try { json = JSON.parse(res.body); } catch { return ''; }
+      out = extractJson(json, single);
+    } else {
+      out = extractHtml(res.body, single);
+    }
+    return out.unreadMessages ?? '';
+  } catch {
+    return '';
+  }
+}
+
+async function fetchUnreadMessagesViaAxios(
+  client: AxiosInstance,
+  tracker: TrackerConfig,
+  headers: Record<string, string>,
+): Promise<string | number> {
+  return fetchUnreadMessages(tracker, async (url, requestHeaders) => {
+    const res = await client.get<string>(url, { responseType: 'text', headers: requestHeaders });
+    return { status: res.status, body: res.data };
+  }, headers);
+}
+
+async function fetchUnreadMessagesViaCurl(
+  session: CurlSession,
+  tracker: TrackerConfig,
+  headers: Record<string, string>,
+): Promise<string | number> {
+  return fetchUnreadMessages(tracker, async (url, requestHeaders) => {
+    return session.request(url, { headers: requestHeaders, timeoutMs: 30_000 });
+  }, headers);
 }
 
 function writeDebugDump(
@@ -934,6 +1004,9 @@ export async function fetchTracker(
 
         try {
           const stats = buildStatsFromHtml(url, fetchRes.body);
+          if (tracker.fetch.unreadFetch) {
+            stats.fields.unreadMessages = await fetchUnreadMessagesViaCurl(sess, tracker, fetchHeaders);
+          }
           console.log(`  [${tracker.name}] Login+fetch via curl-impersonate OK (JSON/MFA)`);
           return stats;
         } catch {
@@ -971,6 +1044,13 @@ export async function fetchTracker(
 
       try {
         const stats = buildStatsFromHtml(url, fetchRes.body);
+        if (tracker.fetch.unreadFetch) {
+          stats.fields.unreadMessages = await fetchUnreadMessagesViaCurl(
+            sess,
+            tracker,
+            { Referer: loginUrl },
+          );
+        }
         console.log(`  [${tracker.name}] Login+fetch via curl-impersonate OK (axios evite)`);
         return stats;
       } catch {
@@ -1105,6 +1185,11 @@ export async function fetchTracker(
     if (missingFields.length > 0) {
       const dumpPath = writeDebugDump(tracker, url, res.data, fields, 'partial');
       console.log(`  [${tracker.name}] Champs manquants: ${missingFields.join(', ')}${dumpPath ? ` - dump: ${dumpPath}` : ''}`);
+    }
+
+    // MP non lus via requête secondaire (ex. C411) — best-effort, n'invalide pas le tracker.
+    if (tracker.fetch.unreadFetch) {
+      fields.unreadMessages = await fetchUnreadMessagesViaAxios(session.client, tracker, fetchHeaders);
     }
 
     return {

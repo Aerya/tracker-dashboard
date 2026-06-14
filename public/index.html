@@ -1003,6 +1003,7 @@
     .badge-loading { background: color-mix(in srgb, var(--blue) 14%, transparent); color: var(--blue); }
     .badge-ratioless { background: color-mix(in srgb, var(--purple) 16%, transparent); color: var(--purple); }
     .badge-incident { background: color-mix(in srgb, var(--muted) 18%, transparent); color: var(--muted); }
+    .badge-mp { background: color-mix(in srgb, var(--blue) 22%, transparent); color: var(--blue); }
     .incident-box {
       margin: 8px 18px 12px;
       padding: 8px 10px;
@@ -2138,6 +2139,25 @@
   function ratiolessBadge(stat) {
     return isRatiolessTracker(stat)
       ? '<span class="badge badge-ratioless" title="Tracker sans ratio">Ratioless</span>'
+      : '';
+  }
+
+  // Badge "MP : N" affiche uniquement s'il y a au moins un message prive non lu
+  // (champ optionnel unreadMessages extrait par regex depuis la page du tracker).
+  function unreadMessagesCount(stat) {
+    const raw = (stat.fields || {}).unreadMessages;
+    if (!hasStatValue(raw)) return 0;
+    const n = Number(raw);
+    if (Number.isFinite(n)) return n > 0 ? n : 0;
+    // Valeur non numerique : certains trackers ecrivent le singulier en toutes lettres
+    // ("un nouveau message" FR, "a new message" EN) -> au moins 1 message non lu.
+    return /^(une?|an?|one)$/i.test(String(raw).trim()) ? 1 : 0;
+  }
+
+  function mpBadge(stat) {
+    const n = unreadMessagesCount(stat);
+    return n > 0
+      ? `<span class="badge badge-mp" title="${n} message(s) prive(s) non lu(s)">MP : ${n}</span>`
       : '';
   }
 
@@ -3928,7 +3948,7 @@
             ${cardRefreshButton(stat)}
           </div>
         </div>
-        <div class="card-badges">${staleBadge(stat)}${ratiolessBadge(stat)}</div>
+        <div class="card-badges">${mpBadge(stat)}${staleBadge(stat)}${ratiolessBadge(stat)}</div>
 
         <div class="stats">${hasXpFields ? xpGrid : standardGrid}
         </div>

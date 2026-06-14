@@ -40,6 +40,10 @@
       "seedBonus": {
         "regex": "Bonus \\((?<value>[^)]+)\\)",
         "transform": "string"
+      },
+      "unreadMessages": {
+        "regex": "data-noty-type=['\"]Inbox['\"][^>]*>[^<]*?(?<value>\\d+|\\ba) new message",
+        "transform": "string"
       }
     }
   },
