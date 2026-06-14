@@ -29,11 +29,29 @@
     "mode": "browser",
     "responseType": "html",
     "fields": {
-      "downloadedBytes": { "regex": "id=\"stats_leeching\"[^>]*title=\"Downloaded: (?<value>[^\"]+)\"", "transform": "bytes" },
-      "uploadedBytes":   { "regex": "id=\"stats_seeding\"[^>]*title=\"Uploaded: (?<value>[^\"]+)\"",     "transform": "bytes" },
-      "ratio":           { "regex": "id=\"stats_ratio\"[^>]*title=\"Ratio: (?<value>[^\"]+)\"",          "transform": "number" },
-      "requiredRatio":   { "regex": "id=\"stats_required\"[^>]*title=\"Required Ratio: (?<value>[^\"]+)\"", "transform": "number" }
+      "downloadedBytes": {
+        "regex": "id=\"stats_leeching\"[^>]*title=\"Downloaded: (?<value>[^\"]+)\"",
+        "transform": "bytes"
+      },
+      "uploadedBytes": {
+        "regex": "id=\"stats_seeding\"[^>]*title=\"Uploaded: (?<value>[^\"]+)\"",
+        "transform": "bytes"
+      },
+      "ratio": {
+        "regex": "id=\"stats_ratio\"[^>]*title=\"Ratio: (?<value>[^\"]+)\"",
+        "transform": "number"
+      },
+      "requiredRatio": {
+        "regex": "id=\"stats_required\"[^>]*title=\"Required Ratio: (?<value>[^\"]+)\"",
+        "transform": "number"
+      },
+      "unreadMessages": {
+        "regex": "data-noty-type=['\"]Inbox['\"][^>]*>[^<]*?(?<value>\\d+)",
+        "transform": "integer"
+      }
     }
   },
-  "dashboard": { "byteUnit": "binary" }
+  "dashboard": {
+    "byteUnit": "binary"
+  }
 }

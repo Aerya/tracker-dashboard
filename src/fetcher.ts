@@ -123,9 +123,48 @@ function missingExtractedFields(
     if (key === 'bufferBytes' && extractedFields.uploadedBytes !== '' && extractedFields.downloadedBytes !== '') {
       return false;
     }
+    // L'absence de MP non lu est le cas normal : pas de regex match attendu quand 0 message.
+    // On ne le compte donc jamais comme champ manquant (sinon log + dump 'partial' a chaque refresh).
+    if (key === 'unreadMessages') {
+      return false;
+    }
     const value = extractedFields[key];
     return value === '' || value === undefined || value === null;
   });
+}
+
+// Requête secondaire optionnelle (fetch.unreadFetch) : récupère le compteur de MP
+// non lus depuis un endpoint dédié quand il n'est pas dans la réponse principale
+// (ex. C411). Réutilise le client authentifié (cookies/token via headers). Best-effort :
+// toute erreur renvoie '' (champ vide → badge masqué), sans jamais casser le tracker.
+async function fetchUnreadMessages(
+  client: AxiosInstance,
+  tracker: TrackerConfig,
+  headers: Record<string, string>,
+): Promise<string | number> {
+  const uf = tracker.fetch.unreadFetch;
+  if (!uf) return '';
+  try {
+    const url = resolveUrl(tracker.baseUrl, uf.url);
+    const res = await client.get<string>(url, { responseType: 'text', headers });
+    if (res.status >= 400) return '';
+    // On réutilise les extracteurs existants via un champ unique "unreadMessages".
+    const single: Record<string, FieldExtractor> = {
+      unreadMessages: { path: uf.path, regex: uf.regex, transform: uf.transform },
+    };
+    const rt = uf.responseType ?? (uf.path ? 'json' : 'html');
+    let out: Record<string, string | number>;
+    if (rt === 'json') {
+      let json: unknown;
+      try { json = JSON.parse(res.data); } catch { return ''; }
+      out = extractJson(json, single);
+    } else {
+      out = extractHtml(res.data, single);
+    }
+    return out.unreadMessages ?? '';
+  } catch {
+    return '';
+  }
 }
 
 function writeDebugDump(
@@ -1105,6 +1144,11 @@ export async function fetchTracker(
     if (missingFields.length > 0) {
       const dumpPath = writeDebugDump(tracker, url, res.data, fields, 'partial');
       console.log(`  [${tracker.name}] Champs manquants: ${missingFields.join(', ')}${dumpPath ? ` - dump: ${dumpPath}` : ''}`);
+    }
+
+    // MP non lus via requête secondaire (ex. C411) — best-effort, n'invalide pas le tracker.
+    if (tracker.fetch.unreadFetch) {
+      fields.unreadMessages = await fetchUnreadMessages(session.client, tracker, fetchHeaders);
     }
 
     return {

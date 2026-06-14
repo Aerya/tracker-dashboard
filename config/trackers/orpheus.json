@@ -32,7 +32,8 @@
       "downloadedBytes": { "regex": "id=\"stats_leeching\"[\\s\\S]*?title=\"(?<value>[^\"]+)\"", "transform": "bytes" },
       "uploadedBytes":   { "regex": "id=\"stats_seeding\"[\\s\\S]*?title=\"(?<value>[^\"]+)\"",  "transform": "bytes" },
       "ratio":           { "regex": "id=\"stats_ratio\"[\\s\\S]*?title=\"(?<value>[^\"]+)\"",    "transform": "number" },
-      "seedBonus":       { "regex": "Bonus \\((?<value>[^)]+)\\)",                              "transform": "string" }
+      "seedBonus":       { "regex": "Bonus \\((?<value>[^)]+)\\)",                              "transform": "string" },
+      "unreadMessages":  { "regex": "data-noty-type=[\u0027\"]Inbox[\u0027\"][^>]*>[^<]*?(?<value>\\d+|\\ba) new message", "transform": "string" }
     }
   },
   "dashboard": { "byteUnit": "binary" }

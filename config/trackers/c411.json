@@ -40,7 +40,8 @@
       "downloadedBytes": { "path": "user.downloaded", "transform": "bytes" },
       "uploadedBytes":   { "path": "user.uploaded",   "transform": "bytes" },
       "ratio":           { "path": "user.ratio",      "transform": "number" }
-    }
+    },
+    "unreadFetch": { "url": "api/messages/unread-count", "responseType": "json", "path": "total", "transform": "integer" }
   },
   "dashboard": {
     "byteUnit": "decimal"

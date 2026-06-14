@@ -103,6 +103,18 @@ export interface FetchStep {
   mode?: 'http' | 'browser';
   responseType: 'json' | 'html';
   fields: Record<string, FieldExtractor>;
+  /**
+   * Requête secondaire optionnelle pour le compteur de MP non lus, lorsqu'il
+   * n'est pas exposé dans la réponse principale (ex. C411 SPA : le stats endpoint
+   * api/auth/me ne contient pas les MP, ils sont sur api/messages/unread-count).
+   * Exécutée après le fetch principal, avec la même session authentifiée (cookies/token).
+   * La valeur extraite (path JSON ou regex HTML + transform) alimente fields.unreadMessages.
+   * Best-effort : un échec n'invalide jamais le tracker.
+   */
+  unreadFetch?: {
+    url: string;
+    responseType?: 'json' | 'html';
+  } & FieldExtractor;
 }
 
 export interface TrackerConfig {
