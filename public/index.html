@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/png" href="/favicon.png" />
+  <link rel="apple-touch-icon" href="/favicon.png" />
   <title>Tracker Dashboard</title>
   <style>
     :root {
@@ -72,6 +74,8 @@
       overflow: visible;
     }
     .header-logo { display: none; }
+    .header-brand { display: flex; align-items: center; gap: 8px; }
+    .brand-logo { height: 30px; width: auto; display: block; flex: 0 0 auto; }
     .header-logo-text {
       font-family: var(--mono);
       font-size: 15px;
@@ -1588,7 +1592,10 @@
 <body>
 
 <header>
-  <span class="header-logo-text">tracker<span>.dashboard</span></span>
+  <span class="header-brand">
+    <img class="brand-logo" src="/logo.png" alt="Tracker Dashboard" />
+    <span class="header-logo-text">tracker<span>.dashboard</span></span>
+  </span>
   <div class="header-right">
     <button id="view-toggle" onclick="toggleViewMode()" title="Basculer entre vue cartes et vue lignes">Vue lignes</button>
     <button id="theme-toggle" onclick="toggleTheme()">Jour</button>
