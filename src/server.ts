@@ -617,38 +617,31 @@ const COOKIE_ONLY_TRACKERS = new Set([
   'tr4ker',       // Cloudflare + login SPA
   'yggreborn',    // Cloudflare Turnstile
 ]);
-
-const CANONICAL_CONNECTION_TRACKERS = new Set([
-  'c411',
-  'nexum',
-  'phoenixproject',
-  'redacted',
-  'torr9',
-]);
-
 function normalizeTrackerConfigs(): TrackerConfig[] {
   const trackers = loadTrackerConfigsFromDb();
   for (const tracker of trackers) {
     let changed = false;
-    if (CANONICAL_CONNECTION_TRACKERS.has(tracker.id)) {
-      // Lire la definition depuis l'image (toujours a jour) plutot que la copie sur le
-      // volume (config/trackers/), qui n'est jamais rafraichie apres la 1re ecriture.
-      // Fallback sur le fichier du volume si l'image ne fournit pas la definition.
-      const definition = loadDefaultTrackerDefinition(tracker.id)
-        ?? loadTrackerDefinitionFile(tracker.id);
-      if (definition) {
-        if (JSON.stringify(tracker.login) !== JSON.stringify(definition.login)) {
-          tracker.login = definition.login;
-          changed = true;
-        }
-        if (JSON.stringify(tracker.fetch) !== JSON.stringify(definition.fetch)) {
-          tracker.fetch = definition.fetch;
-          changed = true;
-        }
-        if (tracker.curlBinary !== definition.curlBinary) {
-          tracker.curlBinary = definition.curlBinary;
-          changed = true;
-        }
+    // Les champs techniques (login, fetch, curlBinary) font autorite cote image :
+    // on les relit depuis la definition embarquee dans l'image (default-trackers/,
+    // toujours a jour avec la version deployee) et on reinjecte en base si differents.
+    // La copie sur le volume (config/trackers/) n'est jamais rafraichie apres la 1re
+    // ecriture, donc on ne s'y fie pas. Un tracker absent de l'image (purement local)
+    // n'est pas touche : loadDefaultTrackerDefinition renvoie null.
+    // Sans ce mecanisme, une install deployee garde eternellement les vieilles
+    // definitions en base, meme apres une mise a jour d'image qui les corrige.
+    const definition = loadDefaultTrackerDefinition(tracker.id);
+    if (definition) {
+      if (JSON.stringify(tracker.login) !== JSON.stringify(definition.login)) {
+        tracker.login = definition.login;
+        changed = true;
+      }
+      if (JSON.stringify(tracker.fetch) !== JSON.stringify(definition.fetch)) {
+        tracker.fetch = definition.fetch;
+        changed = true;
+      }
+      if (tracker.curlBinary !== definition.curlBinary) {
+        tracker.curlBinary = definition.curlBinary;
+        changed = true;
       }
     }
     const isHdOnlyLikeTracker = ['hdonly', 'hdforever'].includes(tracker.id);
