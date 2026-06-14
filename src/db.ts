@@ -315,7 +315,7 @@ export function loadTrackerDefinitionFile(trackerId: string): TrackerConfig | nu
 // Lit la definition par defaut EMBARQUEE DANS L'IMAGE (default-trackers/), donc toujours
 // a jour avec la version deployee — contrairement a loadTrackerDefinitionFile qui lit la
 // copie sur le volume (config/trackers/), jamais rafraichie une fois ecrite. A utiliser
-// pour les trackers "canoniques" dont la definition fait autorite cote application.
+// pour les trackers embarques dont la definition fait autorite cote application.
 export function loadDefaultTrackerDefinition(trackerId: string): TrackerConfig | null {
   if (!fs.existsSync(DEFAULT_TRACKERS_DIR)) return null;
   const target = path.join(DEFAULT_TRACKERS_DIR, `${trackerId}.json`);
