@@ -2759,6 +2759,25 @@
       </table>`;
   }
 
+  // Libellés français des états de torrent (enum qBittorrent + seeding/leeching/
+  // stopped pour ruTorrent/rTorrent). État inconnu : renvoyé tel quel, capitalisé.
+  function torrentStateLabel(state) {
+    const map = {
+      error: 'Erreur', missingFiles: 'Fichiers manquants',
+      uploading: 'En partage', forcedUP: 'Partage forcé', stalledUP: 'En partage (inactif)',
+      queuedUP: 'En file (partage)', checkingUP: 'Vérification (partage)',
+      pausedUP: 'En pause (partage)', stoppedUP: 'Arrêté (partage)',
+      downloading: 'Téléchargement', forcedDL: 'Téléchargement forcé', stalledDL: 'Téléchargement (inactif)',
+      queuedDL: 'En file (téléchargement)', checkingDL: 'Vérification (téléchargement)',
+      pausedDL: 'En pause (téléchargement)', stoppedDL: 'Arrêté (téléchargement)',
+      metaDL: 'Métadonnées', allocating: 'Allocation', moving: 'Déplacement',
+      checkingResumeData: 'Vérification des données', unknown: 'Inconnu',
+      seeding: 'En partage', leeching: 'Téléchargement', stopped: 'Arrêté',
+    };
+    const key = String(state || '').trim();
+    return map[key] || (key ? key.charAt(0).toUpperCase() + key.slice(1) : '-');
+  }
+
   function renderBetaTrackerPage() {
     const container = document.getElementById('beta-tracker-page');
     if (!container) return;
@@ -2827,9 +2846,9 @@
           <thead><tr><th>Client</th><th>Torrent</th><th>État</th><th>Taille</th><th>Progression</th><th>UP</th><th>DL</th><th>Ratio</th></tr></thead>
           <tbody>${torrents.map(torrent => `
             <tr>
-              <td>${escapeHtml(torrent.clientLabel)}</td>
+              <td>${torrent.clientBaseUrl ? `<a href="${escapeHtml(torrent.clientBaseUrl)}" target="_blank" rel="noreferrer noopener" title="Ouvrir ${escapeHtml(torrent.clientLabel)} dans un nouvel onglet">${escapeHtml(torrent.clientLabel)}</a>` : escapeHtml(torrent.clientLabel)}</td>
               <td title="${escapeHtml(torrent.hash)}">${escapeHtml(torrent.name || torrent.hash || '-')}</td>
-              <td>${escapeHtml(torrent.state || '-')}</td>
+              <td>${escapeHtml(torrentStateLabel(torrent.state))}</td>
               <td>${bytesText(torrent.sizeBytes)}</td>
               <td>${Math.round((Number(torrent.progress) || 0) * 100)}%</td>
               <td>${bytesText(torrent.uploadedBytes)}</td>
@@ -3526,19 +3545,35 @@
     renderBetaQbitClients();
   }
 
-  function addBetaAnnounceMapping(host = '', trackerId = '') {
-    betaSettings = collectBetaSettingsFromDom();
-    betaSettings.announceMappings = betaSettings.announceMappings || [];
+  // Importer / lier un hôte d'annonce à un tracker. On part de l'état serveur
+  // courant (betaSettings) — et non du DOM, qui pourrait être incomplet hors de
+  // la vue Notifications — puis on PERSISTE et on recharge l'overview pour que
+  // l'association soit recalculée côté serveur (les torrents passent en « liés »).
+  async function addBetaAnnounceMapping(host = '', trackerId = '') {
+    const settings = { ...betaSettings, announceMappings: [...(betaSettings.announceMappings || [])] };
     const normalized = trackerHostFromUrl(host);
-    if (normalized && betaSettings.announceMappings.some(mapping => trackerHostFromUrl(mapping.announceHost) === normalized)) {
-      renderBetaAnnounceMappings();
-      return;
+    const exists = normalized && settings.announceMappings.some(mapping => trackerHostFromUrl(mapping.announceHost) === normalized);
+    if (!exists) {
+      settings.announceMappings.push({
+        announceHost: normalized || '',
+        trackerId: trackerId || betaTrackerMatchForHost(normalized)?.tracker.id || selectedBetaTracker()?.id || trackerConfig[0]?.id || '',
+      });
     }
-    betaSettings.announceMappings.push({
-      announceHost: normalized || '',
-      trackerId: trackerId || betaTrackerMatchForHost(normalized)?.tracker.id || selectedBetaTracker()?.id || trackerConfig[0]?.id || '',
-    });
-    renderBetaAnnounceMappings();
+    try {
+      const r = await fetch('/api/beta/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      });
+      const data = await r.json();
+      if (!data.ok) { alert(data.error || 'Erreur de sauvegarde bêta'); return; }
+      betaSettings = data.settings;
+      await loadBetaData();        // recharge l'overview : trackerId est recalculé
+      renderBetaAnnounceMappings();
+      renderBetaTrackerPage();     // rafraîchit la fiche (torrents → « liés »)
+    } catch (e) {
+      alert('Erreur de sauvegarde : ' + e.message);
+    }
   }
 
   function removeBetaAnnounceMapping(index) {
