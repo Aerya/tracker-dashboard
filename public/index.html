@@ -241,13 +241,15 @@
       transition: transform .15s, color .15s;
     }
     .nav-caret:hover { color: var(--text); }
-    .nav-group.open .nav-caret { transform: rotate(90deg); }
+    /* Enfant direct uniquement : un accordéon parent ouvert ne force pas
+       l'ouverture de ses accordéons imbriqués (Ajouter / Configurer). */
+    .nav-group.open > .nav-group-toggle .nav-caret { transform: rotate(90deg); }
     .nav-sub {
       display: none;
       flex-direction: column;
       padding: 2px 0 6px;
     }
-    .nav-group.open .nav-sub { display: flex; }
+    .nav-group.open > .nav-sub { display: flex; }
     .nav-sub-item {
       display: flex;
       align-items: center;
