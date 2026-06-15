@@ -152,6 +152,11 @@ interface BetaNotificationPreferences {
   notifySuccess: boolean;
   notifySuccessAfterFailure: boolean;
   notifyStats: boolean;
+  notifyMp: boolean;
+  notifyManualError: boolean;
+  notifyManualSuccess: boolean;
+  notifyManualStats: boolean;
+  notifyManualMp: boolean;
 }
 
 interface BetaTrackerScheduleOverride {
@@ -162,14 +167,28 @@ interface BetaTrackerScheduleOverride {
   lastRunAt: string | null;
 }
 
+// Alerte par tracker (override). 'kind' = metrique surveillee.
+// ratio/buffer/cookie : comparaison numerique via operator + threshold.
+// fail : tracker en echec. mp : MP non lus > 0. stats : envoie la ligne stats.
 interface BetaAlertRule {
   id: string;
   trackerId: string;
   enabled: boolean;
-  kind: 'ratio' | 'buffer' | 'seedtime' | 'cookie' | 'site';
-  operator: '<=' | '<' | '>=' | '>' | 'expired' | 'soon' | 'down';
+  kind: 'ratio' | 'buffer' | 'fail' | 'mp' | 'cookie' | 'stats';
+  operator: '<=' | '<' | '>=' | '>';
   threshold: number;
   targetIds: string[];
+}
+
+// Alertes globales numeriques communes aux deux modes (auto et manuel).
+// Echec et MP sont geres par les preferences (notifyError/notifyMp).
+interface BetaGlobalAlerts {
+  ratioEnabled: boolean;
+  ratioThreshold: number;
+  bufferEnabled: boolean;
+  bufferThresholdGo: number;
+  sessionEnabled: boolean;
+  sessionDays: number;
 }
 
 interface BetaAnnounceMapping {
@@ -185,6 +204,7 @@ interface BetaSettings {
   scheduleOverrides: BetaTrackerScheduleOverride[];
   notificationPreferences: BetaNotificationPreferences;
   alertRules: BetaAlertRule[];
+  globalAlerts: BetaGlobalAlerts;
   defaults: {
     ratioEnabled: boolean;
     ratioThreshold: number;
@@ -1481,41 +1501,220 @@ function nextBetaScheduleRun(schedule: BetaScheduleSettings, from = new Date()):
   return null;
 }
 
+function unreadMessagesCount(stat: TrackerStats): number {
+  const raw = (stat.fields ?? {}).unreadMessages;
+  if (raw === undefined || raw === null || raw === '') return 0;
+  const n = Number(raw);
+  if (Number.isFinite(n)) return n > 0 ? n : 0;
+  return String(raw).trim().length > 0 ? 1 : 0;
+}
+
+function formatBytesForNotif(bytes: number | string, byteUnit: 'binary' | 'decimal' = 'binary'): string {
+  const b = Number(bytes);
+  if (!Number.isFinite(b)) return String(bytes);
+  const sign = b < 0 ? '-' : '';
+  const abs = Math.abs(b);
+  if (byteUnit === 'decimal') {
+    if (abs >= 1e12) return `${sign}${(abs / 1e12).toFixed(2)} To`;
+    if (abs >= 1e9) return `${sign}${(abs / 1e9).toFixed(2)} Go`;
+    if (abs >= 1e6) return `${sign}${(abs / 1e6).toFixed(2)} Mo`;
+    if (abs >= 1e3) return `${sign}${(abs / 1e3).toFixed(2)} Ko`;
+    return `${sign}${abs.toFixed(0)} o`;
+  }
+  if (abs >= 1024 ** 4) return `${sign}${(abs / 1024 ** 4).toFixed(2)} Tio`;
+  if (abs >= 1024 ** 3) return `${sign}${(abs / 1024 ** 3).toFixed(2)} Gio`;
+  if (abs >= 1024 ** 2) return `${sign}${(abs / 1024 ** 2).toFixed(2)} Mio`;
+  if (abs >= 1024) return `${sign}${(abs / 1024).toFixed(2)} Kio`;
+  return `${sign}${abs.toFixed(0)} o`;
+}
+
+function formatStatLine(stat: TrackerStats): string {
+  const fields = stat.fields ?? {};
+  const byteUnit = stat.byteUnit ?? 'binary';
+  const parts: string[] = [];
+  let ratioDisplay: string | null = null;
+  if (fields.ratio !== undefined && fields.ratio !== null && fields.ratio !== '') {
+    const n = Number(fields.ratio);
+    ratioDisplay = Number.isFinite(n) ? n.toFixed(2) : String(fields.ratio);
+  } else if (fields.uploadedBytes !== undefined && fields.downloadedBytes !== undefined) {
+    const up = Number(fields.uploadedBytes);
+    const down = Number(fields.downloadedBytes);
+    if (!Number.isNaN(up) && !Number.isNaN(down)) {
+      ratioDisplay = down === 0 ? (up > 0 ? '∞' : null) : (up / down).toFixed(2);
+    }
+  }
+  if (ratioDisplay !== null) parts.push(`Ratio ${ratioDisplay}`);
+  if (fields.uploadedBytes !== undefined && fields.uploadedBytes !== '') {
+    parts.push(`Up ${formatBytesForNotif(fields.uploadedBytes, byteUnit)}`);
+  }
+  if (fields.downloadedBytes !== undefined && fields.downloadedBytes !== '') {
+    parts.push(`Down ${formatBytesForNotif(fields.downloadedBytes, byteUnit)}`);
+  }
+  return parts.join(' - ');
+}
+
+function computeRatio(stat: TrackerStats): number | null {
+  const fields = stat.fields ?? {};
+  if (fields.ratio !== undefined && fields.ratio !== null && fields.ratio !== '') {
+    if (fields.ratio === '∞' || fields.ratio === Infinity) return Infinity;
+    const n = Number(fields.ratio);
+    if (Number.isFinite(n)) return n;
+  }
+  const up = Number(fields.uploadedBytes);
+  const down = Number(fields.downloadedBytes);
+  if (Number.isNaN(up) || Number.isNaN(down)) return null;
+  if (down === 0) return up > 0 ? Infinity : null;
+  return up / down;
+}
+
+function compareNumber(value: number, operator: '<=' | '<' | '>=' | '>', threshold: number): boolean {
+  switch (operator) {
+    case '<=': return value <= threshold;
+    case '<': return value < threshold;
+    case '>=': return value >= threshold;
+    case '>': return value > threshold;
+    default: return false;
+  }
+}
+
+function evaluateTrackerAlerts(settings: BetaSettings, results: TrackerStats[]): string[] {
+  const global = settings.globalAlerts;
+  const overrides = settings.alertRules.filter(rule => rule.enabled);
+  const messages: string[] = [];
+  for (const stat of results) {
+    const trackerOverrides = overrides.filter(rule => rule.trackerId === stat.id);
+    const overriddenKinds = new Set(trackerOverrides.map(rule => rule.kind));
+    const ratioOverride = trackerOverrides.find(rule => rule.kind === 'ratio');
+    if (ratioOverride) {
+      const ratio = computeRatio(stat);
+      if (ratio !== null && Number.isFinite(ratio) && compareNumber(ratio, ratioOverride.operator, ratioOverride.threshold)) {
+        messages.push(`${stat.name} : ratio ${ratio.toFixed(2)} ${ratioOverride.operator} ${ratioOverride.threshold}`);
+      }
+    } else if (global.ratioEnabled && stat.status === 'ok') {
+      const ratio = computeRatio(stat);
+      if (ratio !== null && Number.isFinite(ratio) && ratio < global.ratioThreshold) {
+        messages.push(`${stat.name} : ratio ${ratio.toFixed(2)} < ${global.ratioThreshold}`);
+      }
+    }
+    const bufferOverride = trackerOverrides.find(rule => rule.kind === 'buffer');
+    const up = Number((stat.fields ?? {}).uploadedBytes);
+    const down = Number((stat.fields ?? {}).downloadedBytes);
+    const bufferKnown = !Number.isNaN(up) && !Number.isNaN(down);
+    if (bufferOverride) {
+      if (bufferKnown) {
+        const buffer = up - down;
+        if (compareNumber(buffer, bufferOverride.operator, bufferOverride.threshold)) {
+          messages.push(`${stat.name} : buffer ${formatBytesForNotif(buffer, stat.byteUnit)} ${bufferOverride.operator} ${formatBytesForNotif(bufferOverride.threshold, stat.byteUnit)}`);
+        }
+      }
+    } else if (global.bufferEnabled && stat.status === 'ok' && bufferKnown) {
+      const buffer = up - down;
+      const thresholdBytes = global.bufferThresholdGo * 1e9;
+      if (buffer < thresholdBytes) {
+        messages.push(`${stat.name} : buffer ${formatBytesForNotif(buffer, stat.byteUnit)} < ${global.bufferThresholdGo} Go`);
+      }
+    }
+    if (overriddenKinds.has('fail') && stat.status === 'error') {
+      const reason = stat.error || stat.siteReachability?.reason || 'erreur inconnue';
+      messages.push(`${stat.name} : échec — ${reason}`);
+    }
+    if (overriddenKinds.has('mp') && stat.status === 'ok') {
+      const mp = unreadMessagesCount(stat);
+      if (mp > 0) messages.push(`${stat.name} : ${mp} MP non lu${mp > 1 ? 's' : ''}`);
+    }
+    const cookieOverride = trackerOverrides.find(rule => rule.kind === 'cookie');
+    const sessionDays = cookieOverride ? cookieOverride.threshold : global.sessionDays;
+    const sessionApplies = cookieOverride ? true : (global.sessionEnabled && !overriddenKinds.has('cookie'));
+    if (sessionApplies && stat.lastLoginAt) {
+      const ageDays = (Date.now() - Date.parse(stat.lastLoginAt)) / 86_400_000;
+      if (Number.isFinite(ageDays) && ageDays > sessionDays) {
+        messages.push(`${stat.name} : session ancienne (${Math.floor(ageDays)} j, seuil ${sessionDays} j)`);
+      }
+    }
+    if (overriddenKinds.has('stats') && stat.status === 'ok') {
+      const statLine = formatStatLine(stat);
+      messages.push(`${stat.name} : ${statLine || 'OK'}`);
+    }
+  }
+  return messages;
+}
+
 async function notifyScheduledResult(
   settings: BetaSettings,
   results: TrackerStats[],
   previousFailures: Set<string>,
+  manual = false,
 ): Promise<void> {
   const targets = settings.notificationTargets.filter(target => target.enabled && target.url);
   if (targets.length === 0 || results.length === 0) return;
 
-  const errors = results.filter(result => result.status === 'error');
-  const recovered = results.filter(result => result.status === 'ok' && previousFailures.has(result.id));
-  const prefs = settings.notificationPreferences;
-  let title = '';
-  let lines: string[] = [];
+  const isUnconfigured = (result: TrackerStats) =>
+    result.status === 'error' && result.error?.startsWith('Credentials manquants');
+  const relevant = results.filter(result => !isUnconfigured(result));
+  if (relevant.length === 0) return;
 
-  if (errors.length > 0 && prefs.notifyError) {
-    title = `Tracker Dashboard : ${errors.length} echec(s)`;
-    lines = errors.map(result => `${result.name}: ${result.error || 'erreur inconnue'}`);
-  } else if (recovered.length > 0 && prefs.notifySuccessAfterFailure) {
-    title = 'Tracker Dashboard : retablissement';
-    lines = [`Sites retablis : ${recovered.map(result => result.name).join(', ')}`];
-  } else if (errors.length === 0 && prefs.notifySuccess) {
-    title = 'Tracker Dashboard : cycle termine';
-    lines = ['Tous les trackers configures sont accessibles.'];
-    if (prefs.notifyStats) {
-      lines.push(...results.map(result => `${result.name}: ${Object.entries(result.fields ?? {}).slice(0, 4).map(([key, value]) => `${key}=${String(value)}`).join(', ') || 'OK'}`));
-    }
+  const errors = relevant.filter(result => result.status === 'error');
+  const ok = relevant.filter(result => result.status === 'ok');
+  const recovered = ok.filter(result => previousFailures.has(result.id));
+  const prefs = settings.notificationPreferences;
+  const notifications: Array<{ title: string; lines: string[] }> = [];
+
+  const wantError = manual ? prefs.notifyManualError : prefs.notifyError;
+  const wantSuccess = manual ? prefs.notifyManualSuccess : prefs.notifySuccess;
+  const wantStats = manual ? prefs.notifyManualStats : prefs.notifyStats;
+  const wantMp = manual ? prefs.notifyManualMp : prefs.notifyMp;
+  const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? 's' : ''}`;
+
+  const totalMp = wantMp ? ok.reduce((sum, result) => sum + unreadMessagesCount(result), 0) : 0;
+  const titleParts: string[] = [];
+  if (ok.length > 0) titleParts.push(`${ok.length} succès`);
+  if (errors.length > 0) titleParts.push(plural(errors.length, 'échec'));
+  if (totalMp > 0) titleParts.push(plural(totalMp, 'MP'));
+  const sharedTitle = `TD : ${titleParts.join(' - ')}`;
+
+  if (errors.length > 0 && wantError) {
+    notifications.push({
+      title: sharedTitle,
+      lines: errors.map(result => `- ${result.name} : ${result.error || 'erreur inconnue'}`),
+    });
   }
 
-  if (!title) return;
-  const deliveries = await Promise.allSettled(targets.map(target => sendBetaNotification(target, lines.join('\n'), title)));
-  deliveries.forEach((delivery, index) => {
-    if (delivery.status === 'rejected') {
-      console.error(`[Beta Notifications] ${targets[index].label}:`, delivery.reason);
+  if (ok.length > 0 && wantSuccess) {
+    const lines: string[] = [];
+    if (recovered.length > 0) {
+      lines.push(`Sites rétablis : ${recovered.map(result => result.name).join(', ')}`, '');
     }
-  });
+    if (wantStats) {
+      ok.forEach((result, index) => {
+        const statLine = formatStatLine(result);
+        const mp = wantMp ? unreadMessagesCount(result) : 0;
+        const mpSuffix = mp > 0 ? ` - ${mp} MP non lu${mp > 1 ? 's' : ''}` : '';
+        lines.push(`- ${result.name}${mpSuffix}`);
+        lines.push(statLine || 'OK');
+        if (index < ok.length - 1) lines.push('');
+      });
+    } else {
+      lines.push(ok.map(result => `- ${result.name}`).join('\n'));
+    }
+    notifications.push({ title: sharedTitle, lines });
+  }
+
+  const alertMessages = evaluateTrackerAlerts(settings, relevant);
+  if (alertMessages.length > 0) {
+    notifications.push({
+      title: `TD : ${plural(alertMessages.length, 'alerte')}`,
+      lines: alertMessages.map(message => `- ${message}`),
+    });
+  }
+
+  for (const { title, lines } of notifications) {
+    const deliveries = await Promise.allSettled(targets.map(target => sendBetaNotification(target, lines.join('\n'), title)));
+    deliveries.forEach((delivery, index) => {
+      if (delivery.status === 'rejected') {
+        console.error(`[Beta Notifications] ${targets[index].label}:`, delivery.reason);
+      }
+    });
+  }
 }
 
 async function runBetaScheduledCycle(): Promise<void> {
@@ -1748,8 +1947,21 @@ function defaultBetaSettings(): BetaSettings {
       notifySuccess: false,
       notifySuccessAfterFailure: true,
       notifyStats: false,
+      notifyMp: true,
+      notifyManualError: true,
+      notifyManualSuccess: false,
+      notifyManualStats: false,
+      notifyManualMp: true,
     },
     alertRules: [],
+    globalAlerts: {
+      ratioEnabled: false,
+      ratioThreshold: 1,
+      bufferEnabled: false,
+      bufferThresholdGo: 100,
+      sessionEnabled: false,
+      sessionDays: 30,
+    },
     defaults: {
       ratioEnabled: true,
       ratioThreshold: 1,
@@ -1775,6 +1987,7 @@ function loadBetaSettings(): BetaSettings {
       ...(settings.notificationPreferences ?? {}),
     },
     alertRules: Array.isArray(settings.alertRules) ? settings.alertRules : [],
+    globalAlerts: { ...defaultBetaSettings().globalAlerts, ...(settings.globalAlerts ?? {}) },
   };
 }
 
@@ -1852,8 +2065,8 @@ function saveBetaSettingsPayload(raw: unknown): BetaSettings {
       id: typeof rule.id === 'string' && rule.id ? rule.id : crypto.randomUUID(),
       trackerId: String(rule.trackerId || '').trim(),
       enabled: rule.enabled !== false,
-      kind: ['buffer', 'seedtime', 'cookie', 'site'].includes(String(rule.kind)) ? rule.kind as BetaAlertRule['kind'] : 'ratio',
-      operator: ['<=', '<', '>=', '>', 'expired', 'soon', 'down'].includes(String(rule.operator)) ? rule.operator as BetaAlertRule['operator'] : '<=',
+      kind: ['ratio', 'buffer', 'fail', 'mp', 'cookie', 'stats'].includes(String(rule.kind)) ? rule.kind as BetaAlertRule['kind'] : 'ratio',
+      operator: ['<=', '<', '>=', '>'].includes(String(rule.operator)) ? rule.operator as BetaAlertRule['operator'] : '<',
       threshold: Number.isFinite(Number(rule.threshold)) ? Number(rule.threshold) : 1,
       targetIds: Array.isArray(rule.targetIds) ? rule.targetIds.filter((id): id is string => typeof id === 'string') : [],
     };
@@ -1931,9 +2144,24 @@ function saveBetaSettingsPayload(raw: unknown): BetaSettings {
     notifySuccess: rawPreferences.notifySuccess === true,
     notifySuccessAfterFailure: rawPreferences.notifySuccessAfterFailure !== false,
     notifyStats: rawPreferences.notifyStats === true,
+    notifyMp: rawPreferences.notifyMp !== false,
+    notifyManualError: rawPreferences.notifyManualError !== false,
+    notifyManualSuccess: rawPreferences.notifyManualSuccess === true,
+    notifyManualStats: rawPreferences.notifyManualStats === true,
+    notifyManualMp: rawPreferences.notifyManualMp !== false,
   };
 
-  const next = { qbitClients, announceMappings, notificationTargets, schedule, scheduleOverrides, notificationPreferences, alertRules, defaults };
+  const rawGlobal = (body.globalAlerts ?? current.globalAlerts) as Partial<BetaGlobalAlerts>;
+  const globalAlerts: BetaGlobalAlerts = {
+    ratioEnabled: rawGlobal.ratioEnabled === true,
+    ratioThreshold: Number.isFinite(Number(rawGlobal.ratioThreshold)) ? Number(rawGlobal.ratioThreshold) : 1,
+    bufferEnabled: rawGlobal.bufferEnabled === true,
+    bufferThresholdGo: Number.isFinite(Number(rawGlobal.bufferThresholdGo)) ? Number(rawGlobal.bufferThresholdGo) : 100,
+    sessionEnabled: rawGlobal.sessionEnabled === true,
+    sessionDays: Number.isFinite(Number(rawGlobal.sessionDays)) ? Number(rawGlobal.sessionDays) : 30,
+  };
+
+  const next = { qbitClients, announceMappings, notificationTargets, schedule, scheduleOverrides, notificationPreferences, alertRules, globalAlerts, defaults };
   setJsonSetting(BETA_SETTINGS_KEY, next);
   return next;
 }
@@ -2579,7 +2807,11 @@ export async function start(): Promise<void> {
       lastRefresh = new Date().toISOString();
       return res.json({ ok: true, presentationMode: true });
     }
-    refresh(trackers);
+    const settings = loadBetaSettings();
+    const previousFailures = new Set(settings.schedule.lastFailedTrackerIds);
+    refresh(trackers).then(results => {
+      void notifyScheduledResult(settings, results, previousFailures, true);
+    }).catch(err => console.error('[Manual Refresh] erreur:', err));
     res.json({ ok: true });
   });
 
@@ -2592,7 +2824,10 @@ export async function start(): Promise<void> {
     }
     const tracker = trackers.find(t => t.id === req.params.trackerId && t.enabled !== false);
     if (!tracker) return res.status(404).json({ ok: false, error: 'Tracker introuvable' });
+    const settings = loadBetaSettings();
+    const previousFailures = new Set(settings.schedule.lastFailedTrackerIds);
     const stat = await refreshOneTracker(tracker);
+    void notifyScheduledResult(settings, [stat], previousFailures, true);
     res.json({ ok: true, stat });
   });
 
