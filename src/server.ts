@@ -118,6 +118,10 @@ interface BetaQbitClient {
   username?: string;
   password?: string;
   enabled: boolean;
+  // Intervalle de rafraîchissement automatique en minutes (par client).
+  // 0 (ou absent) = pas de rescan automatique ; sinon le scheduler rescanne ce
+  // client toutes les N minutes. Plafonné à 1440 (24 h) à l'enregistrement.
+  refreshMinutes?: number;
 }
 
 interface BetaNotificationTarget {
@@ -215,6 +219,9 @@ interface QbitTrackerAggregate {
 const BETA_SETTINGS_KEY = 'beta_settings';
 let betaQbitStats: QbitTrackerAggregate[] = [];
 let betaQbitLastRefresh: string | null = null;
+// Horodatage (epoch ms) du dernier scan par client, pour piloter le
+// rafraîchissement automatique par intervalle (en mémoire, comme betaQbitStats).
+const qbitClientLastScan = new Map<string, number>();
 
 const unit3dFields = knownUnit3dFields();
 const gazelleStatsFields = knownGazelleStatsFields();
@@ -1578,6 +1585,21 @@ function startScheduler(): void {
       }
     }
 
+    // Rafraîchissement automatique des clients BitTorrent, par client et selon
+    // l'intervalle configuré (refreshMinutes). Granularité = ce tick (60 s).
+    const nowQbit = Date.now();
+    for (const client of settings.qbitClients) {
+      if (!client.enabled) continue;
+      const minutes = Math.floor(Number(client.refreshMinutes) || 0);
+      if (minutes < 1) continue;
+      const last = qbitClientLastScan.get(client.id) ?? 0;
+      if (nowQbit - last < minutes * 60_000) continue;
+      // Marquer l'échéance immédiatement pour éviter un double déclenchement
+      // pendant que le scan (asynchrone) est en cours.
+      qbitClientLastScan.set(client.id, nowQbit);
+      void refreshSingleQbitClient(client);
+    }
+
     const trackers = loadTrackerConfigsFromDb();
     const now = Date.now();
     let delay = 0;
@@ -1791,6 +1813,7 @@ function saveBetaSettingsPayload(raw: unknown): BetaSettings {
       username: String(client.username || '').trim(),
       password,
       enabled: client.enabled !== false,
+      refreshMinutes: Math.max(0, Math.min(1440, Math.floor(Number(client.refreshMinutes) || 0))),
     };
   }).filter(client => client.baseUrl) : current.qbitClients;
 
@@ -2380,12 +2403,31 @@ async function refreshBetaQbitStats(settings = loadBetaSettings()): Promise<Qbit
   }
   betaQbitStats = results;
   betaQbitLastRefresh = new Date().toISOString();
+  // Un scan complet remet à zéro l'échéance auto de tous les clients actifs.
+  const now = Date.now();
+  for (const client of enabled) qbitClientLastScan.set(client.id, now);
   const torrentCount = results.reduce((sum, item) => sum + item.torrentCount, 0);
   betaLog(`refresh termine: ${torrentCount} torrent(s), ${results.length} hote(s) d'annonce`);
   if (enabled.length > 0 && torrentCount === 0) {
     throw new Error('Aucun torrent recupere depuis les clients BitTorrent actifs. Les logs [Beta BitTorrent] indiquent quel endpoint repond vide ou invalide.');
   }
   return results;
+}
+
+// Rescanne un seul client BitTorrent et fusionne son résultat dans betaQbitStats
+// (remplace uniquement les agrégats de ce client). Best-effort : une erreur ne
+// touche pas les données des autres clients. Utilisé par le rafraîchissement
+// automatique par intervalle (voir startScheduler).
+async function refreshSingleQbitClient(client: BetaQbitClient): Promise<void> {
+  try {
+    const clientResults = await fetchTorrentClient(client);
+    betaQbitStats = betaQbitStats.filter(stat => stat.clientId !== client.id).concat(clientResults);
+    betaQbitLastRefresh = new Date().toISOString();
+    const torrentCount = clientResults.reduce((sum, item) => sum + item.torrentCount, 0);
+    betaLog(`auto-refresh ${betaClientLogName(client)}: ${torrentCount} torrent(s), ${clientResults.length} hote(s)`);
+  } catch (err: unknown) {
+    betaWarn(`auto-refresh ${betaClientLogName(client)} KO - ${err instanceof Error ? err.message : String(err)}`);
+  }
 }
 
 async function sendBetaNotification(

@@ -1870,6 +1870,7 @@
         <div class="beta-stack" style="width:100%">
           <section class="beta-panel">
             <h3>Clients BitTorrent</h3>
+            <p class="beta-note" style="margin-bottom:10px">Le champ « Auto (min) » de chaque client définit son rafraîchissement automatique en arrière-plan (0 = désactivé). Le bouton ci-dessous force une synchronisation immédiate de tous les clients.</p>
             <div class="beta-actions" style="margin-bottom:10px">
               <button id="beta-refresh-clients" class="beta-icon-btn" onclick="refreshBetaQbit()" type="button">Synchroniser les clients BitTorrent</button>
             </div>
@@ -3179,13 +3180,14 @@
     if (!container) return;
     const clients = betaSettings.qbitClients || [];
     container.innerHTML = clients.map((client, idx) => `
-      <div class="beta-form-row" data-beta-qbit="${idx}" style="grid-template-columns: 130px minmax(0,1fr) minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) 80px auto">
+      <div class="beta-form-row" data-beta-qbit="${idx}" style="grid-template-columns: 130px minmax(0,1fr) minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) 80px 96px auto">
         <div class="beta-field"><label>Type</label><select data-field="type"><option value="qbittorrent" ${client.type !== 'rutorrent' ? 'selected' : ''}>qBittorrent</option><option value="rutorrent" ${client.type === 'rutorrent' ? 'selected' : ''}>ruTorrent / rTorrent</option></select></div>
         <div class="beta-field"><label>Nom</label><input data-field="label" value="${escapeHtml(client.label || '')}" placeholder="Seedbox principale"></div>
         <div class="beta-field"><label>URL API</label><input data-field="baseUrl" value="${escapeHtml(client.baseUrl || '')}" placeholder="qBit: https://qb.example · ruTorrent: https://rt.example/RPC2"></div>
         <div class="beta-field"><label>Utilisateur</label><input data-field="username" value="${escapeHtml(client.username || '')}"></div>
         <div class="beta-field"><label>Mot de passe</label><input data-field="password" type="password" value="${escapeHtml(client.password || '')}"></div>
         <div class="beta-field"><label>Actif</label><select data-field="enabled"><option value="true" ${client.enabled !== false ? 'selected' : ''}>Oui</option><option value="false" ${client.enabled === false ? 'selected' : ''}>Non</option></select></div>
+        <div class="beta-field"><label title="Rafraîchissement automatique de ce client, en minutes. 0 = désactivé.">Auto (min)</label><input data-field="refreshMinutes" type="number" min="0" max="1440" step="1" value="${Number(client.refreshMinutes) || 0}" title="0 = pas de rafraîchissement automatique"></div>
         <div style="display:flex; gap:6px; align-items:flex-end"><button class="beta-icon-btn" onclick="testBetaQbitClient(${idx})" type="button">Tester</button><button class="beta-icon-btn" onclick="removeBetaQbitClient(${idx})" type="button">X</button></div>
       </div>
     `).join('') || '<p class="beta-note">Ajouter un ou plusieurs clients qBittorrent ou ruTorrent/rTorrent pour comparer les stats locales aux stats des sites.</p>';
@@ -3364,6 +3366,7 @@
       username: row.querySelector('[data-field="username"]').value.trim(),
       password: row.querySelector('[data-field="password"]').value,
       enabled: row.querySelector('[data-field="enabled"]').value === 'true',
+      refreshMinutes: Math.max(0, Math.min(1440, Math.floor(Number(row.querySelector('[data-field="refreshMinutes"]')?.value) || 0))),
     })).filter(client => client.baseUrl);
     const announceMappings = Array.from(document.querySelectorAll('[data-beta-mapping]')).map((row) => ({
       announceHost: row.querySelector('[data-field="announceHost"]').value.trim(),
@@ -3425,7 +3428,7 @@
 
   function addBetaQbitClient() {
     betaSettings = collectBetaSettingsFromDom();
-    betaSettings.qbitClients.push({ id: genId(), type: 'qbittorrent', label: 'qBittorrent', baseUrl: '', username: '', password: '', enabled: true });
+    betaSettings.qbitClients.push({ id: genId(), type: 'qbittorrent', label: 'qBittorrent', baseUrl: '', username: '', password: '', enabled: true, refreshMinutes: 15 });
     renderBetaQbitClients();
   }
 
