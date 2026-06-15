@@ -1636,8 +1636,11 @@
   <button class="nav-item" data-nav="qbit" onclick="showView('qbit')" type="button">
     <span class="nav-icon">⬇</span> Clients BitTorrent
   </button>
-  <button class="nav-item" data-nav="alerts" onclick="showView('alerts')" type="button">
-    <span class="nav-icon">⚑</span> Alertes et Notifications
+  <button class="nav-item" data-nav="scraping" onclick="showView('scraping')" type="button">
+    <span class="nav-icon">⟳</span> Scraping
+  </button>
+  <button class="nav-item" data-nav="notifications" onclick="showView('notifications')" type="button">
+    <span class="nav-icon">⚑</span> Notifications
   </button>
 
   <div class="nav-group" data-nav-group="fiche">
@@ -1891,24 +1894,19 @@
         </div>
   </section>
 
-  <section class="tab-view" data-view="alerts">
+  <section class="tab-view" data-view="scraping">
+    <section class="beta-panel" style="width:100%">
+      <h3>Planification des logins (scraping)</h3>
+      <p class="beta-note" style="margin-bottom:10px">Planification du scraping des trackers, inspirée d'Autovisit : une planification globale et, plus bas, une fréquence individuelle par tracker. Chaque cycle visite tous les trackers actifs disposant de credentials.</p>
+      <div id="beta-schedule-settings"></div>
+      <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap">
+        <button class="beta-icon-btn primary" onclick="saveBetaSettings()" type="button">Enregistrer la planification</button>
+      </div>
+    </section>
+  </section>
+
+  <section class="tab-view" data-view="notifications">
         <div class="beta-grid-2" style="width:100%">
-          <section class="beta-panel">
-            <h3>Planification des logins</h3>
-            <p class="beta-note" style="margin-bottom:10px">Planification globale inspirée d'Autovisit. Chaque cycle visite tous les trackers actifs disposant de credentials.</p>
-            <div id="beta-schedule-settings"></div>
-            <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap">
-              <button class="beta-icon-btn primary" onclick="saveBetaSettings()" type="button">Enregistrer la planification</button>
-            </div>
-          </section>
-          <section class="beta-panel">
-            <h3>Alertes par tracker</h3>
-            <div id="beta-alert-rules"></div>
-            <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap">
-              <button class="beta-icon-btn" onclick="addBetaAlertRule()" type="button">Ajouter une alerte</button>
-              <button class="beta-icon-btn primary" onclick="saveBetaSettings()" type="button">Enregistrer</button>
-            </div>
-          </section>
           <section class="beta-panel">
             <h3>Notifications Autovisit / Discord</h3>
             <div id="beta-notification-preferences"></div>
@@ -1916,6 +1914,15 @@
             <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap">
               <button class="beta-icon-btn" onclick="addBetaNotificationTarget('discord')" type="button">Ajouter Discord</button>
               <button class="beta-icon-btn" onclick="addBetaNotificationTarget('apprise')" type="button">Ajouter Apprise</button>
+              <button class="beta-icon-btn primary" onclick="saveBetaSettings()" type="button">Enregistrer</button>
+            </div>
+          </section>
+          <section class="beta-panel">
+            <h3>Alertes par tracker</h3>
+            <p class="beta-note" style="margin-bottom:10px">Règles de seuil par tracker qui déclenchent les notifications ci-contre.</p>
+            <div id="beta-alert-rules"></div>
+            <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap">
+              <button class="beta-icon-btn" onclick="addBetaAlertRule()" type="button">Ajouter une alerte</button>
               <button class="beta-icon-btn primary" onclick="saveBetaSettings()" type="button">Enregistrer</button>
             </div>
           </section>
@@ -2346,10 +2353,10 @@
   const expandedIncidents = new Set();
   let viewMode = 'cards'; // 'cards' | 'rows'
   // Vue active pilotée par la barre latérale.
-  // 'dashboard' | 'trackers' | 'proxies' | 'incidents' | 'graphs' | 'qbit' | 'alerts' | 'fiche'
+  // 'dashboard' | 'trackers' | 'proxies' | 'incidents' | 'graphs' | 'qbit' | 'scraping' | 'notifications' | 'fiche'
   let currentView = 'dashboard';
   // Vues alimentées par les données bêta (overview + historique).
-  const BETA_VIEWS = ['incidents', 'graphs', 'qbit', 'alerts', 'fiche'];
+  const BETA_VIEWS = ['incidents', 'graphs', 'qbit', 'scraping', 'notifications', 'fiche'];
   let betaStatusFilter = 'all'; // 'all' | 'problems' | 'healthy'
   let betaCalendarMonth = new Date();
   let betaOverview = null;
@@ -3593,7 +3600,7 @@
     alert(data.ok ? 'Notification envoyée' : `Notification KO: ${data.error}`);
   }
 
-  const ALL_VIEWS = ['dashboard', 'trackers', 'proxies', 'incidents', 'graphs', 'qbit', 'alerts', 'fiche'];
+  const ALL_VIEWS = ['dashboard', 'trackers', 'proxies', 'incidents', 'graphs', 'qbit', 'scraping', 'notifications', 'fiche'];
 
   // Affiche la vue demandée : bascule les sections de <main>, le panneau proxy
   // (sibling de <main>) et l'état actif de la barre latérale.
