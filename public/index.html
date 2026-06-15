@@ -54,8 +54,8 @@
       font-family: var(--sans);
       font-size: 14px;
       display: grid;
-      grid-template-columns: 220px 1fr;
-      grid-template-rows: 48px 1fr;
+      grid-template-columns: 250px 1fr;
+      grid-template-rows: 1fr;
       height: 100vh;
       overflow: hidden;
     }
@@ -110,15 +110,69 @@
 
     /* ── Sidebar ─────────────────────────────────────────────────── */
     .sidebar {
-      grid-row: 2;
+      grid-row: 1;
       background: var(--bg2);
       border-right: 1px solid var(--border);
       display: flex;
       flex-direction: column;
-      padding: 16px 0;
+      padding: 14px 0;
       overflow-y: auto;
       z-index: 5;
     }
+    /* Logo + nom en haut de la barre latérale */
+    .sidebar-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 16px 12px;
+      margin-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-brand .brand-logo { height: 30px; width: auto; display: block; flex: 0 0 auto; }
+    .sidebar-brand .header-logo-text { font-family: var(--mono); font-size: 15px; font-weight: 600; color: var(--accent); letter-spacing: .04em; white-space: nowrap; }
+    .sidebar-brand .header-logo-text span { color: var(--text2); font-weight: 400; }
+    /* Sous-contrôle (ex: bascule vue cartes/lignes sous Dashboard) */
+    .nav-subcontrol {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px 6px 38px;
+      font-size: 12px;
+      color: var(--text2);
+      cursor: pointer;
+      background: none;
+      border: none;
+      width: 100%;
+      text-align: left;
+      transition: color .15s, background .15s;
+    }
+    .nav-subcontrol:hover { color: var(--text); background: color-mix(in srgb, var(--bg) 60%, transparent); }
+    .nav-subcontrol .nav-subcontrol-icon { width: 16px; text-align: center; flex-shrink: 0; }
+    /* Bas de barre : horodatage + bascule de thème */
+    .sidebar-updated { padding: 8px 16px 2px; font-size: 11px; color: var(--muted); text-align: center; }
+    .theme-switch {
+      display: flex;
+      gap: 4px;
+      margin: 8px 12px 0;
+      padding: 3px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .theme-switch button {
+      flex: 1;
+      display: flex; align-items: center; justify-content: center;
+      padding: 5px 0;
+      background: none;
+      border: none;
+      border-radius: 6px;
+      color: var(--text2);
+      cursor: pointer;
+      transition: background .15s, color .15s;
+    }
+    .theme-switch button:hover { color: var(--text); }
+    .theme-switch button.active { background: var(--bg2); color: var(--accent); }
+    .theme-switch button svg { width: 16px; height: 16px; }
     .nav-section-label {
       font-size: 10px;
       font-weight: 700;
@@ -187,13 +241,15 @@
       transition: transform .15s, color .15s;
     }
     .nav-caret:hover { color: var(--text); }
-    .nav-group.open .nav-caret { transform: rotate(90deg); }
+    /* Enfant direct uniquement : un accordéon parent ouvert ne force pas
+       l'ouverture de ses accordéons imbriqués (Ajouter / Configurer). */
+    .nav-group.open > .nav-group-toggle .nav-caret { transform: rotate(90deg); }
     .nav-sub {
       display: none;
       flex-direction: column;
       padding: 2px 0 6px;
     }
-    .nav-group.open .nav-sub { display: flex; }
+    .nav-group.open > .nav-sub { display: flex; }
     .nav-sub-item {
       display: flex;
       align-items: center;
@@ -227,9 +283,16 @@
     }
     .nav-item.proxy-on.active::after { margin-left: 8px; }
 
+    /* Accordéons imbriqués (ex : Configuration > Ajouter un tracker > liste) */
+    .nav-sub > .nav-item,
+    .nav-sub > .nav-group > .nav-group-toggle { padding-left: 38px; }
+    .nav-sub .nav-sub > .nav-sub-item { padding-left: 56px; }
+    .nav-sub .nav-sub > .nav-sub-empty { padding-left: 56px; }
+    .nav-section-label-side { font-size: 10px; font-weight: 700; color: var(--text2); letter-spacing: .08em; text-transform: uppercase; padding: 10px 16px 4px; }
+
     /* ── Content area ────────────────────────────────────────────── */
     .content-area {
-      grid-row: 2;
+      grid-row: 1;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
@@ -1152,22 +1215,7 @@
     }
     .proxyspin-promo a { color: var(--blue); font-weight: 600; text-decoration: none; }
     .proxyspin-promo a:hover { text-decoration: underline; }
-    #proxy-toggle, #theme-toggle, #presentation-toggle, #view-toggle {
-      background: none;
-      border: 1px solid var(--border);
-      color: var(--muted);
-      border-radius: 8px;
-      padding: 6px 12px;
-      font-size: 12px;
-      cursor: pointer;
-      display: flex; align-items: center; gap: 5px;
-      transition: border-color .15s, color .15s;
-    }
-    #proxy-toggle:hover, #theme-toggle:hover, #presentation-toggle:hover, #view-toggle:hover { border-color: var(--accent); color: var(--text); }
-    #proxy-toggle.active, #view-toggle.active { border-color: var(--accent); color: var(--accent); }
-    #theme-toggle.active { border-color: var(--yellow); color: var(--yellow); }
-    #presentation-toggle.active { border-color: var(--purple); color: var(--purple); }
-    #presentation-toggle { display: none; }
+    /* Anciens boutons d'en-tête supprimés (barre du haut retirée). */
     /* logout migré dans sidebar */
     #logout-btn { display: none; }
 
@@ -1595,67 +1643,75 @@
 </head>
 <body>
 
-<header>
-  <span class="header-brand">
+<nav class="sidebar">
+  <span class="sidebar-brand">
     <img class="brand-logo" src="/logo.png" alt="Tracker Dashboard" />
     <span class="header-logo-text">tracker<span>.dashboard</span></span>
   </span>
-  <div class="header-right">
-    <button id="view-toggle" onclick="toggleViewMode()" title="Basculer entre vue cartes et vue lignes">Vue lignes</button>
-    <button id="theme-toggle" onclick="toggleTheme()">Jour</button>
-    <span id="last-updated">—</span>
-    <button id="refresh-btn" onclick="refresh()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/>
-      </svg>
-      Rafraîchir les statistiques
-    </button>
-  </div>
-</header>
 
-<nav class="sidebar">
-  <span class="nav-section-label">Navigation</span>
   <button class="nav-item active" data-nav="dashboard" onclick="showView('dashboard')" type="button">
     <span class="nav-icon">◈</span> Dashboard
   </button>
-
-  <div class="nav-group" data-nav-group="trackers">
-    <button class="nav-item nav-group-toggle" data-nav="trackers" onclick="onTrackersNavClick(event)" type="button">
-      <span class="nav-icon">⚙</span> Trackers
-      <span class="nav-caret" onclick="toggleNavGroup(event, 'trackers')">▸</span>
-    </button>
-    <div class="nav-sub" id="nav-sub-trackers"></div>
-  </div>
-
-  <button class="nav-item" data-nav="proxies" onclick="showView('proxies')" type="button">
-    <span class="nav-icon">⇄</span> Proxies
-  </button>
-  <button class="nav-item" data-nav="incidents" onclick="showView('incidents')" type="button">
-    <span class="nav-icon">⚠</span> Focus incident
-  </button>
-  <button class="nav-item" data-nav="graphs" onclick="showView('graphs')" type="button">
-    <span class="nav-icon">▤</span> Graphiques
-  </button>
-  <button class="nav-item" data-nav="qbit" onclick="showView('qbit')" type="button">
-    <span class="nav-icon">⬇</span> Clients BitTorrent
-  </button>
-  <button class="nav-item" data-nav="scraping" onclick="showView('scraping')" type="button">
-    <span class="nav-icon">⟳</span> AutoVisit
-  </button>
-  <button class="nav-item" data-nav="notifications" onclick="showView('notifications')" type="button">
-    <span class="nav-icon">⚑</span> Notifications
+  <button class="nav-subcontrol" id="view-toggle" onclick="toggleViewMode()" type="button" title="Basculer entre vue cartes et vue lignes">
+    <span class="nav-subcontrol-icon">▦</span> <span id="view-toggle-label">Vue lignes</span>
   </button>
 
   <div class="nav-group" data-nav-group="fiche">
-    <button class="nav-item nav-group-toggle" data-nav="fiche" onclick="onFicheNavClick(event)" type="button">
-      <span class="nav-icon">▦</span> Fiches de trackers
-      <span class="nav-caret" onclick="toggleNavGroup(event, 'fiche')">▸</span>
+    <button class="nav-item nav-group-toggle" onclick="toggleNavGroup(event, 'fiche')" type="button">
+      <span class="nav-icon">▦</span> Trackers activés
+      <span class="nav-caret">▸</span>
     </button>
     <div class="nav-sub" id="nav-sub-fiche"></div>
   </div>
 
+  <button class="nav-item" data-nav="graphs" onclick="showView('graphs')" type="button">
+    <span class="nav-icon">▤</span> Graphiques
+  </button>
+  <button class="nav-item" data-nav="incidents" onclick="showView('incidents')" type="button">
+    <span class="nav-icon">⚠</span> Incidents
+  </button>
+
+  <div class="nav-group" data-nav-group="config">
+    <button class="nav-item nav-group-toggle" onclick="toggleNavGroup(event, 'config')" type="button">
+      <span class="nav-icon">⚙</span> Configuration
+      <span class="nav-caret">▸</span>
+    </button>
+    <div class="nav-sub" id="nav-sub-config">
+      <div class="nav-group" data-nav-group="add">
+        <button class="nav-item nav-group-toggle" onclick="toggleNavGroup(event, 'add')" type="button">
+          <span class="nav-icon">＋</span> Ajouter un tracker
+          <span class="nav-caret">▸</span>
+        </button>
+        <div class="nav-sub" id="nav-sub-add"></div>
+      </div>
+      <div class="nav-group" data-nav-group="configure">
+        <button class="nav-item nav-group-toggle" onclick="toggleNavGroup(event, 'configure')" type="button">
+          <span class="nav-icon">✎</span> Configurer les actifs
+          <span class="nav-caret">▸</span>
+        </button>
+        <div class="nav-sub" id="nav-sub-configure"></div>
+      </div>
+      <button class="nav-item" data-nav="qbit" onclick="showView('qbit')" type="button"><span class="nav-icon">⬇</span> Clients BitTorrent</button>
+      <button class="nav-item" data-nav="notifications" onclick="showView('notifications')" type="button"><span class="nav-icon">⚑</span> Notifications</button>
+      <button class="nav-item" data-nav="proxies" onclick="showView('proxies')" type="button"><span class="nav-icon">⇄</span> Proxies</button>
+      <button class="nav-item" data-nav="scraping" onclick="showView('scraping')" type="button"><span class="nav-icon">⟳</span> Fréquence d'auto visite</button>
+    </div>
+  </div>
+
   <span class="nav-spacer"></span>
-  <button class="sidebar-run-btn" id="sidebar-run-btn" onclick="refresh()">▶ Tout visiter</button>
+  <button class="sidebar-run-btn" id="sidebar-run-btn" onclick="refresh()">▶ Synchroniser les sites</button>
+  <div class="sidebar-updated" id="last-updated">—</div>
+  <div class="theme-switch" role="group" aria-label="Thème">
+    <button type="button" data-theme-mode="light" onclick="setThemeMode('light')" title="Clair" aria-label="Clair">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+    </button>
+    <button type="button" data-theme-mode="dark" onclick="setThemeMode('dark')" title="Sombre" aria-label="Sombre">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+    </button>
+    <button type="button" data-theme-mode="system" onclick="setThemeMode('system')" title="Système" aria-label="Système">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+    </button>
+  </div>
   <button class="sidebar-logout" onclick="logout()">⏻ Déconnexion</button>
 </nav>
 
@@ -1784,11 +1840,9 @@
   </section>
 
   <section class="tab-view" data-view="trackers">
-    <details id="tracker-definitions-panel" open>
-      <summary>Trackers</summary>
-      <div style="margin:0 0 10px; display:flex; gap:10px; align-items:center; flex-wrap:wrap">
+    <div class="beta-panel" style="width:100%">
+      <div style="margin:0 0 12px; display:flex; gap:10px; align-items:center; flex-wrap:wrap">
         <button class="btn-test" onclick="refreshLogos()">Rafraîchir les logos</button>
-        <button class="btn-test" id="tracker-sort-btn" onclick="toggleTrackerDefinitionsSort()">Trier par statut</button>
         <span id="logos-result" style="font-size:12px; color:var(--muted)"></span>
         <span style="font-size:12px; color:var(--muted)" title="Extensions pour exporter les cookies de session (format cookies.txt)">
           Export cookies :
@@ -1799,7 +1853,7 @@
       </div>
       <div id="tracker-definitions-list" class="credential-status"></div>
       <div class="credential-status" id="credential-result"></div>
-    </details>
+    </div>
   </section>
 
   <section class="tab-view" data-view="fiche">
@@ -2474,34 +2528,44 @@
     });
   }
 
-  // Remplit les deux sous-menus dépliants de la barre latérale.
+  // Accordéon « Trackers activés » : liste les trackers activés ; clic = fiche.
   function renderBetaTrackerList() {
     const subFiche = document.getElementById('nav-sub-fiche');
-    const subTrackers = document.getElementById('nav-sub-trackers');
-    if (!subFiche && !subTrackers) return;
+    if (!subFiche) return;
     const statuses = new Map((betaOverview?.trackerStatuses || []).map(item => [item.id, item]));
     const trackers = activeTrackerStats();
     if (!betaSelectedTrackerId && trackers[0]) betaSelectedTrackerId = trackers[0].id;
+    subFiche.innerHTML = trackers.map(stat => {
+      const status = statuses.get(stat.id);
+      const mode = trackerModeLabel(status);
+      const dot = mode === 'fonctionne' ? 'ok' : (mode === 'cookie-only' || mode === 'captcha' ? 'warn' : 'bad');
+      const active = currentView === 'fiche' && stat.id === betaSelectedTrackerId;
+      return `
+        <button class="nav-sub-item ${active ? 'active' : ''}" onclick="openTrackerFiche('${escapeHtml(stat.id)}')" type="button" title="${escapeHtml(mode)}">
+          <i class="nav-sub-dot ${dot}"></i>
+          <span class="nav-sub-name">${escapeHtml(stat.name)}</span>
+        </button>`;
+    }).join('') || '<p class="nav-sub-empty">Aucun tracker activé.</p>';
+  }
 
-    if (subFiche) {
-      subFiche.innerHTML = trackers.map(stat => {
-        const status = statuses.get(stat.id);
-        const mode = trackerModeLabel(status);
-        const dot = mode === 'fonctionne' ? 'ok' : (mode === 'cookie-only' || mode === 'captcha' ? 'warn' : 'bad');
-        const active = currentView === 'fiche' && stat.id === betaSelectedTrackerId;
-        return `
-          <button class="nav-sub-item ${active ? 'active' : ''}" onclick="openTrackerFiche('${escapeHtml(stat.id)}')" type="button" title="${escapeHtml(mode)}">
-            <i class="nav-sub-dot ${dot}"></i>
-            <span class="nav-sub-name">${escapeHtml(stat.name)}</span>
-          </button>`;
-      }).join('') || '<p class="nav-sub-empty">Aucun tracker actif.</p>';
+  // Accordéons « Ajouter un tracker » (non activés) et « Configurer les actifs »
+  // (activés) sous Configuration. Alimentés par les définitions en cache.
+  function renderTrackerConfigNav() {
+    const subAdd = document.getElementById('nav-sub-add');
+    const subConfigure = document.getElementById('nav-sub-configure');
+    if (!subAdd && !subConfigure) return;
+    const defs = [...cachedTrackerDefinitions].sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
+    const itemHtml = def => `
+      <button class="nav-sub-item ${currentView === 'trackers' && def.id === configSelectedTrackerId ? 'active' : ''}" onclick="openTrackerConfig('${escapeHtml(def.id)}')" type="button">
+        <span class="nav-sub-name">${escapeHtml(def.name)}</span>
+      </button>`;
+    if (subAdd) {
+      subAdd.innerHTML = defs.filter(def => !def.enabled).map(itemHtml).join('')
+        || '<p class="nav-sub-empty">Tous les trackers sont activés.</p>';
     }
-
-    if (subTrackers) {
-      subTrackers.innerHTML = trackers.map(stat => `
-          <button class="nav-sub-item" onclick="openTrackerConfig('${escapeHtml(stat.id)}')" type="button">
-            <span class="nav-sub-name">${escapeHtml(stat.name)}</span>
-          </button>`).join('') || '<p class="nav-sub-empty">Aucun tracker actif.</p>';
+    if (subConfigure) {
+      subConfigure.innerHTML = defs.filter(def => def.enabled).map(itemHtml).join('')
+        || '<p class="nav-sub-empty">Aucun tracker activé.</p>';
     }
   }
 
@@ -2510,24 +2574,21 @@
     renderBetaLab();
   }
 
-  // Ouvre la fiche d'un tracker depuis l'accordéon « Fiches de trackers ».
+  // Ouvre la fiche d'un tracker depuis l'accordéon « Trackers activés ».
   function openTrackerFiche(trackerId) {
     betaSelectedTrackerId = trackerId;
     setNavGroupOpen('fiche', true);
     showView('fiche');
   }
 
-  // Ouvre la gestion d'un tracker depuis l'accordéon « Trackers » et défile
-  // jusqu'à sa carte de configuration.
+  // Ouvre la configuration d'un seul tracker (depuis « Ajouter un tracker » ou
+  // « Configurer les actifs ») : la vue n'affiche que ce tracker.
   function openTrackerConfig(trackerId) {
-    setNavGroupOpen('trackers', true);
+    configSelectedTrackerId = trackerId;
+    setNavGroupOpen('config', true);
     showView('trackers');
-    const row = document.getElementById('tracker-def-' + trackerId);
-    if (row) {
-      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      row.classList.add('definition-row-highlight');
-      setTimeout(() => row.classList.remove('definition-row-highlight'), 2000);
-    }
+    renderSelectedTrackerCard();
+    renderTrackerConfigNav();
   }
 
   function betaTrackerUrl(stat) {
@@ -3638,6 +3699,7 @@
     if (isBetaView()) loadBetaData();
     renderGrid();
     renderBetaTrackerList();
+    renderTrackerConfigNav();
   }
 
   function loadActiveView() {
@@ -3652,22 +3714,11 @@
     if (group) group.classList.toggle('open', open);
   }
 
+  // Clic sur le nom d'un accordéon = déplier / replier.
   function toggleNavGroup(event, name) {
     if (event) event.stopPropagation();
     const group = document.querySelector(`.nav-group[data-nav-group="${name}"]`);
     if (group) group.classList.toggle('open');
-  }
-
-  // Clic sur l'entête « Trackers » : ouvre la vue de gestion et déplie le menu.
-  function onTrackersNavClick(event) {
-    setNavGroupOpen('trackers', true);
-    showView('trackers');
-  }
-
-  // Clic sur l'entête « Fiches de trackers » : ouvre la vue fiche et déplie le menu.
-  function onFicheNavClick(event) {
-    setNavGroupOpen('fiche', true);
-    showView('fiche');
   }
 
   function loadBetaSettings() {
@@ -3713,11 +3764,8 @@
   function applyViewMode(mode) {
     viewMode = mode === 'rows' ? 'rows' : 'cards';
     localStorage.setItem('tracker-dashboard-view', viewMode);
-    const btn = document.getElementById('view-toggle');
-    if (btn) {
-      btn.classList.toggle('active', viewMode === 'rows');
-      btn.textContent = viewMode === 'rows' ? 'Vue cartes' : 'Vue lignes';
-    }
+    const label = document.getElementById('view-toggle-label');
+    if (label) label.textContent = viewMode === 'rows' ? 'Vue cartes' : 'Vue lignes';
     renderGrid();
   }
 
@@ -4152,6 +4200,12 @@
   let trackerConfig = [];
   let presentationMode = false;
   let trackerDefinitionsSort = 'configured';
+  // Cache des définitions/identifiants (pour rendre la config d'un seul tracker
+  // et alimenter les accordéons Ajouter / Configurer les actifs).
+  let cachedTrackerDefinitions = [];
+  let cachedTrackerCredentials = new Map();
+  let cachedNewDefinitions = [];
+  let configSelectedTrackerId = null;
 
   function escapeHtml(value) {
     return String(value ?? '')
@@ -4179,8 +4233,6 @@
   }
 
   async function loadTrackerDefinitionsPanel() {
-    const panel = document.getElementById('tracker-definitions-panel');
-    const list = document.getElementById('tracker-definitions-list');
     try {
       const [definitionResponse, credentialResponse] = await Promise.all([
         fetch('/api/tracker-definitions'),
@@ -4188,60 +4240,33 @@
       ]);
       const data = await definitionResponse.json();
       const credentialData = await credentialResponse.json();
-      const credentials = new Map((credentialData.credentials || []).map(item => [item.trackerId, item]));
-
-      const definitions = data.definitions || [];
-      const newDefinitions = data.newDefinitions || [];
-      if (newDefinitions.length > 0) panel.open = true;
-
-      if (!definitions.length) {
-        list.innerHTML = 'Aucune définition trouvée dans /config/trackers.';
-        return;
+      cachedTrackerCredentials = new Map((credentialData.credentials || []).map(item => [item.trackerId, item]));
+      cachedTrackerDefinitions = data.definitions || [];
+      cachedNewDefinitions = data.newDefinitions || [];
+      // Sélection par défaut : premier tracker à ajouter, sinon le premier défini.
+      if ((!configSelectedTrackerId || !cachedTrackerDefinitions.some(def => def.id === configSelectedTrackerId)) && cachedTrackerDefinitions.length) {
+        const firstAvailable = cachedTrackerDefinitions.find(def => !def.enabled);
+        configSelectedTrackerId = (firstAvailable || cachedTrackerDefinitions[0]).id;
       }
+      renderTrackerConfigNav();
+      renderSelectedTrackerCard();
+    } catch(e) {
+      const list = document.getElementById('tracker-definitions-list');
+      if (list) list.innerHTML = 'Impossible de lire /config/trackers.';
+      console.warn('Tracker definitions unavailable', e);
+    }
+  }
 
-      const sorted = [...definitions];
-      if (trackerDefinitionsSort === 'configured') {
-        sorted.sort((a, b) => {
-          const aCred = credentials.get(a.id);
-          const bCred = credentials.get(b.id);
-          const aOk = Boolean(aCred?.hasPassword || aCred?.hasCookie);
-          const bOk = Boolean(bCred?.hasPassword || bCred?.hasCookie);
-          if (aOk !== bOk) return bOk - aOk;
-          return a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' });
-        });
-      } else {
-        sorted.sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
-      }
-
-      const notice = newDefinitions.length
-        ? `<div class="definition-notice">
-            <strong>${newDefinitions.length} nouveau(x) tracker(s) détecté(s)</strong>
-            <button class="btn-save" style="float:right;padding:5px 10px" onclick="ackTrackerDefinitions()">Vu</button>
-          </div>`
-        : '';
-
-      // Ajouter un séparateur entre configurés et non configurés
-      let prevConfigured = null;
-      list.innerHTML = `
-        ${notice}
-        <div class="definition-list">
-          ${sorted.map((definition, idx) => {
-            const isNew = newDefinitions.some(item => item.id === definition.id);
-            const isEnabled = Boolean(definition.enabled);
-            const credential = credentials.get(definition.id) || {};
-            const isConfigured = Boolean(credential.hasPassword || credential.hasCookie);
-            const separator = (idx > 0 && prevConfigured !== null && prevConfigured !== isConfigured)
-              ? '<div class="definition-separator"></div>'
-              : '';
-            prevConfigured = isConfigured;
-            const safeId = escapeHtml(definition.id);
-            const cookieOnly = Boolean(credential.cookieOnly);
-            const statusBadge = cookieOnly
-              ? `<span class="credential-badge ${credential.hasCookie ? 'credential-ok' : 'credential-missing'}">${credential.hasCookie ? 'Cookie OK' : 'Cookie requis'}</span>`
-              : `<span class="credential-badge ${credential.hasPassword ? 'credential-ok' : 'credential-missing'}">${credential.hasPassword ? 'Configuré' : 'Manquant'}</span>`;
-            return `
-              ${separator}
-              <div class="definition-row" id="tracker-def-${escapeHtml(definition.id)}">
+  // Carte de configuration d'un tracker (identifiants, cookie, 2FA, activation).
+  function trackerDefinitionCardHtml(definition, credential = {}, isNew = false) {
+    const isEnabled = Boolean(definition.enabled);
+    const safeId = escapeHtml(definition.id);
+    const cookieOnly = Boolean(credential.cookieOnly);
+    const statusBadge = cookieOnly
+      ? `<span class="credential-badge ${credential.hasCookie ? 'credential-ok' : 'credential-missing'}">${credential.hasCookie ? 'Cookie OK' : 'Cookie requis'}</span>`
+      : `<span class="credential-badge ${credential.hasPassword ? 'credential-ok' : 'credential-missing'}">${credential.hasPassword ? 'Configuré' : 'Manquant'}</span>`;
+    return `
+              <div class="definition-row" id="tracker-def-${safeId}">
                 <div class="definition-info">
                   <strong>${trackerLogo(definition.id)}${escapeHtml(definition.name)}${cookieOnly ? ' <span class="definition-badge definition-badge-cookie" title="Login automatique désactivé : ce tracker nécessite un cookie de session (CAPTCHA/anti-bot). Renseigne-le dans Options avancées.">Cookie uniquement</span>' : ''}</strong>
                   <small>${escapeHtml(definition.file)} · <a href="${escapeHtml(definition.baseUrl)}" target="_blank" rel="noreferrer noopener">${escapeHtml(definition.baseUrl)}</a></small>
@@ -4294,12 +4319,24 @@
                   </div>
                 </details>
               </div>`;
-          }).join('')}
-        </div>`;
-    } catch(e) {
-      list.innerHTML = 'Impossible de lire /config/trackers.';
-      console.warn('Tracker definitions unavailable', e);
+  }
+
+  // Vue Configuration : n'affiche que le tracker sélectionné.
+  function renderSelectedTrackerCard() {
+    const list = document.getElementById('tracker-definitions-list');
+    if (!list) return;
+    if (!cachedTrackerDefinitions.length) {
+      list.innerHTML = 'Aucune définition trouvée dans /config/trackers.';
+      return;
     }
+    const definition = cachedTrackerDefinitions.find(def => def.id === configSelectedTrackerId);
+    if (!definition) {
+      list.innerHTML = '<p class="beta-note">Sélectionne un tracker dans « Ajouter un tracker » ou « Configurer les actifs ».</p>';
+      return;
+    }
+    const credential = cachedTrackerCredentials.get(definition.id) || {};
+    const isNew = cachedNewDefinitions.some(item => item.id === definition.id);
+    list.innerHTML = `<div class="definition-list">${trackerDefinitionCardHtml(definition, credential, isNew)}</div>`;
   }
 
   async function ackTrackerDefinitions() {
@@ -4424,26 +4461,36 @@
     }
   }
 
-  function applyTheme(theme) {
-    const nextTheme = theme === 'light' ? 'light' : 'dark';
-    document.documentElement.dataset.theme = nextTheme;
-    localStorage.setItem('tracker-dashboard-theme', nextTheme);
-    const btn = document.getElementById('theme-toggle');
-    if (btn) {
-      btn.classList.toggle('active', nextTheme === 'light');
-      btn.textContent = nextTheme === 'light' ? 'Nuit' : 'Jour';
-      btn.title = nextTheme === 'light' ? 'Passer en mode nuit' : 'Passer en mode jour';
-    }
+  // Thème : 3 modes — 'light', 'dark', 'system' (suit le réglage de l'OS).
+  let themeMode = 'system';
+
+  function resolveTheme(mode) {
+    if (mode === 'light' || mode === 'dark') return mode;
+    return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  }
+
+  function renderThemeSwitch() {
+    document.querySelectorAll('.theme-switch [data-theme-mode]').forEach(btn => {
+      btn.classList.toggle('active', btn.getAttribute('data-theme-mode') === themeMode);
+    });
+  }
+
+  function setThemeMode(mode) {
+    themeMode = ['light', 'dark', 'system'].includes(mode) ? mode : 'system';
+    localStorage.setItem('tracker-dashboard-theme-mode', themeMode);
+    document.documentElement.dataset.theme = resolveTheme(themeMode);
+    renderThemeSwitch();
   }
 
   function loadTheme() {
-    const saved = localStorage.getItem('tracker-dashboard-theme');
-    const preferred = window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-    applyTheme(saved || preferred);
-  }
-
-  function toggleTheme() {
-    applyTheme(document.documentElement.dataset.theme === 'light' ? 'dark' : 'light');
+    const stored = localStorage.getItem('tracker-dashboard-theme-mode')
+      || localStorage.getItem('tracker-dashboard-theme') // ancienne clé (light|dark)
+      || 'system';
+    setThemeMode(stored);
+    // Suivre l'OS en temps réel quand le mode « système » est actif.
+    window.matchMedia?.('(prefers-color-scheme: light)').addEventListener?.('change', () => {
+      if (themeMode === 'system') document.documentElement.dataset.theme = resolveTheme('system');
+    });
   }
 
   function renderPresentationToggle() {
@@ -4530,19 +4577,15 @@
   }
 
   async function refresh() {
-    const btn = document.getElementById('refresh-btn');
-    btn.disabled = true;
-    btn.textContent = 'Refresh en cours…';
+    const btn = document.getElementById('sidebar-run-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Synchronisation…'; }
     try {
       await fetch('/api/refresh', { method: 'POST' });
       // Attend un peu puis recharge
       await new Promise(r => setTimeout(r, 2000));
       await loadStats();
     } finally {
-      btn.disabled = false;
-      btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/>
-      </svg> Rafraîchir les statistiques`;
+      if (btn) { btn.disabled = false; btn.textContent = '▶ Synchroniser les sites'; }
     }
   }
 
