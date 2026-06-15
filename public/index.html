@@ -796,6 +796,9 @@
     .beta-icon-btn:hover { border-color: var(--blue); color: var(--text); }
     .beta-icon-btn.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
     .beta-note { color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .beta-overrides-details { margin-top: 16px; }
+    .beta-overrides-details > summary { cursor: pointer; list-style-position: outside; user-select: none; }
+    .beta-overrides-details > summary:hover h4 { color: var(--text); }
     .beta-detail-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -2373,6 +2376,9 @@
   let betaSelectedTrackerId = null;
   let betaSelectedCalendarDay = new Date().toISOString().slice(0, 10);
   let betaTableSort = { key: 'name', dir: 'asc' };
+  // État déplié/replié de la section « Fréquences individuelles » (AutoVisit).
+  // Conservé en mémoire pour survivre aux re-renders périodiques de la vue.
+  let betaOverridesExpanded = false;
   const betaMetricDefs = {
     uploadedBytes: { label: 'UP', color: '#22c55e', format: value => bytesText(value).replace(/<[^>]+>/g, ''), axis: value => formatBytes(value, 'binary').join(' ') },
     downloadedBytes: { label: 'DL', color: '#3b82f6', format: value => bytesText(value).replace(/<[^>]+>/g, ''), axis: value => formatBytes(value, 'binary').join(' ') },
@@ -3266,8 +3272,9 @@
       <div style="margin:10px 0 6px; display:flex; gap:8px; flex-wrap:wrap">
         <button class="beta-icon-btn primary" onclick="saveBetaSettings()" type="button">Enregistrer</button>
       </div>
-      <h4 style="margin:16px 0 8px">Fréquences individuelles</h4>
-      <p class="beta-note" style="margin-bottom:8px">Une valeur individuelle remplace la planification globale pour le tracker concerné.</p>
+      <details class="beta-overrides-details" ${betaOverridesExpanded ? 'open' : ''} ontoggle="setBetaOverridesExpanded(this.open)">
+        <summary><h4 style="display:inline; margin:0">Fréquences individuelles</h4></summary>
+      <p class="beta-note" style="margin:8px 0">Une valeur individuelle remplace la planification globale pour le tracker concerné.</p>
       <div id="beta-schedule-overrides">
         ${trackerConfig.filter(tracker => tracker.enabled !== false).map(tracker => {
           const override = (betaSettings.scheduleOverrides || []).find(item => item.trackerId === tracker.id) || { mode: 'global', intervalHours: 24 };
@@ -3279,8 +3286,13 @@
           </div>`;
         }).join('') || '<p class="beta-note">Aucun tracker actif.</p>'}
       </div>
+      </details>
     `;
     updateBetaScheduleMode();
+  }
+
+  function setBetaOverridesExpanded(open) {
+    betaOverridesExpanded = Boolean(open);
   }
 
   function updateBetaScheduleMode() {
