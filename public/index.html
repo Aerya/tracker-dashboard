@@ -2149,7 +2149,6 @@
     if (!hasStatValue(raw)) return 0;
     const n = Number(raw);
     if (Number.isFinite(n)) return n > 0 ? n : 0;
-    // Valeur non numerique : certains trackers ecrivent le singulier en toutes lettres
     // (FR "un", EN "a/an/one"). D'autres (UNIT3D) renvoient un signal de presence
     // quelconque (ex. "1s" = duree de l'animation de la sphere MP).
     // Regle : toute string non vide = au moins 1 message non lu.
