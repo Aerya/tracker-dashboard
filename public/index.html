@@ -3180,14 +3180,17 @@
     if (!container) return;
     const clients = betaSettings.qbitClients || [];
     container.innerHTML = clients.map((client, idx) => `
-      <div class="beta-form-row" data-beta-qbit="${idx}" style="grid-template-columns: 130px minmax(0,1fr) minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) 80px 96px auto">
+      <div class="beta-form-row" data-beta-qbit="${idx}" style="grid-template-columns: 130px minmax(0,1fr) minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) 80px 132px auto">
         <div class="beta-field"><label>Type</label><select data-field="type"><option value="qbittorrent" ${client.type !== 'rutorrent' ? 'selected' : ''}>qBittorrent</option><option value="rutorrent" ${client.type === 'rutorrent' ? 'selected' : ''}>ruTorrent / rTorrent</option></select></div>
         <div class="beta-field"><label>Nom</label><input data-field="label" value="${escapeHtml(client.label || '')}" placeholder="Seedbox principale"></div>
         <div class="beta-field"><label>URL API</label><input data-field="baseUrl" value="${escapeHtml(client.baseUrl || '')}" placeholder="qBit: https://qb.example · ruTorrent: https://rt.example/RPC2"></div>
         <div class="beta-field"><label>Utilisateur</label><input data-field="username" value="${escapeHtml(client.username || '')}"></div>
         <div class="beta-field"><label>Mot de passe</label><input data-field="password" type="password" value="${escapeHtml(client.password || '')}"></div>
         <div class="beta-field"><label>Actif</label><select data-field="enabled"><option value="true" ${client.enabled !== false ? 'selected' : ''}>Oui</option><option value="false" ${client.enabled === false ? 'selected' : ''}>Non</option></select></div>
-        <div class="beta-field"><label title="Rafraîchissement automatique de ce client, en minutes. 0 = désactivé.">Auto (min)</label><input data-field="refreshMinutes" type="number" min="0" max="1440" step="1" value="${Number(client.refreshMinutes) || 0}" title="0 = pas de rafraîchissement automatique"></div>
+        <div class="beta-field"><label title="Rafraîchissement automatique de ce client : jours et/ou heures (combinables). 0 / 0 = désactivé.">Auto (j / h)</label><div style="display:flex; gap:4px">
+          <input data-field="refreshDays" type="number" min="0" max="30" step="1" value="${Math.floor((Number(client.refreshMinutes) || 0) / 1440)}" title="Jours" style="width:50%; min-width:0">
+          <input data-field="refreshHours" type="number" min="0" max="23" step="1" value="${Math.floor(((Number(client.refreshMinutes) || 0) % 1440) / 60)}" title="Heures" style="width:50%; min-width:0">
+        </div></div>
         <div style="display:flex; gap:6px; align-items:flex-end"><button class="beta-icon-btn" onclick="testBetaQbitClient(${idx})" type="button">Tester</button><button class="beta-icon-btn" onclick="removeBetaQbitClient(${idx})" type="button">X</button></div>
       </div>
     `).join('') || '<p class="beta-note">Ajouter un ou plusieurs clients qBittorrent ou ruTorrent/rTorrent pour comparer les stats locales aux stats des sites.</p>';
@@ -3366,7 +3369,9 @@
       username: row.querySelector('[data-field="username"]').value.trim(),
       password: row.querySelector('[data-field="password"]').value,
       enabled: row.querySelector('[data-field="enabled"]').value === 'true',
-      refreshMinutes: Math.max(0, Math.min(1440, Math.floor(Number(row.querySelector('[data-field="refreshMinutes"]')?.value) || 0))),
+      refreshMinutes: Math.max(0, Math.min(43200,
+        (Math.max(0, Math.floor(Number(row.querySelector('[data-field="refreshDays"]')?.value) || 0)) * 1440)
+        + (Math.max(0, Math.floor(Number(row.querySelector('[data-field="refreshHours"]')?.value) || 0)) * 60))),
     })).filter(client => client.baseUrl);
     const announceMappings = Array.from(document.querySelectorAll('[data-beta-mapping]')).map((row) => ({
       announceHost: row.querySelector('[data-field="announceHost"]').value.trim(),
