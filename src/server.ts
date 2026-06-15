@@ -118,9 +118,10 @@ interface BetaQbitClient {
   username?: string;
   password?: string;
   enabled: boolean;
-  // Intervalle de rafraîchissement automatique en minutes (par client).
-  // 0 (ou absent) = pas de rescan automatique ; sinon le scheduler rescanne ce
-  // client toutes les N minutes. Plafonné à 1440 (24 h) à l'enregistrement.
+  // Intervalle de rafraîchissement automatique en minutes (par client), saisi
+  // côté WebUI en jours et/ou heures (combinables). 0 (ou absent) = pas de rescan
+  // automatique ; sinon le scheduler rescanne ce client toutes les N minutes.
+  // Plafonné à 43200 (30 jours) à l'enregistrement.
   refreshMinutes?: number;
 }
 
@@ -1813,7 +1814,7 @@ function saveBetaSettingsPayload(raw: unknown): BetaSettings {
       username: String(client.username || '').trim(),
       password,
       enabled: client.enabled !== false,
-      refreshMinutes: Math.max(0, Math.min(1440, Math.floor(Number(client.refreshMinutes) || 0))),
+      refreshMinutes: Math.max(0, Math.min(43200, Math.floor(Number(client.refreshMinutes) || 0))),
     };
   }).filter(client => client.baseUrl) : current.qbitClients;
 
