@@ -3263,6 +3263,9 @@
         <div class="beta-field"><label>Jours</label><div style="display:flex;gap:8px;flex-wrap:wrap">${dayLabels.map((label, day) => `<label><input type="checkbox" data-beta-weekday="${day}" ${weekdays.has(day) ? 'checked' : ''}> ${label}</label>`).join('')}</div></div>
       </div>
       <p class="beta-note">Prochaine exécution : ${schedule.nextRunAt ? escapeHtml(new Date(schedule.nextRunAt).toLocaleString('fr-FR')) : 'non planifiée'}${schedule.lastRunAt ? ` · Dernière : ${escapeHtml(new Date(schedule.lastRunAt).toLocaleString('fr-FR'))}` : ''}</p>
+      <div style="margin:10px 0 6px; display:flex; gap:8px; flex-wrap:wrap">
+        <button class="beta-icon-btn primary" onclick="saveBetaSettings()" type="button">Enregistrer</button>
+      </div>
       <h4 style="margin:16px 0 8px">Fréquences individuelles</h4>
       <p class="beta-note" style="margin-bottom:8px">Une valeur individuelle remplace la planification globale pour le tracker concerné.</p>
       <div id="beta-schedule-overrides">
