@@ -126,11 +126,17 @@ interface BetaQbitClient {
 
 interface BetaNotificationTarget {
   id: string;
-  type: 'discord' | 'apprise';
+  type: 'discord' | 'apprise' | 'mail';
   label: string;
-  url: string;
-  urls?: string[];
+  url: string;       // webhook Discord ou URL serveur Apprise ; vide pour mail (resolu auto)
+  urls?: string[];   // URLs Apprise (type apprise)
   enabled: boolean;
+  // Champs specifiques au type mail (construits en mailtos:// au moment de l'envoi)
+  mailFrom?: string;    // ex. user@gmail.com ou user1@example.com
+  mailPass?: string;    // mot de passe / app password
+  mailTo?: string;      // destinataire (defaut = mailFrom)
+  mailSmtp?: string;    // serveur SMTP custom (optionnel, ex. mail.example.com)
+  mailPort?: number;    // port custom (optionnel, defaut 587)
 }
 
 interface BetaScheduleSettings {
@@ -166,17 +172,26 @@ interface BetaTrackerScheduleOverride {
   lastRunAt: string | null;
 }
 
-// Alerte par tracker (override). 'kind' = metrique surveillee.
-// ratio/buffer/cookie : comparaison numerique via operator + threshold.
-// fail : tracker en echec. mp : MP non lus > 0. stats : envoie la ligne stats.
-interface BetaAlertRule {
-  id: string;
-  trackerId: string;
-  enabled: boolean;
-  kind: 'ratio' | 'buffer' | 'fail' | 'mp' | 'cookie' | 'stats';
-  operator: '<=' | '<' | '>=' | '>';
-  threshold: number;
-  targetIds: string[];
+// Alertes par tracker : memes options que les reglages globaux (Echec/Succes/Stats/MP
+// en mode auto+manuel, + seuils ratio/buffer/session). Systeme ADDITIF et INDEPENDANT
+// du global : un tracker present ici declenche sa propre notification, en plus de la
+// notif globale. Pas d'override. Stockage : Record<trackerId, BetaTrackerAlert>.
+// Un tracker est "specifique" des qu'au moins une option est active.
+interface BetaTrackerAlert {
+  notifyError: boolean;
+  notifyManualError: boolean;
+  notifySuccess: boolean;
+  notifyManualSuccess: boolean;
+  notifyStats: boolean;
+  notifyManualStats: boolean;
+  notifyMp: boolean;
+  notifyManualMp: boolean;
+  ratioEnabled: boolean;
+  ratioThreshold: number;
+  bufferEnabled: boolean;
+  bufferThresholdGo: number;
+  sessionEnabled: boolean;
+  sessionDays: number;
 }
 
 // Alertes globales numeriques communes aux deux modes (auto et manuel).
@@ -202,7 +217,7 @@ interface BetaSettings {
   schedule: BetaScheduleSettings;
   scheduleOverrides: BetaTrackerScheduleOverride[];
   notificationPreferences: BetaNotificationPreferences;
-  alertRules: BetaAlertRule[];
+  trackerAlerts: Record<string, BetaTrackerAlert>;
   globalAlerts: BetaGlobalAlerts;
   defaults: {
     ratioEnabled: boolean;
@@ -1566,76 +1581,112 @@ function computeRatio(stat: TrackerStats): number | null {
   return up / down;
 }
 
-function compareNumber(value: number, operator: '<=' | '<' | '>=' | '>', threshold: number): boolean {
-  switch (operator) {
-    case '<=': return value <= threshold;
-    case '<': return value < threshold;
-    case '>=': return value >= threshold;
-    case '>': return value > threshold;
-    default: return false;
-  }
+// Construit les lignes d'une notification (echecs + succes/stats/mp + alertes
+// ratio/buffer/session) pour un sous-ensemble de trackers, selon un jeu de reglages
+// donne (global OU specifique a un tracker). Reutilise pour les deux notifications.
+interface AlertConfig {
+  notifyError: boolean; notifyManualError: boolean;
+  notifySuccess: boolean; notifyManualSuccess: boolean;
+  notifyStats: boolean; notifyManualStats: boolean;
+  notifyMp: boolean; notifyManualMp: boolean;
+  ratioEnabled: boolean; ratioThreshold: number;
+  bufferEnabled: boolean; bufferThresholdGo: number;
+  sessionEnabled: boolean; sessionDays: number;
 }
 
-function evaluateTrackerAlerts(settings: BetaSettings, results: TrackerStats[]): string[] {
-  const global = settings.globalAlerts;
-  const overrides = settings.alertRules.filter(rule => rule.enabled);
-  const messages: string[] = [];
-  for (const stat of results) {
-    const trackerOverrides = overrides.filter(rule => rule.trackerId === stat.id);
-    const overriddenKinds = new Set(trackerOverrides.map(rule => rule.kind));
-    const ratioOverride = trackerOverrides.find(rule => rule.kind === 'ratio');
-    if (ratioOverride) {
-      const ratio = computeRatio(stat);
-      if (ratio !== null && Number.isFinite(ratio) && compareNumber(ratio, ratioOverride.operator, ratioOverride.threshold)) {
-        messages.push(`${stat.name} : ratio ${ratio.toFixed(2)} ${ratioOverride.operator} ${ratioOverride.threshold}`);
-      }
-    } else if (global.ratioEnabled && stat.status === 'ok') {
-      const ratio = computeRatio(stat);
-      if (ratio !== null && Number.isFinite(ratio) && ratio < global.ratioThreshold) {
-        messages.push(`${stat.name} : ratio ${ratio.toFixed(2)} < ${global.ratioThreshold}`);
-      }
-    }
-    const bufferOverride = trackerOverrides.find(rule => rule.kind === 'buffer');
-    const up = Number((stat.fields ?? {}).uploadedBytes);
-    const down = Number((stat.fields ?? {}).downloadedBytes);
-    const bufferKnown = !Number.isNaN(up) && !Number.isNaN(down);
-    if (bufferOverride) {
-      if (bufferKnown) {
-        const buffer = up - down;
-        if (compareNumber(buffer, bufferOverride.operator, bufferOverride.threshold)) {
-          messages.push(`${stat.name} : buffer ${formatBytesForNotif(buffer, stat.byteUnit)} ${bufferOverride.operator} ${formatBytesForNotif(bufferOverride.threshold, stat.byteUnit)}`);
-        }
-      }
-    } else if (global.bufferEnabled && stat.status === 'ok' && bufferKnown) {
-      const buffer = up - down;
-      const thresholdBytes = global.bufferThresholdGo * 1e9;
-      if (buffer < thresholdBytes) {
-        messages.push(`${stat.name} : buffer ${formatBytesForNotif(buffer, stat.byteUnit)} < ${global.bufferThresholdGo} Go`);
-      }
-    }
-    if (overriddenKinds.has('fail') && stat.status === 'error') {
-      const reason = stat.error || stat.siteReachability?.reason || 'erreur inconnue';
-      messages.push(`${stat.name} : échec — ${reason}`);
-    }
-    if (overriddenKinds.has('mp') && stat.status === 'ok') {
-      const mp = unreadMessagesCount(stat);
-      if (mp > 0) messages.push(`${stat.name} : ${mp} MP non lu${mp > 1 ? 's' : ''}`);
-    }
-    const cookieOverride = trackerOverrides.find(rule => rule.kind === 'cookie');
-    const sessionDays = cookieOverride ? cookieOverride.threshold : global.sessionDays;
-    const sessionApplies = cookieOverride ? true : (global.sessionEnabled && !overriddenKinds.has('cookie'));
-    if (sessionApplies && stat.lastLoginAt) {
-      const ageDays = (Date.now() - Date.parse(stat.lastLoginAt)) / 86_400_000;
-      if (Number.isFinite(ageDays) && ageDays > sessionDays) {
-        messages.push(`${stat.name} : session ancienne (${Math.floor(ageDays)} j, seuil ${sessionDays} j)`);
-      }
-    }
-    if (overriddenKinds.has('stats') && stat.status === 'ok') {
-      const statLine = formatStatLine(stat);
-      messages.push(`${stat.name} : ${statLine || 'OK'}`);
+// Evalue les seuils ratio/buffer/session d'un tracker selon une config donnee.
+function evaluateThresholds(stat: TrackerStats, cfg: AlertConfig): string[] {
+  const out: string[] = [];
+  if (cfg.ratioEnabled && stat.status === 'ok') {
+    const ratio = computeRatio(stat);
+    if (ratio !== null && Number.isFinite(ratio) && ratio < cfg.ratioThreshold) {
+      out.push(`${stat.name} : ratio ${ratio.toFixed(2)} < ${cfg.ratioThreshold}`);
     }
   }
-  return messages;
+  if (cfg.bufferEnabled && stat.status === 'ok') {
+    const up = Number((stat.fields ?? {}).uploadedBytes);
+    const down = Number((stat.fields ?? {}).downloadedBytes);
+    if (!Number.isNaN(up) && !Number.isNaN(down) && (up - down) < cfg.bufferThresholdGo * 1e9) {
+      out.push(`${stat.name} : buffer ${formatBytesForNotif(up - down, stat.byteUnit)} < ${cfg.bufferThresholdGo} Go`);
+    }
+  }
+  if (cfg.sessionEnabled && stat.lastLoginAt) {
+    const ageDays = (Date.now() - Date.parse(stat.lastLoginAt)) / 86_400_000;
+    if (Number.isFinite(ageDays) && ageDays > cfg.sessionDays) {
+      out.push(`${stat.name} : session ancienne (${Math.floor(ageDays)} j, seuil ${cfg.sessionDays} j)`);
+    }
+  }
+  return out;
+}
+
+const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? 's' : ''}`;
+
+// Construit jusqu'a 3 notifications (echecs / succes / alertes) a partir d'une liste
+// de trackers et d'une config. Le titre est partage : "TD : X succes - Y echecs - Z MP".
+function buildNotifications(
+  relevant: TrackerStats[],
+  cfg: AlertConfig,
+  previousFailures: Set<string>,
+  manual: boolean,
+): Array<{ title: string; lines: string[] }> {
+  const wantError = manual ? cfg.notifyManualError : cfg.notifyError;
+  const wantSuccess = manual ? cfg.notifyManualSuccess : cfg.notifySuccess;
+  const wantStats = manual ? cfg.notifyManualStats : cfg.notifyStats;
+  const wantMp = manual ? cfg.notifyManualMp : cfg.notifyMp;
+
+  const errors = wantError ? relevant.filter(r => r.status === 'error') : [];
+  const ok = wantSuccess ? relevant.filter(r => r.status === 'ok') : [];
+  const recovered = ok.filter(r => previousFailures.has(r.id));
+  const totalMp = wantMp ? relevant.filter(r => r.status === 'ok').reduce((s, r) => s + unreadMessagesCount(r), 0) : 0;
+
+  const titleParts: string[] = [];
+  if (ok.length > 0) titleParts.push(`${ok.length} succès`);
+  if (errors.length > 0) titleParts.push(plural(errors.length, 'échec'));
+  if (totalMp > 0) titleParts.push(plural(totalMp, 'MP'));
+  const sharedTitle = titleParts.length ? `TD : ${titleParts.join(' - ')}` : 'TD';
+
+  const notifications: Array<{ title: string; lines: string[] }> = [];
+
+  if (errors.length > 0) {
+    notifications.push({
+      title: sharedTitle,
+      lines: errors.map(r => `- ${r.name} : ${r.error || 'erreur inconnue'}`),
+    });
+  }
+
+  if (ok.length > 0) {
+    const lines: string[] = [];
+    if (recovered.length > 0) {
+      lines.push(`Sites rétablis : ${recovered.map(r => r.name).join(', ')}`, '');
+    }
+    if (wantStats) {
+      ok.forEach((r, index) => {
+        const mp = wantMp ? unreadMessagesCount(r) : 0;
+        const mpSuffix = mp > 0 ? ` - ${mp} MP non lu${mp > 1 ? 's' : ''}` : '';
+        lines.push(`- ${r.name}${mpSuffix}`);
+        lines.push(formatStatLine(r) || 'OK');
+        if (index < ok.length - 1) lines.push('');
+      });
+    } else {
+      ok.forEach(r => {
+        const mp = wantMp ? unreadMessagesCount(r) : 0;
+        const mpSuffix = mp > 0 ? ` - ${mp} MP non lu${mp > 1 ? 's' : ''}` : '';
+        lines.push(`- ${r.name}${mpSuffix}`);
+      });
+    }
+    notifications.push({ title: sharedTitle, lines });
+  }
+
+  // Alertes seuils ratio/buffer/session
+  const alertMessages = relevant.flatMap(stat => evaluateThresholds(stat, cfg));
+  if (alertMessages.length > 0) {
+    notifications.push({
+      title: `TD : ${plural(alertMessages.length, 'alerte')}`,
+      lines: alertMessages.map(m => `- ${m}`),
+    });
+  }
+
+  return notifications;
 }
 
 async function notifyScheduledResult(
@@ -1652,62 +1703,70 @@ async function notifyScheduledResult(
   const relevant = results.filter(result => !isUnconfigured(result));
   if (relevant.length === 0) return;
 
-  const errors = relevant.filter(result => result.status === 'error');
-  const ok = relevant.filter(result => result.status === 'ok');
-  const recovered = ok.filter(result => previousFailures.has(result.id));
-  const prefs = settings.notificationPreferences;
-  const notifications: Array<{ title: string; lines: string[] }> = [];
+  const p = settings.notificationPreferences;
+  const g = settings.globalAlerts;
+  const trackerAlerts = settings.trackerAlerts || {};
 
-  const wantError = manual ? prefs.notifyManualError : prefs.notifyError;
-  const wantSuccess = manual ? prefs.notifyManualSuccess : prefs.notifySuccess;
-  const wantStats = manual ? prefs.notifyManualStats : prefs.notifyStats;
-  const wantMp = manual ? prefs.notifyManualMp : prefs.notifyMp;
-  const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? 's' : ''}`;
+  // 1) NOTIF GLOBALE : tous les trackers, selon les reglages globaux.
+  const globalCfg: AlertConfig = {
+    notifyError: p.notifyError, notifyManualError: p.notifyManualError,
+    notifySuccess: p.notifySuccess, notifyManualSuccess: p.notifyManualSuccess,
+    notifyStats: p.notifyStats, notifyManualStats: p.notifyManualStats,
+    notifyMp: p.notifyMp, notifyManualMp: p.notifyManualMp,
+    ratioEnabled: g.ratioEnabled, ratioThreshold: g.ratioThreshold,
+    bufferEnabled: g.bufferEnabled, bufferThresholdGo: g.bufferThresholdGo,
+    sessionEnabled: g.sessionEnabled, sessionDays: g.sessionDays,
+  };
+  const notifications = buildNotifications(relevant, globalCfg, previousFailures, manual);
 
-  const totalMp = wantMp ? ok.reduce((sum, result) => sum + unreadMessagesCount(result), 0) : 0;
-  const titleParts: string[] = [];
-  if (ok.length > 0) titleParts.push(`${ok.length} succès`);
-  if (errors.length > 0) titleParts.push(plural(errors.length, 'échec'));
-  if (totalMp > 0) titleParts.push(plural(totalMp, 'MP'));
-  const sharedTitle = `TD : ${titleParts.join(' - ')}`;
-
-  if (errors.length > 0 && wantError) {
-    notifications.push({
-      title: sharedTitle,
-      lines: errors.map(result => `- ${result.name} : ${result.error || 'erreur inconnue'}`),
-    });
-  }
-
-  if (ok.length > 0 && wantSuccess) {
-    const lines: string[] = [];
-    if (recovered.length > 0) {
-      lines.push(`Sites rétablis : ${recovered.map(result => result.name).join(', ')}`, '');
-    }
-    if (wantStats) {
-      ok.forEach((result, index) => {
-        const statLine = formatStatLine(result);
-        const mp = wantMp ? unreadMessagesCount(result) : 0;
+  // 2) NOTIF PAR TRACKER : independante, groupee, uniquement les trackers ayant des
+  // reglages specifiques, chacun selon SES reglages. Une notif distincte du global.
+  const specificStats = relevant.filter(stat => trackerAlerts[stat.id]);
+  if (specificStats.length > 0) {
+    // Chaque tracker specifique evalue avec sa propre config ; on agrege les lignes.
+    const perTrackerNotifs = specificStats.flatMap(stat =>
+      buildNotifications([stat], trackerAlerts[stat.id] as AlertConfig, previousFailures, manual),
+    );
+    // Regrouper par titre identique serait complexe ; on prefixe d'un marqueur clair.
+    // On fusionne toutes les lignes en une seule notif "par tracker".
+    const errLines: string[] = [];
+    const okLines: string[] = [];
+    const alertLines: string[] = [];
+    let okCount = 0, errCount = 0, mpCount = 0, alertCount = 0;
+    for (const stat of specificStats) {
+      const cfg = trackerAlerts[stat.id] as AlertConfig;
+      const wantError = manual ? cfg.notifyManualError : cfg.notifyError;
+      const wantSuccess = manual ? cfg.notifyManualSuccess : cfg.notifySuccess;
+      const wantStats = manual ? cfg.notifyManualStats : cfg.notifyStats;
+      const wantMp = manual ? cfg.notifyManualMp : cfg.notifyMp;
+      if (wantError && stat.status === 'error') {
+        errLines.push(`- ${stat.name} : ${stat.error || 'erreur inconnue'}`);
+        errCount += 1;
+      }
+      if (wantSuccess && stat.status === 'ok') {
+        const mp = wantMp ? unreadMessagesCount(stat) : 0;
         const mpSuffix = mp > 0 ? ` - ${mp} MP non lu${mp > 1 ? 's' : ''}` : '';
-        lines.push(`- ${result.name}${mpSuffix}`);
-        lines.push(statLine || 'OK');
-        if (index < ok.length - 1) lines.push('');
-      });
-    } else {
-      lines.push(ok.map(result => `- ${result.name}`).join('\n'));
+        okLines.push(`- ${stat.name}${mpSuffix}`);
+        if (wantStats) okLines.push(formatStatLine(stat) || 'OK');
+        okCount += 1;
+        mpCount += mp;
+      }
+      const thr = evaluateThresholds(stat, cfg);
+      alertLines.push(...thr.map(m => `- ${m}`));
+      alertCount += thr.length;
     }
-    notifications.push({ title: sharedTitle, lines });
-  }
-
-  const alertMessages = evaluateTrackerAlerts(settings, relevant);
-  if (alertMessages.length > 0) {
-    notifications.push({
-      title: `TD : ${plural(alertMessages.length, 'alerte')}`,
-      lines: alertMessages.map(message => `- ${message}`),
-    });
+    const titleParts: string[] = [];
+    if (okCount > 0) titleParts.push(`${okCount} succès`);
+    if (errCount > 0) titleParts.push(plural(errCount, 'échec'));
+    if (mpCount > 0) titleParts.push(plural(mpCount, 'MP'));
+    const trackerTitle = titleParts.length ? `TD : ${titleParts.join(' - ')}` : 'TD';
+    if (errLines.length > 0) notifications.push({ title: trackerTitle, lines: errLines });
+    if (okLines.length > 0) notifications.push({ title: trackerTitle, lines: okLines });
+    if (alertLines.length > 0) notifications.push({ title: `TD : ${plural(alertCount, 'alerte')}`, lines: alertLines });
   }
 
   for (const { title, lines } of notifications) {
-    const deliveries = await Promise.allSettled(targets.map(target => sendBetaNotification(target, lines.join('\n'), title)));
+    const deliveries = await Promise.allSettled(targets.map(target => sendBetaNotification(target, lines.join('\n'), title, targets)));
     deliveries.forEach((delivery, index) => {
       if (delivery.status === 'rejected') {
         console.error(`[Beta Notifications] ${targets[index].label}:`, delivery.reason);
@@ -1952,7 +2011,7 @@ function defaultBetaSettings(): BetaSettings {
       notifyManualStats: false,
       notifyManualMp: true,
     },
-    alertRules: [],
+    trackerAlerts: {},
     globalAlerts: {
       ratioEnabled: false,
       ratioThreshold: 1,
@@ -1985,7 +2044,7 @@ function loadBetaSettings(): BetaSettings {
       ...defaultBetaSettings().notificationPreferences,
       ...(settings.notificationPreferences ?? {}),
     },
-    alertRules: Array.isArray(settings.alertRules) ? settings.alertRules : [],
+    trackerAlerts: (settings.trackerAlerts && typeof settings.trackerAlerts === "object") ? settings.trackerAlerts : {},
     globalAlerts: { ...defaultBetaSettings().globalAlerts, ...(settings.globalAlerts ?? {}) },
   };
 }
@@ -2035,11 +2094,11 @@ function saveBetaSettingsPayload(raw: unknown): BetaSettings {
     const id = typeof target.id === 'string' && target.id ? target.id : crypto.randomUUID();
     const previous = previousTargets.get(id);
     const url = target.url === '••••••••' ? (previous?.url ?? '') : (target.url ?? '');
-    const type: BetaNotificationTarget['type'] = target.type === 'apprise' ? 'apprise' : 'discord';
-    return {
+    const type: BetaNotificationTarget['type'] = target.type === 'apprise' ? 'apprise' : target.type === 'mail' ? 'mail' : 'discord';
+    const base = {
       id,
       type,
-      label: String(target.label || (type === 'discord' ? 'Discord' : 'Apprise')).trim().slice(0, 80),
+      label: String(target.label || (type === 'discord' ? 'Discord' : type === 'mail' ? 'Mail' : 'Apprise')).trim().slice(0, 80),
       url: String(url || '').trim(),
       urls: Array.isArray(target.urls)
         ? (target.urls.every(value => value === '********')
@@ -2048,7 +2107,20 @@ function saveBetaSettingsPayload(raw: unknown): BetaSettings {
         : (previous?.urls ?? []),
       enabled: target.enabled !== false,
     };
-  }).filter(target => target.url) : current.notificationTargets;
+    if (type === 'mail') {
+      const resolveSecret = (val: string | undefined, prev: string | undefined) =>
+        val === '••••••••' ? (prev ?? '') : (val ?? '');
+      return {
+        ...base,
+        mailFrom: String(target.mailFrom || '').trim().toLowerCase(),
+        mailPass: resolveSecret(target.mailPass, previous?.mailPass),
+        mailTo: String(target.mailTo || '').trim().toLowerCase() || undefined,
+        mailSmtp: String(target.mailSmtp || '').trim() || undefined,
+        mailPort: target.mailPort ? Number(target.mailPort) : undefined,
+      };
+    }
+    return base;
+  }).filter(target => target.type === 'mail' ? Boolean((target as BetaNotificationTarget).mailFrom) : target.url) : current.notificationTargets;
 
   const announceMappings: BetaAnnounceMapping[] = Array.isArray(body.announceMappings) ? body.announceMappings.map(rawMapping => {
     const mapping = rawMapping as Partial<BetaAnnounceMapping>;
@@ -2058,18 +2130,33 @@ function saveBetaSettingsPayload(raw: unknown): BetaSettings {
     };
   }).filter(mapping => mapping.announceHost && mapping.announceHost !== 'unknown' && mapping.trackerId) : current.announceMappings;
 
-  const alertRules = Array.isArray(body.alertRules) ? body.alertRules.map(rawRule => {
-    const rule = rawRule as Partial<BetaAlertRule>;
-    return {
-      id: typeof rule.id === 'string' && rule.id ? rule.id : crypto.randomUUID(),
-      trackerId: String(rule.trackerId || '').trim(),
-      enabled: rule.enabled !== false,
-      kind: ['ratio', 'buffer', 'fail', 'mp', 'cookie', 'stats'].includes(String(rule.kind)) ? rule.kind as BetaAlertRule['kind'] : 'ratio',
-      operator: ['<=', '<', '>=', '>'].includes(String(rule.operator)) ? rule.operator as BetaAlertRule['operator'] : '<',
-      threshold: Number.isFinite(Number(rule.threshold)) ? Number(rule.threshold) : 1,
-      targetIds: Array.isArray(rule.targetIds) ? rule.targetIds.filter((id): id is string => typeof id === 'string') : [],
+  const rawTrackerAlerts = (body.trackerAlerts && typeof body.trackerAlerts === 'object') ? body.trackerAlerts as Record<string, Partial<BetaTrackerAlert>> : current.trackerAlerts;
+  const trackerAlerts: Record<string, BetaTrackerAlert> = {};
+  for (const [trackerId, raw] of Object.entries(rawTrackerAlerts || {})) {
+    if (!trackerId || !raw || typeof raw !== 'object') continue;
+    const a = raw as Partial<BetaTrackerAlert>;
+    const entry: BetaTrackerAlert = {
+      notifyError: a.notifyError === true,
+      notifyManualError: a.notifyManualError === true,
+      notifySuccess: a.notifySuccess === true,
+      notifyManualSuccess: a.notifyManualSuccess === true,
+      notifyStats: a.notifyStats === true,
+      notifyManualStats: a.notifyManualStats === true,
+      notifyMp: a.notifyMp === true,
+      notifyManualMp: a.notifyManualMp === true,
+      ratioEnabled: a.ratioEnabled === true,
+      ratioThreshold: Number.isFinite(Number(a.ratioThreshold)) ? Number(a.ratioThreshold) : 1,
+      bufferEnabled: a.bufferEnabled === true,
+      bufferThresholdGo: Number.isFinite(Number(a.bufferThresholdGo)) ? Number(a.bufferThresholdGo) : 100,
+      sessionEnabled: a.sessionEnabled === true,
+      sessionDays: Number.isFinite(Number(a.sessionDays)) ? Number(a.sessionDays) : 30,
     };
-  }).filter(rule => rule.trackerId) : current.alertRules;
+    // Ne conserver que les trackers ayant au moins une option active.
+    const hasAny = entry.notifyError || entry.notifyManualError || entry.notifySuccess || entry.notifyManualSuccess
+      || entry.notifyStats || entry.notifyManualStats || entry.notifyMp || entry.notifyManualMp
+      || entry.ratioEnabled || entry.bufferEnabled || entry.sessionEnabled;
+    if (hasAny) trackerAlerts[trackerId] = entry;
+  }
 
   const defaults = {
     ...current.defaults,
@@ -2160,7 +2247,7 @@ function saveBetaSettingsPayload(raw: unknown): BetaSettings {
     sessionDays: Number.isFinite(Number(rawGlobal.sessionDays)) ? Number(rawGlobal.sessionDays) : 30,
   };
 
-  const next = { qbitClients, announceMappings, notificationTargets, schedule, scheduleOverrides, notificationPreferences, alertRules, globalAlerts, defaults };
+  const next = { qbitClients, announceMappings, notificationTargets, schedule, scheduleOverrides, notificationPreferences, trackerAlerts, globalAlerts, defaults };
   setJsonSetting(BETA_SETTINGS_KEY, next);
   return next;
 }
@@ -2662,13 +2749,32 @@ async function sendBetaNotification(
   target: BetaNotificationTarget,
   message: string,
   title = 'Tracker Dashboard Beta',
+  allTargets: BetaNotificationTarget[] = [],
 ): Promise<void> {
   if (target.type === 'discord') {
     const content = `**${title}**\n${message}`.slice(0, 2000);
     await axios.post(target.url, { content }, { timeout: 8000 });
     return;
   }
-  if (!target.urls?.length) throw new Error('Aucune URL de destination Apprise configuree');
+  if (target.type === 'mail') {
+    // Construire l'URL mailtos:// et l'envoyer via le premier canal Apprise actif.
+    const appriseTarget = allTargets.find(t => t.type === 'apprise' && t.enabled && t.url);
+    if (!appriseTarget) throw new Error('Type mail : aucun canal Apprise configuré pour le transport');
+    const from = target.mailFrom ?? '';
+    const pass = encodeURIComponent(target.mailPass ?? '');
+    const domain = from.includes('@') ? from.split('@')[1] : from;
+    const user = from.includes('@') ? encodeURIComponent(from) : encodeURIComponent(from);
+    let mailUrl = `mailtos://${user}:${pass}@${domain}`;
+    const params: string[] = [];
+    if (target.mailSmtp) params.push(`smtp=${encodeURIComponent(target.mailSmtp)}`);
+    if (target.mailPort) params.push(`port=${target.mailPort}`);
+    if (target.mailTo && target.mailTo !== from) params.push(`to=${encodeURIComponent(target.mailTo)}`);
+    if (params.length) mailUrl += `?${params.join('&')}`;
+    const endpoint = `${appriseTarget.url.replace(/\/$/, '')}/notify/`;
+    await axios.post(endpoint, { title, body: message, urls: mailUrl }, { timeout: 10_000 });
+    return;
+  }
+  if (!target.urls?.length) throw new Error('Aucune URL de destination Apprise configurée');
   const endpoint = `${target.url.replace(/\/$/, '')}/notify/`;
   await axios.post(endpoint, {
     title,
@@ -2947,7 +3053,7 @@ export async function start(): Promise<void> {
     const target = settings.notificationTargets.find(item => item.id === id);
     if (!target) return res.status(404).json({ ok: false, error: 'Destination introuvable' });
     try {
-      await sendBetaNotification(target, 'Test Tracker Dashboard Beta : notification recue.');
+      await sendBetaNotification(target, 'Test Tracker Dashboard Beta : notification recue.', 'Tracker Dashboard Beta', settings.notificationTargets);
       res.json({ ok: true });
     } catch (err: unknown) {
       res.json({ ok: false, error: err instanceof Error ? err.message : String(err) });
