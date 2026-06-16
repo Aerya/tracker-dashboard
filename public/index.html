@@ -2589,7 +2589,10 @@
     subFiche.innerHTML = trackers.map(stat => {
       const status = statuses.get(stat.id);
       const mode = trackerModeLabel(status);
-      const dot = mode === 'fonctionne' ? 'ok' : (mode === 'cookie-only' || mode === 'captcha' ? 'warn' : 'bad');
+      // Pastille binaire OK / NOK uniquement (vert = fonctionne, rouge = en
+      // erreur ou données anciennes). cookie-only / captcha qui marchent restent
+      // verts : ce n'est pas une anomalie. Le mode reste affiché en infobulle.
+      const dot = hasTrackerProblem(stat) ? 'bad' : 'ok';
       const active = currentView === 'fiche' && stat.id === betaSelectedTrackerId;
       return `
         <button class="nav-sub-item ${active ? 'active' : ''}" onclick="openTrackerFiche('${escapeHtml(stat.id)}')" type="button" title="${escapeHtml(mode)}">
