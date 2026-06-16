@@ -3008,17 +3008,33 @@
           ${(() => {
             const ta = trackerAlert;
             const editBtn = `<div style="margin-top:8px"><button class="beta-icon-btn" onclick="openTrackerNotif('${escapeHtml(stat.id)}')" type="button">Configurer les notifications de ce tracker</button></div>`;
-            if (!ta) return `<p class="beta-note">Ce tracker suit les notifications globales.</p>${editBtn}`;
-            const active = [];
-            if (ta.notifyError || ta.notifyManualError) active.push('Échecs');
-            if (ta.notifySuccess || ta.notifyManualSuccess) active.push('Succès');
-            if (ta.notifyStats || ta.notifyManualStats) active.push('Statistiques');
-            if (ta.notifyMp || ta.notifyManualMp) active.push('MP non lus');
-            if (ta.ratioEnabled) active.push(`Ratio &lt; ${escapeHtml(ta.ratioThreshold)}`);
-            if (ta.bufferEnabled) active.push(`Buffer &lt; ${escapeHtml(ta.bufferThresholdGo)} Go`);
-            if (ta.sessionEnabled) active.push(`Session &gt; ${escapeHtml(ta.sessionDays)} j`);
-            if (active.length === 0) return `<p class="beta-note">Ce tracker suit les notifications globales.</p>${editBtn}`;
-            return `<table class="beta-mini-table"><thead><tr><th>Notifications spécifiques actives</th></tr></thead><tbody>${active.map(a => `<tr><td>${a}</td></tr>`).join('')}</tbody></table>${editBtn}`;
+            // Notifications spécifiques à ce tracker (menu Notifications › Par tracker).
+            const specific = [];
+            if (ta) {
+              if (ta.notifyError || ta.notifyManualError) specific.push('Échecs');
+              if (ta.notifySuccess || ta.notifyManualSuccess) specific.push('Succès');
+              if (ta.notifyStats || ta.notifyManualStats) specific.push('Statistiques');
+              if (ta.notifyMp || ta.notifyManualMp) specific.push('MP non lus');
+              if (ta.ratioEnabled) specific.push(`Ratio &lt; ${escapeHtml(ta.ratioThreshold)}`);
+              if (ta.bufferEnabled) specific.push(`Buffer &lt; ${escapeHtml(ta.bufferThresholdGo)} Go`);
+              if (ta.sessionEnabled) specific.push(`Session &gt; ${escapeHtml(ta.sessionDays)} j`);
+            }
+            // Notifications globales (menu Notifications › Notifications globales),
+            // qui s'appliquent aussi à ce tracker.
+            const prefs = betaSettings.notificationPreferences || {};
+            const global = [];
+            if (prefs.notifyError) global.push('Échecs');
+            if (prefs.notifySuccess) global.push('Succès');
+            if (prefs.notifySuccessAfterFailure) global.push('Rétablissement après échec');
+            if (prefs.notifyStats) global.push('Statistiques');
+            if (prefs.notifyMp) global.push('MP non lus');
+            if (specific.length === 0 && global.length === 0) {
+              return `<p class="beta-note">Aucune.</p>${editBtn}`;
+            }
+            const block = (titre, items) => items.length
+              ? `<table class="beta-mini-table"><thead><tr><th>${escapeHtml(titre)}</th></tr></thead><tbody>${items.map(a => `<tr><td>${a}</td></tr>`).join('')}</tbody></table>`
+              : '';
+            return `${block('Spécifiques à ce tracker', specific)}${block('Globales (tous les trackers)', global)}${editBtn}`;
           })()}
         </div>
       </div>
