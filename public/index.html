@@ -665,7 +665,10 @@
       height: 100%;
       min-width: 2px;
       border-radius: inherit;
+      background: var(--muted);
     }
+    .beta-bar-fill.dl { background: #3b82f6; }
+    .beta-bar-fill.up { background: #22c55e; }
     .beta-bar-value {
       color: var(--muted);
       font-size: 11px;
@@ -3240,7 +3243,10 @@
     drawSeriesChart('beta-multi-chart', rows, defs, metric === 'ratio' ? 'Ratio par tracker' : `${metricDef.label} quotidien par tracker`, { axisFormat: metricDef.axis });
   }
 
-  function renderBetaBarList(title, rows, color) {
+  // colorClass : 'dl' (bleu) ou 'up' (vert). La couleur vient d'une classe CSS et
+  // la largeur est posée en JS (applyBetaBarWidths), donc aucun style inline — robuste
+  // si l'environnement (reverse proxy, extension) filtre les attributs style inline.
+  function renderBetaBarList(title, rows, colorClass) {
     const max = Math.max(...rows.map(row => row.value), 1);
     return `
       <div class="beta-bar-list">
@@ -3248,11 +3254,17 @@
         ${rows.map(row => `
           <div class="beta-bar-row" title="${escapeHtml(row.name)}">
             <span class="beta-bar-name">${escapeHtml(row.name)}</span>
-            <span class="beta-bar-track"><span class="beta-bar-fill" style="width:${Math.max(1, row.value / max * 100).toFixed(1)}%; background:${color}"></span></span>
+            <span class="beta-bar-track"><span class="beta-bar-fill ${colorClass}" data-bar-width="${Math.max(1, row.value / max * 100).toFixed(1)}"></span></span>
             <span class="beta-bar-value">${escapeHtml(bytesText(row.value).replace(/<[^>]+>/g, ''))}</span>
           </div>
         `).join('') || '<p class="beta-note">Aucune donnée.</p>'}
       </div>`;
+  }
+
+  function applyBetaBarWidths(container) {
+    container.querySelectorAll('.beta-bar-fill[data-bar-width]').forEach(el => {
+      el.style.width = el.getAttribute('data-bar-width') + '%';
+    });
   }
 
   function drawBetaTotalBars() {
@@ -3282,8 +3294,9 @@
     }
     const dlRows = rows.map(row => ({ name: row.name, value: row.downloadedBytes })).sort((a, b) => b.value - a.value);
     const upRows = rows.map(row => ({ name: row.name, value: row.uploadedBytes })).sort((a, b) => b.value - a.value);
-    container.innerHTML = renderBetaBarList(ranged ? 'DL sur la période' : 'DL total', dlRows, '#3b82f6')
-      + renderBetaBarList(ranged ? 'UP sur la période' : 'UP total', upRows, '#22c55e');
+    container.innerHTML = renderBetaBarList(ranged ? 'DL sur la période' : 'DL total', dlRows, 'dl')
+      + renderBetaBarList(ranged ? 'UP sur la période' : 'UP total', upRows, 'up');
+    applyBetaBarWidths(container);
   }
 
   function drawBetaCharts() {
