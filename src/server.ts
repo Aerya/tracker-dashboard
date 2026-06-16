@@ -78,7 +78,6 @@ function shortRevision(revision: string): string {
 }
 
 function startupBanner(port: number): string {
-  const appVersion = readAppVersion();
   const imageSource = process.env.APP_IMAGE_SOURCE?.trim() || 'local';
   const imageVersion = process.env.APP_IMAGE_VERSION?.trim() || 'dev';
   const imageRevision = process.env.APP_IMAGE_REVISION?.trim() || 'unknown';
@@ -90,7 +89,7 @@ function startupBanner(port: number): string {
 
   return [
     '',
-    `Tracker Dashboard v${appVersion}`,
+    'Tracker Dashboard',
     `Image: ${imageSource}:${imageVersion}`,
     `Build ref: ${imageRef}`,
     `Build revision: ${revisionShort}`,

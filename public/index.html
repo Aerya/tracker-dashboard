@@ -622,6 +622,11 @@
       margin-bottom: 10px;
     }
     .beta-chart-controls .beta-field { max-width: 180px; }
+    .beta-multi-trackers { margin-bottom: 10px; }
+    .beta-multi-actions { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .beta-multi-checks { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+    .beta-multi-check { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text2); cursor: pointer; }
+    .beta-multi-check input { cursor: pointer; }
     .beta-chart-bars {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
@@ -651,9 +656,9 @@
       white-space: nowrap;
     }
     .beta-bar-track {
-      height: 8px;
+      height: 11px;
       border-radius: 999px;
-      background: color-mix(in srgb, var(--muted) 20%, transparent);
+      background: color-mix(in srgb, var(--muted) 22%, transparent);
       overflow: hidden;
     }
     .beta-bar-fill {
@@ -758,6 +763,9 @@
       font-size: 12px;
     }
     .beta-calendar-columns a:hover { color: var(--blue); }
+    .beta-calendar-entry-link { width: 100%; background: none; cursor: pointer; text-align: left; }
+    .beta-calendar-entry-link:hover { color: var(--blue); }
+    .beta-calendar-entry-link strong { text-decoration: underline; text-decoration-style: dotted; }
     .beta-calendar-columns span {
       color: var(--muted);
       overflow-wrap: anywhere;
@@ -1071,6 +1079,11 @@
     .error-reason { margin: -4px 18px 12px; padding: 6px 10px; font-size: 12px; border-radius: 6px;
       background: color-mix(in srgb, var(--yellow) 10%, transparent); color: var(--yellow); }
     .beta-panel .error-reason { margin: 0 0 8px; }
+    .beta-error-heading { display: block; font-size: 12px; color: var(--text2); margin: 10px 0 4px; }
+    .beta-error-heading:first-of-type { margin-top: 0; }
+    .beta-error-history { margin-top: 8px; }
+    .beta-error-history > summary { cursor: pointer; font-size: 12px; color: var(--text2); user-select: none; }
+    .beta-error-history > summary:hover { color: var(--text); }
     .badge-loading { background: color-mix(in srgb, var(--blue) 14%, transparent); color: var(--blue); }
     .badge-ratioless { background: color-mix(in srgb, var(--purple) 16%, transparent); color: var(--purple); }
     .badge-incident { background: color-mix(in srgb, var(--muted) 18%, transparent); color: var(--muted); }
@@ -1661,6 +1674,13 @@
     <span class="nav-subcontrol-icon">▦</span> <span id="view-toggle-label">Vue lignes</span>
   </button>
 
+  <button class="nav-item" data-nav="graphs" onclick="showView('graphs')" type="button">
+    <span class="nav-icon">▤</span> Graphiques
+  </button>
+  <button class="nav-item" data-nav="calendar" onclick="showView('calendar')" type="button">
+    <span class="nav-icon">▥</span> Calendrier
+  </button>
+
   <div class="nav-group" data-nav-group="fiche">
     <button class="nav-item nav-group-toggle" onclick="toggleNavGroup(event, 'fiche')" type="button">
       <span class="nav-icon">▦</span> Trackers activés
@@ -1668,13 +1688,6 @@
     </button>
     <div class="nav-sub" id="nav-sub-fiche"></div>
   </div>
-
-  <button class="nav-item" data-nav="graphs" onclick="showView('graphs')" type="button">
-    <span class="nav-icon">▤</span> Graphiques
-  </button>
-  <button class="nav-item" data-nav="incidents" onclick="showView('incidents')" type="button">
-    <span class="nav-icon">⚠</span> Incidents
-  </button>
 
   <div class="nav-group" data-nav-group="config">
     <button class="nav-item nav-group-toggle" onclick="toggleNavGroup(event, 'config')" type="button">
@@ -1698,9 +1711,9 @@
       </div>
       <button class="nav-item" data-nav="qbit" onclick="showView('qbit')" type="button"><span class="nav-icon">⬇</span> Clients BitTorrent</button>
       <div class="nav-group" data-nav-group="notif">
-        <button class="nav-item nav-group-toggle" data-nav="notif" onclick="onNotifNavClick(event)" type="button">
+        <button class="nav-item nav-group-toggle" onclick="toggleNavGroup(event, 'notif')" type="button">
           <span class="nav-icon">⚑</span> Notifications
-          <span class="nav-caret" onclick="toggleNavGroup(event, 'notif')">▸</span>
+          <span class="nav-caret">▸</span>
         </button>
         <div class="nav-sub" id="nav-sub-notif">
           <button class="nav-sub-item" data-nav="notif-canaux" onclick="showView('notif-canaux')" type="button"><span class="nav-sub-name">Canaux</span></button>
@@ -1890,11 +1903,16 @@
     </div>
   </section>
 
-  <section class="tab-view" data-view="incidents">
+  <section class="tab-view" data-view="calendar">
     <section class="beta-panel" style="width:100%">
-      <h3>Focus incidents</h3>
-      <div class="beta-note" style="margin-bottom:10px">Trackers en erreur, données anciennes, captcha, cookie-only ou site difficile à joindre.</div>
-      <div id="beta-focus-incidents"></div>
+      <h3>Calendrier des refreshs</h3>
+      <div class="beta-calendar-head">
+        <button class="beta-icon-btn" onclick="shiftBetaCalendar(-1)" type="button">Mois précédent</button>
+        <strong id="beta-calendar-title"></strong>
+        <button class="beta-icon-btn" onclick="shiftBetaCalendar(1)" type="button">Mois suivant</button>
+      </div>
+      <div id="beta-calendar" class="beta-calendar"></div>
+      <div id="beta-calendar-detail" class="beta-calendar-detail"></div>
     </section>
   </section>
 
@@ -1914,7 +1932,7 @@
         <section class="beta-panel">
           <h3>Évolution globale et tracker sélectionné</h3>
           <div class="beta-chart-controls">
-            <div class="beta-field"><label for="beta-history-tracker">Tracker</label><select id="beta-history-tracker" onchange="drawBetaCharts()"><option value="all">Tout</option></select></div>
+            <div class="beta-field"><label for="beta-history-tracker">Tracker</label><select id="beta-history-tracker" onchange="drawBetaCharts()"><option value="all">Tous</option></select></div>
             <div class="beta-field"><label for="beta-history-metric">Métrique</label><select id="beta-history-metric" onchange="drawBetaCharts()"><option value="all">UP / DL / Ratio</option><option value="uploadedBytes">UP seul</option><option value="downloadedBytes">DL seul</option><option value="ratio">Ratio seul</option></select></div>
             <div class="beta-field"><label for="beta-history-mode">Valeurs</label><select id="beta-history-mode" onchange="drawBetaCharts()"><option value="delta">Activité par période</option><option value="total">Cumul</option></select></div>
             <div class="beta-field"><label for="beta-history-from">Du</label><input id="beta-history-from" type="date" onchange="drawBetaCharts()"></div>
@@ -1929,6 +1947,7 @@
             <div class="beta-field"><label for="beta-multi-from">Du</label><input id="beta-multi-from" type="date" onchange="drawBetaCharts()"></div>
             <div class="beta-field"><label for="beta-multi-to">Au</label><input id="beta-multi-to" type="date" onchange="drawBetaCharts()"></div>
           </div>
+          <div id="beta-multi-trackers" class="beta-multi-trackers"></div>
           <div id="beta-multi-chart" class="beta-chart"></div>
         </section>
         <section class="beta-panel">
@@ -1939,16 +1958,6 @@
             <div class="beta-note">Sans dates : cumuls actuels par tracker. Avec une période : volume échangé sur l'intervalle.</div>
           </div>
           <div id="beta-total-bars" class="beta-chart-bars"></div>
-        </section>
-        <section class="beta-panel">
-          <h3>Calendrier des refreshs</h3>
-          <div class="beta-calendar-head">
-            <button class="beta-icon-btn" onclick="shiftBetaCalendar(-1)" type="button">Mois précédent</button>
-            <strong id="beta-calendar-title"></strong>
-            <button class="beta-icon-btn" onclick="shiftBetaCalendar(1)" type="button">Mois suivant</button>
-          </div>
-          <div id="beta-calendar" class="beta-calendar"></div>
-          <div id="beta-calendar-detail" class="beta-calendar-detail"></div>
         </section>
         </div>
   </section>
@@ -2452,7 +2461,7 @@
   // 'dashboard' | 'trackers' | 'proxies' | 'incidents' | 'graphs' | 'qbit' | 'scraping' | 'notif-canaux' | 'notif-globales' | 'notif-tracker' | 'fiche'
   let currentView = 'dashboard';
   // Vues alimentées par les données bêta (overview + historique).
-  const BETA_VIEWS = ['incidents', 'graphs', 'qbit', 'scraping', 'notif-canaux', 'notif-globales', 'notif-tracker', 'fiche'];
+  const BETA_VIEWS = ['calendar', 'graphs', 'qbit', 'scraping', 'notif-canaux', 'notif-globales', 'notif-tracker', 'fiche'];
   let betaStatusFilter = 'all'; // 'all' | 'problems' | 'healthy'
   let betaCalendarMonth = new Date();
   let betaOverview = null;
@@ -2835,7 +2844,14 @@
     const ratio = computedRatio(stat.fields);
     const buffer = formatBuffer(stat.fields, statByteUnit(stat));
     const history = historyForSelectedTracker();
-    const recentErrors = history.filter(row => row.status !== 'ok').slice(-6).reverse();
+    // Erreurs historisées, triées du plus récent au plus ancien.
+    const allErrors = history.filter(row => row.status !== 'ok')
+      .slice()
+      .sort((a, b) => String(b.capturedAt || '').localeCompare(String(a.capturedAt || '')));
+    const sevenDaysAgo = Date.now() - 7 * 24 * 3600 * 1000;
+    const recentErrors = allErrors.filter(row => (Date.parse(row.capturedAt) || 0) >= sevenDaysAgo);
+    const currentlyInError = stat.status === 'error' || Boolean(stat.stale);
+    const currentErrorMsg = stat.stale?.error || stat.error || '';
     const rules = (betaSettings.alertRules || []).filter(rule => rule.trackerId === stat.id);
     const targets = new Map((betaSettings.notificationTargets || []).map(target => [target.id, target]));
 
@@ -2850,17 +2866,29 @@
       <div class="beta-link-row">
         ${trackerUrl ? `<a class="beta-icon-btn" href="${escapeHtml(trackerUrl)}" target="_blank" rel="noreferrer noopener">Ouvrir le tracker</a>` : ''}
         ${qbits.map(item => `<a class="beta-icon-btn" href="${escapeHtml(item.clientBaseUrl)}" target="_blank" rel="noreferrer noopener">Ouvrir ${escapeHtml(item.clientLabel)}</a>`).join('')}
-        <button class="beta-icon-btn" onclick="testTrackerProxy('${escapeHtml(stat.id)}')" type="button">Tester via proxy serveur</button>
+        <button class="beta-icon-btn" onclick="testTrackerProxy('${escapeHtml(stat.id)}')" type="button">Tester si le site est en ligne</button>
         <span id="beta-proxy-check-${escapeHtml(stat.id)}" class="beta-note"></span>
       </div>
       <div class="beta-grid-2">
         <div>
-          <h3>Erreurs récentes</h3>
-          ${stat.error || stat.stale ? `<div class="error-reason">${escapeHtml(stat.stale?.error || stat.error || '')}</div>` : ''}
+          <h3>Erreurs</h3>
+          <strong class="beta-error-heading">Erreur en cours</strong>
+          ${currentlyInError && currentErrorMsg
+            ? `<div class="error-reason">${escapeHtml(currentErrorMsg)}</div>`
+            : `<div class="beta-note" style="margin:4px 0 10px">Aucune erreur en cours.</div>`}
+          <strong class="beta-error-heading">Erreurs récentes (7 derniers jours)</strong>
           <table class="beta-mini-table beta-error-table">
             <thead><tr><th>Date</th><th>Erreur</th></tr></thead>
-            <tbody>${recentErrors.map(row => `<tr><td>${formatDateTime(row.capturedAt)}</td><td>${escapeHtml(row.error || row.status)}</td></tr>`).join('') || '<tr><td colspan="2" class="cell-muted">Aucune erreur historisée.</td></tr>'}</tbody>
+            <tbody>${recentErrors.map(row => `<tr><td>${formatDateTime(row.capturedAt)}</td><td>${escapeHtml(row.error || row.status)}</td></tr>`).join('') || '<tr><td colspan="2" class="cell-muted">Aucune erreur sur les 7 derniers jours.</td></tr>'}</tbody>
           </table>
+          ${allErrors.length ? `
+          <details class="beta-error-history">
+            <summary>Historique des erreurs (${allErrors.length})</summary>
+            <table class="beta-mini-table beta-error-table" style="margin-top:6px">
+              <thead><tr><th>Date</th><th>Erreur</th></tr></thead>
+              <tbody>${allErrors.map(row => `<tr><td>${formatDateTime(row.capturedAt)}</td><td>${escapeHtml(row.error || row.status)}</td></tr>`).join('')}</tbody>
+            </table>
+          </details>` : ''}
         </div>
         <div>
           <h3>Notifications configurées</h3>
@@ -3118,7 +3146,7 @@
     if (!select) return;
     const current = select.value || 'all';
     const trackers = activeTrackerStats();
-    select.innerHTML = `<option value="all">Tout</option>` + trackers.map(stat =>
+    select.innerHTML = `<option value="all">Tous</option>` + trackers.map(stat =>
       `<option value="${escapeHtml(stat.id)}">${escapeHtml(stat.name)}</option>`).join('');
     select.value = trackers.some(stat => stat.id === current) ? current : 'all';
   }
@@ -3133,7 +3161,7 @@
     if (trackerId === 'all') {
       rows = latestSnapshotsByTrackerAndPeriod('day', mode, source)
         .map(row => ({ ...row, ratio: row.downloadedBytes > 0 ? row.uploadedBytes / row.downloadedBytes : 0 }));
-      title = 'Tout';
+      title = 'Tous';
     } else {
       rows = chartRowsForTracker(trackerId, 'day', mode, source);
       title = latestSortedStats.find(stat => stat.id === trackerId)?.name || 'Tracker';
@@ -3147,13 +3175,52 @@
     drawSeriesChart('beta-history-chart', rows, defs, `${title}: ${metric === 'all' ? 'UP / DL / ratio' : betaMetricDefs[metric].label}`, { axisFormat: axisDef.axis });
   }
 
+  // Sélection des trackers affichés dans la comparaison multi-trackers.
+  // null = tous (par défaut) ; sinon un Set d'ids cochés.
+  let betaMultiSelectedTrackers = null;
+
+  function betaMultiTrackerCandidates() {
+    return latestSortedStats.filter(stat => !isUnconfigured(stat));
+  }
+
+  function renderBetaMultiTrackerCheckboxes() {
+    const container = document.getElementById('beta-multi-trackers');
+    if (!container) return;
+    const trackers = betaMultiTrackerCandidates();
+    if (betaMultiSelectedTrackers === null) betaMultiSelectedTrackers = new Set(trackers.map(stat => stat.id));
+    container.innerHTML = `
+      <div class="beta-multi-actions">
+        <span class="beta-note">Trackers affichés :</span>
+        <button class="beta-icon-btn" onclick="setAllBetaMultiTrackers(true)" type="button">Tous</button>
+        <button class="beta-icon-btn" onclick="setAllBetaMultiTrackers(false)" type="button">Aucun</button>
+      </div>
+      <div class="beta-multi-checks">
+        ${trackers.map(stat => `
+          <label class="beta-multi-check"><input type="checkbox" value="${escapeHtml(stat.id)}" ${betaMultiSelectedTrackers.has(stat.id) ? 'checked' : ''} onchange="updateBetaMultiSelection()"> ${escapeHtml(stat.name)}</label>
+        `).join('') || '<span class="beta-note">Aucun tracker.</span>'}
+      </div>`;
+  }
+
+  function updateBetaMultiSelection() {
+    const boxes = Array.from(document.querySelectorAll('#beta-multi-trackers input[type="checkbox"]'));
+    betaMultiSelectedTrackers = new Set(boxes.filter(box => box.checked).map(box => box.value));
+    drawBetaMultiTrackerChart();
+  }
+
+  function setAllBetaMultiTrackers(on) {
+    betaMultiSelectedTrackers = on ? new Set(betaMultiTrackerCandidates().map(stat => stat.id)) : new Set();
+    renderBetaMultiTrackerCheckboxes();
+    drawBetaMultiTrackerChart();
+  }
+
   function drawBetaMultiTrackerChart() {
     const metric = document.getElementById('beta-multi-metric')?.value || 'uploadedBytes';
     const source = filterHistoryByRange('beta-multi-from', 'beta-multi-to');
+    const selected = betaMultiSelectedTrackers;
     const rowsByTracker = latestSortedStats.map((stat, idx) => {
       const rows = chartRowsForTracker(stat.id, 'day', metric === 'ratio' ? 'total' : 'delta', source);
       return { stat, idx, rows };
-    }).filter(item => item.rows.length >= 2);
+    }).filter(item => item.rows.length >= 2 && (!selected || selected.has(item.stat.id)));
     const labels = [...new Set(rowsByTracker.flatMap(item => item.rows.map(row => row.label)))].sort().slice(-36);
     const rows = labels.map(label => {
       const out = { label };
@@ -3299,10 +3366,15 @@
     const rows = latestBetaRowsForDay(betaSelectedCalendarDay);
     const okRows = rows.filter(row => row.status === 'ok');
     const badRows = rows.filter(row => row.status !== 'ok');
-    const renderLinks = list => list.map(row => {
+    // KO : entrée cliquable vers la configuration du tracker (Configuration ›
+    // Configurer les actifs) pour aller régler le problème. OK : entrée neutre.
+    const renderEntries = (list, asConfigLink) => list.map(row => {
       const stat = latestSortedStats.find(item => item.id === row.trackerId);
       const label = stat?.name || row.trackerName || row.trackerId || 'Tracker';
       const status = row.status === 'ok' ? 'OK' : (row.error || row.status || 'Erreur');
+      if (asConfigLink) {
+        return `<button class="beta-calendar-entry beta-calendar-entry-link" onclick="openTrackerConfig('${escapeHtml(row.trackerId)}')" type="button" title="Configurer ce tracker pour corriger le problème"><strong>${escapeHtml(label)}</strong><span>${escapeHtml(status)}</span></button>`;
+      }
       return `<div class="beta-calendar-entry"><strong>${escapeHtml(label)}</strong><span>${escapeHtml(status)}</span></div>`;
     }).join('') || '<p class="beta-note">Aucun tracker.</p>';
     const label = new Date(`${betaSelectedCalendarDay}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
@@ -3311,11 +3383,11 @@
       <div class="beta-calendar-columns">
         <div>
           <div class="beta-pill ok">${okRows.length} OK</div>
-          ${renderLinks(okRows)}
+          ${renderEntries(okRows, false)}
         </div>
         <div>
           <div class="beta-pill bad">${badRows.length} KO</div>
-          ${renderLinks(badRows)}
+          ${renderEntries(badRows, true)}
         </div>
       </div>`;
   }
@@ -3381,7 +3453,7 @@
           <input data-field="refreshDays" type="number" min="0" max="30" step="1" value="${Math.floor((Number(client.refreshMinutes) || 0) / 1440)}" title="Jours" style="width:50%; min-width:0">
           <input data-field="refreshHours" type="number" min="0" max="23" step="1" value="${Math.floor(((Number(client.refreshMinutes) || 0) % 1440) / 60)}" title="Heures" style="width:50%; min-width:0">
         </div></div>
-        <div style="display:flex; gap:6px; align-items:flex-end"><button class="beta-icon-btn" onclick="testBetaQbitClient(${idx})" type="button">Tester</button><button class="beta-icon-btn" onclick="removeBetaQbitClient(${idx})" type="button">X</button></div>
+        <div style="display:flex; gap:6px; align-items:flex-end">${client.baseUrl ? `<a class="beta-icon-btn" href="${escapeHtml(client.baseUrl)}" target="_blank" rel="noreferrer noopener" title="Ouvrir ce client dans un nouvel onglet">Ouvrir</a>` : ''}<button class="beta-icon-btn" onclick="testBetaQbitClient(${idx})" type="button">Tester</button><button class="beta-icon-btn" onclick="removeBetaQbitClient(${idx})" type="button">X</button></div>
       </div>
     `).join('') || '<p class="beta-note">Ajouter un ou plusieurs clients qBittorrent ou ruTorrent/rTorrent pour comparer les stats locales aux stats des sites.</p>';
   }
@@ -3590,6 +3662,7 @@
     renderBetaFocusIncidents();
     renderBetaCalendar();
     renderBetaHistoryTrackerOptions();
+    renderBetaMultiTrackerCheckboxes();
     drawBetaGlobalChart();
     drawBetaHistoryChart();
     drawBetaMultiTrackerChart();
@@ -3871,7 +3944,7 @@
     alert(data.ok ? 'Notification envoyée' : `Notification KO: ${data.error}`);
   }
 
-  const ALL_VIEWS = ['dashboard', 'trackers', 'proxies', 'incidents', 'graphs', 'qbit', 'scraping', 'notif-canaux', 'notif-globales', 'notif-tracker', 'fiche'];
+  const ALL_VIEWS = ['dashboard', 'trackers', 'proxies', 'calendar', 'graphs', 'qbit', 'scraping', 'notif-canaux', 'notif-globales', 'notif-tracker', 'fiche'];
 
   // Affiche la vue demandée : bascule les sections de <main>, le panneau proxy
   // (sibling de <main>) et l'état actif de la barre latérale.
@@ -3917,10 +3990,6 @@
     if (group) group.classList.toggle('open');
   }
 
-  function onNotifNavClick(event) {
-    setNavGroupOpen('notif', true);
-    showView('notif-canaux');
-  }
 
   let betaNotifMode = 'auto'; // 'auto' | 'manual'
 
