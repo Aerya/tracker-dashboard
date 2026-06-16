@@ -3477,7 +3477,9 @@
   function renderBetaCalendar() {
     const container = document.getElementById('beta-calendar');
     if (!container) return;
-    const rows = betaHistory;
+    // Les trackers non configures (credentials manquants) ne sont pas un suivi :
+    // on ne veut ni les compter en KO ni les afficher dans le calendrier.
+    const rows = betaHistory.filter(row => !isUnconfigured(row));
     const title = document.getElementById('beta-calendar-title');
     const month = new Date(betaCalendarMonth.getFullYear(), betaCalendarMonth.getMonth(), 1);
     if (title) title.textContent = month.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
@@ -3529,7 +3531,7 @@
   function latestBetaRowsForDay(day) {
     const byTracker = new Map();
     betaHistory
-      .filter(row => String(row.capturedAt || '').slice(0, 10) === day)
+      .filter(row => !isUnconfigured(row) && String(row.capturedAt || '').slice(0, 10) === day)
       .forEach(row => {
         const previous = byTracker.get(row.trackerId);
         if (!previous || String(row.capturedAt || '') > String(previous.capturedAt || '')) byTracker.set(row.trackerId, row);
