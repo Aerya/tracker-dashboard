@@ -500,6 +500,24 @@
     .beta-field input:focus,
     .beta-field select:focus,
     .beta-field textarea:focus { outline: none; border-color: var(--blue); }
+    input.beta-num {
+      width: 72px; height: 28px;
+      background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+      color: var(--text); font-size: 12px; padding: 0 7px;
+      -moz-appearance: textfield;
+    }
+    input.beta-num::-webkit-outer-spin-button,
+    input.beta-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    input.beta-num:focus { outline: none; border-color: var(--blue); }
+    input.beta-port {
+      width: 54px; height: 28px;
+      background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+      color: var(--text); font-size: 12px; padding: 0 7px;
+      -moz-appearance: textfield;
+    }
+    input.beta-port::-webkit-outer-spin-button,
+    input.beta-port::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    input.beta-port:focus { outline: none; border-color: var(--blue); }
     .beta-list {
       display: grid;
       gap: 6px;
@@ -2016,11 +2034,16 @@
   <section class="tab-view" data-view="notif-canaux">
     <section class="beta-panel" style="width:100%">
       <h3>Canaux de notification</h3>
-      <p class="beta-note" style="margin-bottom:10px">Destinations Apprise et/ou Discord. Les notifications globales et par tracker sont envoyées sur tous les canaux actifs.</p>
+      <p class="beta-note" style="margin-bottom:10px">Chaque canal est une destination indépendante. Les notifications sont envoyées sur tous les canaux actifs.<br><br>
+        <strong>Discord</strong> — coller l'URL du webhook (Paramètres salon → Intégrations → Webhooks).<br>
+        <strong>Apprise</strong> — URL de votre serveur Apprise + une ou plusieurs URLs de service (Pushover, Telegram…).<br>
+        <strong>Mail</strong> — envoi via votre serveur Apprise. Nécessite un canal Apprise actif.
+      </p>
       <div id="beta-notification-targets"></div>
       <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap">
-        <button class="beta-icon-btn" onclick="addBetaNotificationTarget('discord')" type="button">Ajouter Discord</button>
-        <button class="beta-icon-btn" onclick="addBetaNotificationTarget('apprise')" type="button">Ajouter Apprise</button>
+        <button class="beta-icon-btn" onclick="addBetaNotificationTarget('discord')" type="button">+ Discord</button>
+        <button class="beta-icon-btn" onclick="addBetaNotificationTarget('apprise')" type="button">+ Apprise</button>
+        <button class="beta-icon-btn" onclick="addBetaNotificationTarget('mail')" type="button">+ Mail</button>
         <button class="beta-icon-btn primary" onclick="saveBetaSettings()" type="button">Enregistrer</button>
       </div>
     </section>
@@ -2040,10 +2063,9 @@
   <section class="tab-view" data-view="notif-tracker">
     <section class="beta-panel" style="width:100%">
       <h3>Notifications par tracker</h3>
-      <p class="beta-note" style="margin-bottom:10px">Règles spécifiques à un tracker. Une règle ratio / buffer / session remplace le seuil global pour ce tracker.</p>
-      <div id="beta-alert-rules"></div>
+      <p class="beta-note" style="margin-bottom:10px">Notifications spécifiques à un tracker, envoyées dans une notification distincte de la globale. Sélectionnez un tracker, puis activez les options voulues (mêmes options que les notifications globales).</p>
+      <div id="beta-tracker-alerts"></div>
       <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap">
-        <button class="beta-icon-btn" onclick="addBetaAlertRule()" type="button">Ajouter une alerte tracker</button>
         <button class="beta-icon-btn primary" onclick="saveBetaSettings()" type="button">Enregistrer</button>
       </div>
     </section>
@@ -2486,7 +2508,7 @@
     notificationPreferences: {},
     schedule: {},
     scheduleOverrides: [],
-    alertRules: [],
+    trackerAlerts: {},
     defaults: {},
   };
   let betaHistory = [];
@@ -2922,8 +2944,7 @@
     const recentErrors = allErrors.filter(row => (Date.parse(row.capturedAt) || 0) >= sevenDaysAgo);
     const currentlyInError = stat.status === 'error' || Boolean(stat.stale);
     const currentErrorMsg = stat.stale?.error || stat.error || '';
-    const rules = (betaSettings.alertRules || []).filter(rule => rule.trackerId === stat.id);
-    const targets = new Map((betaSettings.notificationTargets || []).map(target => [target.id, target]));
+    const trackerAlert = (betaSettings.trackerAlerts || {})[stat.id];
 
     container.innerHTML = `
       <div class="fiche-header">
@@ -2984,22 +3005,21 @@
         </div>
         <div>
           <h3>Notifications configurées</h3>
-          <div style="display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; gap:8px; align-items:end; margin-bottom:8px">
-            <div class="beta-field"><label>Type</label><select id="tracker-alert-kind-${escapeHtml(stat.id)}"><option value="ratio">Ratio</option><option value="buffer">Buffer</option><option value="fail">Échec</option><option value="mp">MP reçu</option><option value="cookie">Session ancienne</option><option value="stats">Statistiques</option></select></div>
-            <div class="beta-field"><label>Condition</label><select id="tracker-alert-op-${escapeHtml(stat.id)}"><option value="<">&lt;</option><option value="<=">&lt;=</option><option value=">=">&gt;=</option><option value=">">&gt;</option></select></div>
-            <div class="beta-field"><label>Seuil</label><input id="tracker-alert-threshold-${escapeHtml(stat.id)}" type="number" step="0.01" value="1"></div>
-            <button class="beta-icon-btn" onclick="addBetaAlertRuleForTracker('${escapeHtml(stat.id)}')" type="button">Ajouter</button>
-          </div>
-          <table class="beta-mini-table">
-            <thead><tr><th>Alerte</th><th>Condition</th><th>Destinations</th></tr></thead>
-            <tbody>${rules.map(rule => {
-              const destinationLabels = (rule.targetIds || []).map(id => targets.get(id)?.label).filter(Boolean);
-              const kindLabels = { ratio: 'Ratio', buffer: 'Buffer', fail: 'Échec', mp: 'MP reçu', cookie: 'Session ancienne', stats: 'Statistiques' };
-              const usesThreshold = ['ratio', 'buffer', 'cookie'].includes(rule.kind);
-              const condText = usesThreshold ? `${escapeHtml(rule.operator)} ${escapeHtml(rule.threshold)}${rule.kind === 'cookie' ? ' j' : ''}` : '—';
-              return `<tr><td>${escapeHtml(kindLabels[rule.kind] || rule.kind)}${rule.enabled === false ? ' (off)' : ''}</td><td>${condText}</td><td>${escapeHtml(destinationLabels.join(', ') || 'Toutes actives / non précisé')}</td></tr>`;
-            }).join('') || '<tr><td colspan="3" class="cell-muted">Aucune alerte individuelle pour ce tracker.</td></tr>'}</tbody>
-          </table>
+          ${(() => {
+            const ta = trackerAlert;
+            const editBtn = `<div style="margin-top:8px"><button class="beta-icon-btn" onclick="openTrackerNotif('${escapeHtml(stat.id)}')" type="button">Configurer les notifications de ce tracker</button></div>`;
+            if (!ta) return `<p class="beta-note">Ce tracker suit les notifications globales.</p>${editBtn}`;
+            const active = [];
+            if (ta.notifyError || ta.notifyManualError) active.push('Échecs');
+            if (ta.notifySuccess || ta.notifyManualSuccess) active.push('Succès');
+            if (ta.notifyStats || ta.notifyManualStats) active.push('Statistiques');
+            if (ta.notifyMp || ta.notifyManualMp) active.push('MP non lus');
+            if (ta.ratioEnabled) active.push(`Ratio &lt; ${escapeHtml(ta.ratioThreshold)}`);
+            if (ta.bufferEnabled) active.push(`Buffer &lt; ${escapeHtml(ta.bufferThresholdGo)} Go`);
+            if (ta.sessionEnabled) active.push(`Session &gt; ${escapeHtml(ta.sessionDays)} j`);
+            if (active.length === 0) return `<p class="beta-note">Ce tracker suit les notifications globales.</p>${editBtn}`;
+            return `<table class="beta-mini-table"><thead><tr><th>Notifications spécifiques actives</th></tr></thead><tbody>${active.map(a => `<tr><td>${a}</td></tr>`).join('')}</tbody></table>${editBtn}`;
+          })()}
         </div>
       </div>
       <div style="margin-top:12px">
@@ -3722,15 +3742,15 @@
       <div style="display:grid;gap:8px">
         <label style="display:flex;align-items:center;gap:8px">
           <input id="beta-global-ratio-enabled" type="checkbox" ${g.ratioEnabled ? 'checked' : ''}> Ratio inférieur à
-          <input id="beta-global-ratio-threshold" type="number" step="0.01" value="${escapeHtml(g.ratioThreshold ?? 1)}" style="width:80px;height:30px">
+          <input id="beta-global-ratio-threshold" type="number" step="0.01" value="${escapeHtml(g.ratioThreshold ?? 1)}" class="beta-num">
         </label>
         <label style="display:flex;align-items:center;gap:8px">
           <input id="beta-global-buffer-enabled" type="checkbox" ${g.bufferEnabled ? 'checked' : ''}> Buffer inférieur à
-          <input id="beta-global-buffer-threshold" type="number" step="1" value="${escapeHtml(g.bufferThresholdGo ?? 100)}" style="width:80px;height:30px"> Go
+          <input id="beta-global-buffer-threshold" type="number" step="1" value="${escapeHtml(g.bufferThresholdGo ?? 100)}" class="beta-num"> Go
         </label>
         <label style="display:flex;align-items:center;gap:8px">
           <input id="beta-global-session-enabled" type="checkbox" ${g.sessionEnabled ? 'checked' : ''}> Session ancienne supérieure à
-          <input id="beta-global-session-days" type="number" step="1" value="${escapeHtml(g.sessionDays ?? 30)}" style="width:80px;height:30px"> jours
+          <input id="beta-global-session-days" type="number" step="1" value="${escapeHtml(g.sessionDays ?? 30)}" class="beta-num"> jours
         </label>
       </div>
     `;
@@ -3740,63 +3760,150 @@
     const container = document.getElementById('beta-notification-targets');
     if (!container) return;
     const targets = betaSettings.notificationTargets || [];
-    container.innerHTML = targets.map((target, idx) => `
-      <div class="beta-form-row" data-beta-target="${idx}">
-        <div class="beta-field"><label>Nom</label><input data-field="label" value="${escapeHtml(target.label || '')}"></div>
-        <div class="beta-field"><label>Type</label><select data-field="type" onchange="changeBetaNotificationType(${idx}, this.value)"><option value="discord" ${target.type !== 'apprise' ? 'selected' : ''}>Discord</option><option value="apprise" ${target.type === 'apprise' ? 'selected' : ''}>Apprise</option></select></div>
-        <div class="beta-field" style="grid-column:1 / -1"><label>${target.type === 'apprise' ? 'URL du serveur Apprise' : 'Webhook Discord'}</label><input data-field="url" value="${escapeHtml(target.url || '')}" placeholder="https://..."></div>
-        ${target.type === 'apprise' ? `<div class="beta-field" style="grid-column:1 / -1"><label>URLs Apprise (une par ligne)</label><textarea data-field="urls" rows="3" placeholder="pover://...&#10;discord://...">${escapeHtml((target.urls || []).join('\n'))}</textarea></div>` : ''}
-        <div class="beta-field"><label>Actif</label><select data-field="enabled"><option value="true" ${target.enabled !== false ? 'selected' : ''}>Oui</option><option value="false" ${target.enabled === false ? 'selected' : ''}>Non</option></select></div>
-        <div style="display:flex; gap:6px"><button class="beta-icon-btn" onclick="testBetaNotification('${escapeHtml(target.id)}')" type="button">Tester</button><button class="beta-icon-btn" onclick="removeBetaNotificationTarget(${idx})" type="button">X</button></div>
-      </div>
-    `).join('') || '<p class="beta-note">Ajouter Discord et/ou Apprise. Les URL sont masquées au rechargement.</p>';
-  }
-
-  function renderBetaAlertRules() {
-    const container = document.getElementById('beta-alert-rules');
-    if (!container) return;
-    const rules = betaSettings.alertRules || [];
-    const trackerOptions = trackerConfig.map(t => `<option value="${escapeHtml(t.id)}">${escapeHtml(t.name)}</option>`).join('');
-    const kindOptions = (selected) => `
-      <option value="ratio" ${selected === 'ratio' ? 'selected' : ''}>Ratio</option>
-      <option value="buffer" ${selected === 'buffer' ? 'selected' : ''}>Buffer</option>
-      <option value="fail" ${selected === 'fail' ? 'selected' : ''}>Échec</option>
-      <option value="mp" ${selected === 'mp' ? 'selected' : ''}>MP reçu</option>
-      <option value="cookie" ${selected === 'cookie' ? 'selected' : ''}>Session ancienne</option>
-      <option value="stats" ${selected === 'stats' ? 'selected' : ''}>Statistiques</option>`;
-    const opOptions = (selected) => `
-      <option value="<" ${selected === '<' ? 'selected' : ''}>&lt;</option>
-      <option value="<=" ${selected === '<=' ? 'selected' : ''}>&lt;=</option>
-      <option value=">=" ${selected === '>=' ? 'selected' : ''}>&gt;=</option>
-      <option value=">" ${selected === '>' ? 'selected' : ''}>&gt;</option>`;
-    const usesThreshold = (kind) => ['ratio', 'buffer', 'cookie'].includes(kind);
-    container.innerHTML = rules.map((rule, idx) => {
-      const needsThreshold = usesThreshold(rule.kind || 'ratio');
+    const hasApprise = targets.some(t => t.type === 'apprise' && t.enabled !== false);
+    container.innerHTML = targets.map((target, idx) => {
+      const isMail = target.type === 'mail';
+      const isApprise = target.type === 'apprise';
+      const typeSelect = `<select data-field="type" onchange="changeBetaNotificationType(${idx}, this.value)">
+        <option value="discord" ${target.type === 'discord' ? 'selected' : ''}>Discord</option>
+        <option value="apprise" ${isApprise ? 'selected' : ''}>Apprise</option>
+        <option value="mail" ${isMail ? 'selected' : ''}>Mail</option>
+      </select>`;
+      const mailWarning = isMail && !hasApprise
+        ? `<div class="beta-note" style="grid-column:1/-1;color:var(--yellow)">⚠ Un canal Apprise actif est requis pour le transport Mail. Ajoutez-en un.</div>` : '';
+      const urlField = !isMail
+        ? `<div class="beta-field" style="grid-column:1 / -1"><label>${isApprise ? 'URL du serveur Apprise' : 'Webhook Discord'}</label><input data-field="url" value="${escapeHtml(target.url || '')}" placeholder="https://..."></div>` : '';
+      const appriseUrls = isApprise
+        ? `<div class="beta-field" style="grid-column:1 / -1"><label>URLs Apprise (une par ligne)</label><textarea data-field="urls" rows="3" placeholder="pover://...&#10;discord://...">${escapeHtml((target.urls || []).join('\n'))}</textarea></div>` : '';
+      const mailFields = isMail ? `
+        ${mailWarning}
+        <div class="beta-field" style="grid-column:1/-1"><label>Adresse email (expéditeur / login SMTP)</label><input data-field="mailFrom" type="email" value="${escapeHtml(target.mailFrom || '')}" placeholder="user@gmail.com"></div>
+        <div class="beta-field"><label>Mot de passe / App password</label><input data-field="mailPass" type="password" value="${target.mailPass ? '••••••••' : ''}"></div>
+        <div class="beta-field"><label>Destinataire (optionnel, défaut = expéditeur)</label><input data-field="mailTo" type="email" value="${escapeHtml(target.mailTo || '')}" placeholder="moi@exemple.com"></div>
+        <div class="beta-field"><label>Serveur SMTP (optionnel)</label><input data-field="mailSmtp" value="${escapeHtml(target.mailSmtp || '')}" placeholder="mail.exemple.com"></div>
+        <div class="beta-field"><label>Port (optionnel, défaut 587)</label><input data-field="mailPort" type="number" value="${escapeHtml(target.mailPort || '')}" placeholder="587" class="beta-port"></div>` : '';
       return `
-      <div class="beta-form-row" data-beta-rule="${idx}">
-        <div class="beta-field"><label>Tracker</label><select data-field="trackerId">${trackerOptions}</select></div>
-        <div class="beta-field"><label>Type</label><select data-field="kind" onchange="refreshBetaAlertRow(${idx}, this.value)">${kindOptions(rule.kind || 'ratio')}</select></div>
-        <div class="beta-field" style="${needsThreshold ? '' : 'visibility:hidden'}"><label>Condition</label><select data-field="operator">${opOptions(rule.operator || '<')}</select></div>
-        <div class="beta-field" style="${needsThreshold ? '' : 'visibility:hidden'}"><label>${rule.kind === 'cookie' ? 'Jours' : 'Seuil'}</label><input data-field="threshold" type="number" step="0.01" value="${escapeHtml(rule.threshold ?? 1)}"></div>
-        <div class="beta-field"><label>Actif</label><select data-field="enabled"><option value="true" ${rule.enabled !== false ? 'selected' : ''}>Oui</option><option value="false" ${rule.enabled === false ? 'selected' : ''}>Non</option></select></div>
-        <button class="beta-icon-btn" onclick="removeBetaAlertRule(${idx})" type="button">X</button>
+      <div class="beta-form-row" data-beta-target="${idx}" style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;background:color-mix(in srgb,var(--bg2) 60%,transparent)">
+        <div style="grid-column:1/-1;font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">${{discord:'Discord',apprise:'Apprise',mail:'Mail'}[target.type]||target.type}</div>
+        <div class="beta-field"><label>Nom</label><input data-field="label" value="${escapeHtml(target.label || '')}"></div>
+        <div class="beta-field"><label>Type</label>${typeSelect}</div>
+        ${urlField}${appriseUrls}${mailFields}
+        <div class="beta-field"><label>Actif</label><select data-field="enabled"><option value="true" ${target.enabled !== false ? 'selected' : ''}>Oui</option><option value="false" ${target.enabled === false ? 'selected' : ''}>Non</option></select></div>
+        <div style="display:flex; gap:6px"><button class="beta-icon-btn" onclick="testBetaNotification('${escapeHtml(target.id)}')" type="button">Tester</button><button class="beta-icon-btn" onclick="removeBetaNotificationTarget(${idx})" type="button">Supprimer</button></div>
       </div>`;
-    }).join('') || '<p class="beta-note">Aucun override. Ajouter ici des règles spécifiques par tracker.</p>';
-    rules.forEach((rule, idx) => {
-      const row = container.querySelector(`[data-beta-rule="${idx}"]`);
-      if (!row) return;
-      ['trackerId', 'kind', 'operator', 'enabled'].forEach(field => {
-        const el = row.querySelector(`[data-field="${field}"]`);
-        if (el) el.value = String(rule[field] ?? '');
-      });
-    });
+    }).join('') || '<p class="beta-note">Ajouter Discord, Apprise et/ou Mail. Les mots de passe sont masqués au rechargement.</p>';
   }
 
-  function refreshBetaAlertRow(idx, kind) {
-    betaSettings = collectBetaSettingsFromDom();
-    if (betaSettings.alertRules[idx]) betaSettings.alertRules[idx].kind = kind;
-    renderBetaAlertRules();
+  // Page « Notifications par tracker » : sélecteur de tracker en haut, puis mêmes
+  // options que les notifications globales (toggle auto/manuel + cases + seuils).
+  function defaultTrackerAlertFront() {
+    const p = betaSettings.notificationPreferences || {};
+    const g = betaSettings.globalAlerts || {};
+    // Valeurs de depart proposees = copie des reglages globaux courants.
+    return {
+      notifyError: p.notifyError === true, notifyManualError: p.notifyManualError === true,
+      notifySuccess: p.notifySuccess === true, notifyManualSuccess: p.notifyManualSuccess === true,
+      notifyStats: p.notifyStats === true, notifyManualStats: p.notifyManualStats === true,
+      notifyMp: p.notifyMp === true, notifyManualMp: p.notifyManualMp === true,
+      ratioEnabled: false, ratioThreshold: g.ratioThreshold ?? 1,
+      bufferEnabled: false, bufferThresholdGo: g.bufferThresholdGo ?? 100,
+      sessionEnabled: false, sessionDays: g.sessionDays ?? 30,
+    };
   }
+
+  function renderBetaTrackerAlerts() {
+    const container = document.getElementById('beta-tracker-alerts');
+    if (!container) return;
+    // N'afficher que les trackers configurés (credentials présents = dans betaStats).
+    const configuredIds = new Set(betaStats().map(s => s.id));
+    const trackers = (trackerConfig || []).filter(t => configuredIds.has(t.id));
+    if (trackers.length === 0) { container.innerHTML = '<p class="beta-note">Aucun tracker configuré.</p>'; return; }
+    if (!betaSettings.trackerAlerts) betaSettings.trackerAlerts = {};
+    if (!betaTrackerAlertId || !trackers.some(t => t.id === betaTrackerAlertId)) betaTrackerAlertId = trackers[0].id;
+    const saved = betaSettings.trackerAlerts[betaTrackerAlertId];
+    const a = saved ? { ...defaultTrackerAlertFront(), ...saved } : defaultTrackerAlertFront();
+    const auto = betaTrackerNotifMode === 'auto';
+    const err = auto ? a.notifyError : a.notifyManualError;
+    const suc = auto ? a.notifySuccess : a.notifyManualSuccess;
+    const sta = auto ? a.notifyStats : a.notifyManualStats;
+    const mp  = auto ? a.notifyMp : a.notifyManualMp;
+    const trackerTabs = trackers.map(t => {
+      const s = betaSettings.trackerAlerts[t.id];
+      const has = s && ['notifyError','notifyManualError','notifySuccess','notifyManualSuccess','notifyStats','notifyManualStats','notifyMp','notifyManualMp','ratioEnabled','bufferEnabled','sessionEnabled'].some(k => s[k]);
+      const on = t.id === betaTrackerAlertId;
+      return `<button type="button" class="beta-icon-btn ${on ? 'primary' : ''}" onclick="setBetaTrackerAlert('${escapeHtml(t.id)}')">${escapeHtml(t.name)}${has ? ' ●' : ''}</button>`;
+    }).join('');
+    const modeTab = (label, mode) => `<button type="button" class="beta-icon-btn ${betaTrackerNotifMode === mode ? 'primary' : ''}" onclick="setBetaTrackerNotifMode('${mode}')">${label}</button>`;
+    container.innerHTML = `
+      <div class="beta-note" style="margin-bottom:6px;font-weight:500">Tracker</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">${trackerTabs}</div>
+      <div style="display:flex;gap:6px;margin-bottom:12px">${modeTab('Si automatique', 'auto')}${modeTab('Si manuel', 'manual')}</div>
+      <div class="beta-form-row" style="grid-template-columns:repeat(2,minmax(0,1fr));margin-bottom:14px">
+        <label><input id="beta-ta-error" type="checkbox" ${err ? 'checked' : ''}> Échecs</label>
+        <label><input id="beta-ta-success" type="checkbox" ${suc ? 'checked' : ''}> Succès</label>
+        <label><input id="beta-ta-stats" type="checkbox" ${sta ? 'checked' : ''}> Inclure les statistiques</label>
+        <label><input id="beta-ta-mp" type="checkbox" ${mp ? 'checked' : ''}> MP non lus</label>
+      </div>
+      <div class="beta-note" style="margin-bottom:6px;font-weight:500">Seuils (communs auto et manuel)</div>
+      <div style="display:grid;gap:8px">
+        <label style="display:flex;align-items:center;gap:8px">
+          <input id="beta-ta-ratio-enabled" type="checkbox" ${a.ratioEnabled ? 'checked' : ''}> Ratio inférieur à
+          <input id="beta-ta-ratio-threshold" type="number" step="0.01" value="${escapeHtml(a.ratioThreshold ?? 1)}" class="beta-num">
+        </label>
+        <label style="display:flex;align-items:center;gap:8px">
+          <input id="beta-ta-buffer-enabled" type="checkbox" ${a.bufferEnabled ? 'checked' : ''}> Buffer inférieur à
+          <input id="beta-ta-buffer-threshold" type="number" step="1" value="${escapeHtml(a.bufferThresholdGo ?? 100)}" class="beta-num"> Go
+        </label>
+        <label style="display:flex;align-items:center;gap:8px">
+          <input id="beta-ta-session-enabled" type="checkbox" ${a.sessionEnabled ? 'checked' : ''}> Session ancienne supérieure à
+          <input id="beta-ta-session-days" type="number" step="1" value="${escapeHtml(a.sessionDays ?? 30)}" class="beta-num"> jours
+        </label>
+      </div>
+    `;
+  }
+
+  // Lit le DOM de la page par tracker et ecrit dans betaSettings.trackerAlerts pour le
+  // tracker selectionne, en preservant les valeurs de l'autre mode (auto/manuel).
+  function collectBetaTrackerAlertFromDom() {
+    if (!betaTrackerAlertId) return;
+    const errEl = document.getElementById('beta-ta-error');
+    if (!errEl) return; // page non affichee
+    if (!betaSettings.trackerAlerts) betaSettings.trackerAlerts = {};
+    const prev = betaSettings.trackerAlerts[betaTrackerAlertId] || defaultTrackerAlertFront();
+    const entry = { ...defaultTrackerAlertFront(), ...prev };
+    const auto = betaTrackerNotifMode === 'auto';
+    entry[auto ? 'notifyError' : 'notifyManualError'] = errEl.checked;
+    entry[auto ? 'notifySuccess' : 'notifyManualSuccess'] = document.getElementById('beta-ta-success')?.checked === true;
+    entry[auto ? 'notifyStats' : 'notifyManualStats'] = document.getElementById('beta-ta-stats')?.checked === true;
+    entry[auto ? 'notifyMp' : 'notifyManualMp'] = document.getElementById('beta-ta-mp')?.checked === true;
+    entry.ratioEnabled = document.getElementById('beta-ta-ratio-enabled')?.checked === true;
+    entry.ratioThreshold = Number(document.getElementById('beta-ta-ratio-threshold')?.value || 1);
+    entry.bufferEnabled = document.getElementById('beta-ta-buffer-enabled')?.checked === true;
+    entry.bufferThresholdGo = Number(document.getElementById('beta-ta-buffer-threshold')?.value || 100);
+    entry.sessionEnabled = document.getElementById('beta-ta-session-enabled')?.checked === true;
+    entry.sessionDays = Number(document.getElementById('beta-ta-session-days')?.value || 30);
+    betaSettings.trackerAlerts[betaTrackerAlertId] = entry;
+  }
+
+  function setBetaTrackerAlert(trackerId) {
+    collectBetaTrackerAlertFromDom();
+    betaTrackerAlertId = trackerId;
+    renderBetaTrackerAlerts();
+  }
+
+  function setBetaTrackerNotifMode(mode) {
+    collectBetaTrackerAlertFromDom();
+    betaTrackerNotifMode = mode === 'manual' ? 'manual' : 'auto';
+    renderBetaTrackerAlerts();
+  }
+
+  // Ouvre la page « Notifications par tracker » en sélectionnant directement ce tracker.
+  function openTrackerNotif(trackerId) {
+    betaTrackerAlertId = trackerId;
+    showView('notif-tracker');
+    renderBetaTrackerAlerts();
+  }
+
 
   function renderBetaLab() {
     renderBetaTrackerList();
@@ -3818,7 +3925,7 @@
     renderBetaScheduleSettings();
     renderBetaNotificationPreferences();
     renderBetaNotificationTargets();
-    renderBetaAlertRules();
+    renderBetaTrackerAlerts();
   }
 
   function collectBetaSettingsFromDom() {
@@ -3838,23 +3945,33 @@
       announceHost: row.querySelector('[data-field="announceHost"]').value.trim(),
       trackerId: row.querySelector('[data-field="trackerId"]').value,
     })).filter(mapping => mapping.announceHost && mapping.trackerId);
-    const notificationTargets = Array.from(document.querySelectorAll('[data-beta-target]')).map((row, idx) => ({
-      id: betaSettings.notificationTargets?.[idx]?.id || genId(),
-      label: row.querySelector('[data-field="label"]').value.trim(),
-      type: row.querySelector('[data-field="type"]').value,
-      url: row.querySelector('[data-field="url"]').value.trim(),
-      urls: row.querySelector('[data-field="urls"]')?.value.split('\n').map(value => value.trim()).filter(Boolean) || [],
-      enabled: row.querySelector('[data-field="enabled"]').value === 'true',
-    })).filter(target => target.url);
-    const alertRules = Array.from(document.querySelectorAll('[data-beta-rule]')).map((row, idx) => ({
-      id: betaSettings.alertRules?.[idx]?.id || genId(),
-      trackerId: row.querySelector('[data-field="trackerId"]').value,
-      kind: row.querySelector('[data-field="kind"]').value,
-      operator: row.querySelector('[data-field="operator"]').value,
-      threshold: Number(row.querySelector('[data-field="threshold"]').value),
-      enabled: row.querySelector('[data-field="enabled"]').value === 'true',
-      targetIds: notificationTargets.filter(target => target.enabled).map(target => target.id),
-    })).filter(rule => rule.trackerId);
+    const notificationTargets = Array.from(document.querySelectorAll('[data-beta-target]')).map((row, idx) => {
+      const prev = betaSettings.notificationTargets?.[idx];
+      const type = row.querySelector('[data-field="type"]').value;
+      const base = {
+        id: prev?.id || genId(),
+        label: row.querySelector('[data-field="label"]').value.trim(),
+        type,
+        url: row.querySelector('[data-field="url"]')?.value.trim() || '',
+        urls: row.querySelector('[data-field="urls"]')?.value.split('\n').map(v => v.trim()).filter(Boolean) || [],
+        enabled: row.querySelector('[data-field="enabled"]').value === 'true',
+      };
+      if (type === 'mail') {
+        const passVal = row.querySelector('[data-field="mailPass"]')?.value;
+        return {
+          ...base,
+          mailFrom: row.querySelector('[data-field="mailFrom"]')?.value.trim() || '',
+          mailPass: passVal === '••••••••' ? (prev?.mailPass || '') : (passVal || ''),
+          mailTo: row.querySelector('[data-field="mailTo"]')?.value.trim() || undefined,
+          mailSmtp: row.querySelector('[data-field="mailSmtp"]')?.value.trim() || undefined,
+          mailPort: Number(row.querySelector('[data-field="mailPort"]')?.value) || undefined,
+        };
+      }
+      return base;
+    }).filter(target => target.type === 'mail' ? Boolean(target.mailFrom) : Boolean(target.url));
+    // Capturer les modifs en cours de la page « par tracker » avant relecture.
+    collectBetaTrackerAlertFromDom();
+    const trackerAlerts = { ...(betaSettings.trackerAlerts || {}) };
     const [hour, minute] = (document.getElementById('beta-schedule-time')?.value || '03:00').split(':').map(Number);
     const schedule = {
       ...(betaSettings.schedule || {}),
@@ -3907,7 +4024,7 @@
       schedule,
       scheduleOverrides,
       notificationPreferences,
-      alertRules,
+      trackerAlerts,
       globalAlerts,
     };
   }
@@ -3963,7 +4080,8 @@
 
   function addBetaNotificationTarget(type) {
     betaSettings = collectBetaSettingsFromDom();
-    betaSettings.notificationTargets.push({ id: genId(), type, label: type === 'apprise' ? 'Apprise' : 'Discord', url: '', urls: [], enabled: true });
+    const labelMap = { discord: 'Discord', apprise: 'Apprise', mail: 'Mail' };
+    betaSettings.notificationTargets.push({ id: genId(), type, label: labelMap[type] || type, url: '', urls: [], enabled: true });
     renderBetaNotificationTargets();
   }
 
@@ -3971,6 +4089,7 @@
     betaSettings = collectBetaSettingsFromDom();
     if (!betaSettings.notificationTargets[index]) return;
     betaSettings.notificationTargets[index].type = type;
+    betaSettings.notificationTargets[index].label = { discord: 'Discord', apprise: 'Apprise', mail: 'Mail' }[type] || type;
     renderBetaNotificationTargets();
   }
 
@@ -3978,43 +4097,6 @@
     betaSettings = collectBetaSettingsFromDom();
     betaSettings.notificationTargets.splice(index, 1);
     renderBetaNotificationTargets();
-  }
-
-  function addBetaAlertRule() {
-    betaSettings = collectBetaSettingsFromDom();
-    betaSettings.alertRules.push({
-      id: genId(),
-      trackerId: selectedBetaTracker()?.id || trackerConfig[0]?.id || '',
-      enabled: true,
-      kind: 'ratio',
-      operator: '<',
-      threshold: 1,
-      targetIds: [],
-    });
-    renderBetaAlertRules();
-  }
-
-  async function addBetaAlertRuleForTracker(trackerId) {
-    betaSettings = collectBetaSettingsFromDom();
-    const activeTargets = (betaSettings.notificationTargets || []).filter(target => target.enabled).map(target => target.id);
-    betaSettings.alertRules.push({
-      id: genId(),
-      trackerId,
-      enabled: true,
-      kind: document.getElementById(`tracker-alert-kind-${trackerId}`)?.value || 'ratio',
-      operator: document.getElementById(`tracker-alert-op-${trackerId}`)?.value || '<',
-      threshold: Number(document.getElementById(`tracker-alert-threshold-${trackerId}`)?.value || 1),
-      targetIds: activeTargets,
-    });
-    renderBetaTrackerPage();
-    renderBetaAlertRules();
-    await saveBetaSettings();
-  }
-
-  function removeBetaAlertRule(index) {
-    betaSettings = collectBetaSettingsFromDom();
-    betaSettings.alertRules.splice(index, 1);
-    renderBetaAlertRules();
   }
 
   async function saveBetaSettings() {
@@ -4138,6 +4220,8 @@
 
 
   let betaNotifMode = 'auto'; // 'auto' | 'manual'
+  let betaTrackerAlertId = null; // tracker sélectionné dans « par tracker »
+  let betaTrackerNotifMode = 'auto'; // mode auto/manuel de la page par tracker
 
   function setBetaNotifMode(mode) {
     betaSettings = collectBetaSettingsFromDom();
