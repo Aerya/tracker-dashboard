@@ -3100,7 +3100,12 @@
     }
     const values = rows.flatMap(row => seriesDefs.map(def => Number(def.value(row))).filter(Number.isFinite));
     const max = Math.max(...values, 1);
-    const w = 1000, h = 170, pad = 22, rightPad = 82;
+    // La largeur du viewBox suit la largeur réelle du conteneur (moins le padding
+    // de .beta-chart) afin que le SVG se rende ~1:1. Sinon, avec un viewBox fixe +
+    // preserveAspectRatio="none", l'axe X est étiré sur écran large (ultra-wide),
+    // ce qui déforme horizontalement le texte des valeurs et écarte les libellés.
+    const h = 170, pad = 22, rightPad = 82;
+    const w = Math.max(600, Math.round((container.clientWidth || 1020) - 20));
     const grid = [0, 1, 2, 3].map(i => {
       const y = pad + ((h - pad * 2) / 3) * i;
       const value = max - (max / 3) * i;
@@ -3308,6 +3313,19 @@
     drawBetaHistoryChart();
     drawBetaMultiTrackerChart();
     drawBetaTotalBars();
+  }
+
+  // Redessine les graphiques au redimensionnement de la fenêtre (la largeur du
+  // SVG dépend de celle du conteneur). Lié une seule fois.
+  let _betaChartsResizeBound = false;
+  function bindBetaChartsResize() {
+    if (_betaChartsResizeBound) return;
+    _betaChartsResizeBound = true;
+    let timer;
+    window.addEventListener('resize', () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => { if (currentView === 'graphs') drawBetaCharts(); }, 200);
+    });
   }
 
   function renderBetaCalendar() {
@@ -3680,6 +3698,7 @@
     renderBetaCalendar();
     renderBetaHistoryTrackerOptions();
     renderBetaMultiTrackerCheckboxes();
+    bindBetaChartsResize();
     drawBetaGlobalChart();
     drawBetaHistoryChart();
     drawBetaMultiTrackerChart();
