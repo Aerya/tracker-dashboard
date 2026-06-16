@@ -1176,6 +1176,14 @@ function visibleStats(trackers: TrackerConfig[]): TrackerStats[] {
       - (order.get(b.id) ?? Number.MAX_SAFE_INTEGER));
 }
 
+// Un tracker "non configure" = aucun credential en base : ce n'est pas un suivi
+// actif, juste un tracker du catalogue auquel on n'a pas (encore) de compte. On ne
+// le persiste pas en historique, on ne le compte pas en erreur et on ne notifie pas.
+function isUnconfiguredStat(stat: TrackerStats): boolean {
+  return stat.status === 'error' && typeof stat.error === 'string'
+    && stat.error.startsWith('Credentials manquants');
+}
+
 function logStatResult(stat: TrackerStats): void {
   if (stat.stale) {
     console.log(`  [${stat.name}] Stats anciennes conservees - ${stat.stale.error}`);
@@ -1189,7 +1197,7 @@ function logStatResult(stat: TrackerStats): void {
     return;
   }
 
-  if (stat.error?.startsWith('Credentials manquants')) return;
+  if (isUnconfiguredStat(stat)) return;
   console.log(`  [${stat.name}] Stats ERREUR - ${stat.error ?? 'Erreur inconnue'}`);
 }
 
@@ -1395,11 +1403,13 @@ async function refresh(trackers: TrackerConfig[]): Promise<TrackerStats[]> {
       ...results.map(attachIncident),
     ];
     lastRefresh = new Date().toISOString();
-    saveStatSnapshots(results.filter(stat => !stat.stale));
-    const ok  = results.filter(s => s.status === 'ok').length;
-    const err = results.filter(s => s.status === 'error').length;
-    console.log(`  ✅ ${ok} ok  ❌ ${err} erreur(s)`);
-    results.filter(s => s.status === 'error' && !s.error?.startsWith('Credentials manquants'))
+    saveStatSnapshots(results.filter(stat => !stat.stale && !isUnconfiguredStat(stat)));
+    const ok           = results.filter(s => s.status === 'ok').length;
+    const unconfigured = results.filter(isUnconfiguredStat).length;
+    const err          = results.filter(s => s.status === 'error').length - unconfigured;
+    const unconfiguredSuffix = unconfigured ? `  ⚙️  ${unconfigured} non configure(s)` : '';
+    console.log(`  ✅ ${ok} ok  ❌ ${err} erreur(s)${unconfiguredSuffix}`);
+    results.filter(s => s.status === 'error' && !isUnconfiguredStat(s))
       .forEach(s => console.log(`  ⚠️  ${s.name}: ${s.error}`));
     return results;
   } finally {
@@ -1698,9 +1708,7 @@ async function notifyScheduledResult(
   const targets = settings.notificationTargets.filter(target => target.enabled && target.url);
   if (targets.length === 0 || results.length === 0) return;
 
-  const isUnconfigured = (result: TrackerStats) =>
-    result.status === 'error' && result.error?.startsWith('Credentials manquants');
-  const relevant = results.filter(result => !isUnconfigured(result));
+  const relevant = results.filter(result => !isUnconfiguredStat(result));
   if (relevant.length === 0) return;
 
   const p = settings.notificationPreferences;
