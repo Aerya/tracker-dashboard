@@ -591,6 +591,8 @@
       width: 132px;
     }
     .beta-mini-table th { color: var(--muted); font-size: 11px; font-weight: 600; }
+    .beta-link-picker { display: inline-flex; gap: 6px; align-items: center; }
+    .beta-link-picker select { max-width: 200px; }
     .beta-chart {
       width: 100%;
       min-height: 240px;
@@ -3647,6 +3649,9 @@
     const mappings = betaSettings.announceMappings || [];
     const detectedHosts = Array.from(new Set((betaOverview?.qbitStats || []).map(item => item.trackerHost).filter(Boolean))).sort();
     const trackerOptions = trackerConfig.map(t => `<option value="${escapeHtml(t.id)}">${escapeHtml(t.name)}</option>`).join('');
+    const optionsWith = (selectedId) => trackerConfig
+      .map(t => `<option value="${escapeHtml(t.id)}"${t.id === selectedId ? ' selected' : ''}>${escapeHtml(t.name)}</option>`)
+      .join('');
     const detectedRows = detectedHosts.map(host => {
       const mapped = mappings.find(mapping => trackerHostFromUrl(mapping.announceHost) === trackerHostFromUrl(host));
       const match = betaTrackerMatchForHost(host);
@@ -3657,7 +3662,10 @@
           <td>${escapeHtml(host)}</td>
           <td>${torrentCount} torrent(s)</td>
           <td>${mapped ? escapeHtml(trackerConfig.find(t => t.id === mapped.trackerId)?.name || mapped.trackerId) : (match ? `${escapeHtml(match.tracker.name)} <span class="cell-muted">(${match.score})</span>` : '<span class="cell-muted">Non lié</span>')}</td>
-          <td>${mapped ? '' : `<button class="beta-icon-btn" onclick="addBetaAnnounceMapping('${escapeHtml(host)}', '${escapeHtml(match?.tracker.id || '')}')" type="button">${match ? 'Lier la suggestion' : 'Lier'}</button>`}</td>
+          <td>${mapped ? '' : (match
+            ? `<div class="beta-link-picker"><select data-link-host data-suggested="${escapeHtml(match.tracker.id)}" aria-label="Tracker à lier" onchange="updateLinkButtonLabel(this)">${optionsWith(match.tracker.id)}</select><button class="beta-icon-btn" onclick="linkDetectedHostFromSelect(this, '${escapeHtml(host)}')" type="button">Lier la suggestion</button></div>`
+            : `<div class="beta-link-picker"><select data-link-host aria-label="Tracker à lier" onchange="updateLinkButtonLabel(this)"><option value="" selected disabled>— choisir un tracker —</option>${optionsWith('')}</select><button class="beta-icon-btn" onclick="linkDetectedHostFromSelect(this, '${escapeHtml(host)}')" type="button">Lier</button></div>`
+          )}</td>
         </tr>`;
     }).join('');
     const editRows = mappings.map((mapping, idx) => `
@@ -4088,6 +4096,25 @@
     } catch (e) {
       alert('Erreur de sauvegarde : ' + e.message);
     }
+  }
+
+  // Bascule le libellé du bouton de liaison : "Lier la suggestion" tant que le
+  // menu reste sur le tracker deviné, "Lier" dès qu'on choisit autre chose.
+  function updateLinkButtonLabel(select) {
+    const button = select.parentElement.querySelector('button');
+    if (!button) return;
+    const suggested = select.getAttribute('data-suggested') || '';
+    button.textContent = (suggested && select.value === suggested) ? 'Lier la suggestion' : 'Lier';
+  }
+
+  // Lier un hôte détecté au tracker choisi dans la liste déroulante de sa ligne
+  // (suggestion présélectionnée ou choix manuel). On lit la valeur du <select>
+  // voisin du bouton plutôt que de laisser addBetaAnnounceMapping choisir.
+  function linkDetectedHostFromSelect(button, host) {
+    const select = button.parentElement.querySelector('select[data-link-host]');
+    const trackerId = select ? select.value : '';
+    if (!trackerId) { alert('Choisir un tracker à lier dans la liste.'); return; }
+    addBetaAnnounceMapping(host, trackerId);
   }
 
   function removeBetaAnnounceMapping(index) {
