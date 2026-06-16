@@ -1088,6 +1088,17 @@
     .beta-error-history { margin-top: 8px; }
     .beta-error-history > summary { cursor: pointer; font-size: 12px; color: var(--text2); user-select: none; }
     .beta-error-history > summary:hover { color: var(--text); }
+    /* En-tête de fiche : logo + nom + lien + badge de statut */
+    .fiche-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .fiche-header .tracker-logo { width: 28px; height: 28px; flex-shrink: 0; }
+    .fiche-header-main { display: flex; flex-direction: column; gap: 1px; margin-right: auto; min-width: 0; }
+    .fiche-header-name { font-size: 16px; }
+    .fiche-header-link { font-size: 12px; color: var(--blue); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fiche-header-link:hover { text-decoration: underline; }
+    .fiche-badge { padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; flex-shrink: 0; }
+    .fiche-badge.ok { background: color-mix(in srgb, var(--green) 18%, transparent); color: var(--green); }
+    .fiche-badge.bad { background: color-mix(in srgb, var(--red) 18%, transparent); color: var(--red); }
+    .beta-fiche-evolution { margin-top: 12px; }
     .badge-loading { background: color-mix(in srgb, var(--blue) 14%, transparent); color: var(--blue); }
     .badge-ratioless { background: color-mix(in srgb, var(--purple) 16%, transparent); color: var(--purple); }
     .badge-incident { background: color-mix(in srgb, var(--muted) 18%, transparent); color: var(--muted); }
@@ -2833,6 +2844,58 @@
     return map[key] || (key ? key.charAt(0).toUpperCase() + key.slice(1) : '-');
   }
 
+  // État des mini-courbes d'évolution de la fiche (conservé entre les re-renders).
+  let ficheChartPeriod = '7'; // '7' | '30' | 'all'
+  let ficheBufferOn = false;
+  let ficheFrom = '';
+  let ficheTo = '';
+
+  function setFichePeriod(value) { ficheChartPeriod = value; drawBetaFicheCharts(); }
+  function setFicheBuffer(checked) { ficheBufferOn = Boolean(checked); drawBetaFicheCharts(); }
+  function setFicheDates() {
+    ficheFrom = document.getElementById('beta-fiche-from')?.value || '';
+    ficheTo = document.getElementById('beta-fiche-to')?.value || '';
+    drawBetaFicheCharts();
+  }
+
+  // Historique filtré pour les courbes de la fiche : une plage Du/Au l'emporte
+  // sinon la période (7 / 30 jours / tout).
+  function ficheChartSource() {
+    if (ficheFrom || ficheTo) {
+      return betaHistory.filter(row => {
+        const day = String(row.capturedAt || '').slice(0, 10);
+        if (ficheFrom && day < ficheFrom) return false;
+        if (ficheTo && day > ficheTo) return false;
+        return true;
+      });
+    }
+    if (ficheChartPeriod === 'all') return betaHistory;
+    const days = Number(ficheChartPeriod) || 7;
+    const cutoff = Date.now() - days * 24 * 3600 * 1000;
+    return betaHistory.filter(row => (Date.parse(row.capturedAt) || 0) >= cutoff);
+  }
+
+  // Deux graphes par tracker : Volumes (UP / DL / buffer optionnel, axe octets)
+  // et Ratio (axe propre). Axes séparés car octets et ratio ne s'affichent pas
+  // bien sur la même échelle.
+  function drawBetaFicheCharts() {
+    if (!document.getElementById('beta-fiche-vol-chart')) return;
+    const stat = selectedBetaTracker();
+    if (!stat) return;
+    const rows = chartRowsForTracker(stat.id, 'day', 'total', ficheChartSource());
+    const volDefs = [
+      { ...betaMetricDefs.uploadedBytes, value: row => row.uploadedBytes, area: true },
+      { ...betaMetricDefs.downloadedBytes, value: row => row.downloadedBytes, area: true },
+    ];
+    if (ficheBufferOn) {
+      volDefs.push({ label: 'Buffer', color: '#a855f7', value: row => row.uploadedBytes - row.downloadedBytes, format: betaMetricDefs.uploadedBytes.format, axis: betaMetricDefs.uploadedBytes.axis });
+    }
+    drawSeriesChart('beta-fiche-vol-chart', rows, volDefs, `Volumes (UP / DL${ficheBufferOn ? ' / buffer' : ''})`, { axisFormat: betaMetricDefs.uploadedBytes.axis });
+    drawSeriesChart('beta-fiche-ratio-chart', rows, [
+      { ...betaMetricDefs.ratio, value: row => row.ratio },
+    ], 'Ratio', { axisFormat: betaMetricDefs.ratio.axis });
+  }
+
   function renderBetaTrackerPage() {
     const container = document.getElementById('beta-tracker-page');
     if (!container) return;
@@ -2863,6 +2926,14 @@
     const targets = new Map((betaSettings.notificationTargets || []).map(target => [target.id, target]));
 
     container.innerHTML = `
+      <div class="fiche-header">
+        ${trackerLogo(stat.id)}
+        <div class="fiche-header-main">
+          <strong class="fiche-header-name">${escapeHtml(stat.name)}</strong>
+          ${trackerUrl ? `<a class="fiche-header-link" href="${escapeHtml(trackerUrl)}" target="_blank" rel="noreferrer noopener">${escapeHtml(host || trackerUrl)}</a>` : ''}
+        </div>
+        ${trackerStatusBadge(stat)}
+      </div>
       <div class="beta-detail-grid">
         <div class="beta-detail-stat"><span>Statut</span><strong>${escapeHtml(stat.stale ? 'données anciennes' : stat.status)}</strong></div>
         <div class="beta-detail-stat"><span>Ratio</span><strong>${hasStatValue(ratio) ? formatRatio(ratio) : '-'}</strong></div>
@@ -2875,6 +2946,20 @@
         ${qbits.map(item => `<a class="beta-icon-btn" href="${escapeHtml(item.clientBaseUrl)}" target="_blank" rel="noreferrer noopener">Ouvrir ${escapeHtml(item.clientLabel)}</a>`).join('')}
         <button class="beta-icon-btn" onclick="testTrackerProxy('${escapeHtml(stat.id)}')" type="button">Tester si le site est en ligne</button>
         <span id="beta-proxy-check-${escapeHtml(stat.id)}" class="beta-note"></span>
+      </div>
+      <div class="beta-fiche-evolution">
+        <h3>Évolution</h3>
+        <div class="beta-chart-controls">
+          <div class="beta-field"><label for="beta-fiche-period">Période</label><select id="beta-fiche-period" onchange="setFichePeriod(this.value)"><option value="7" ${ficheChartPeriod === '7' ? 'selected' : ''}>7 jours</option><option value="30" ${ficheChartPeriod === '30' ? 'selected' : ''}>30 jours</option><option value="all" ${ficheChartPeriod === 'all' ? 'selected' : ''}>Tout</option></select></div>
+          <div class="beta-field"><label for="beta-fiche-from">Du</label><input id="beta-fiche-from" type="date" value="${escapeHtml(ficheFrom)}" onchange="setFicheDates()"></div>
+          <div class="beta-field"><label for="beta-fiche-to">Au</label><input id="beta-fiche-to" type="date" value="${escapeHtml(ficheTo)}" onchange="setFicheDates()"></div>
+          <label class="beta-multi-check"><input type="checkbox" ${ficheBufferOn ? 'checked' : ''} onchange="setFicheBuffer(this.checked)"> Inclure le buffer</label>
+          <div class="beta-note">Une plage Du/Au l'emporte sur la période.</div>
+        </div>
+        <div class="beta-grid-2">
+          <div id="beta-fiche-vol-chart" class="beta-chart"></div>
+          <div id="beta-fiche-ratio-chart" class="beta-chart"></div>
+        </div>
       </div>
       <div class="beta-grid-2">
         <div>
@@ -2948,6 +3033,7 @@
             </div>
           `).join('')}
         </div>` : ''}`;
+    drawBetaFicheCharts();
   }
 
   async function testTrackerProxy(trackerId) {
@@ -2962,22 +3048,46 @@
     }
   }
 
+  // Badge d'état clair pour CE tracker : OK (vert) / NOK (rouge).
+  function trackerStatusBadge(stat) {
+    if (stat.status === 'error') return '<span class="fiche-badge bad">Cassé</span>';
+    if (stat.stale) return '<span class="fiche-badge bad">Données anciennes</span>';
+    return '<span class="fiche-badge ok">Fonctionne</span>';
+  }
+
+  // « Comment ce tracker est lu » : statut de CE tracker (et non un décompte
+  // global), avec mode de lecture, dernière lecture OK et cookie/2FA.
   function renderBetaOperationStatus() {
     const container = document.getElementById('beta-operation-status');
     if (!container) return;
-    const statuses = betaOverview?.trackerStatuses || [];
-    const counts = statuses.reduce((acc, item) => {
-      acc[trackerModeLabel(item)] = (acc[trackerModeLabel(item)] || 0) + 1;
-      return acc;
-    }, {});
+    const stat = selectedBetaTracker();
+    if (!stat) {
+      container.innerHTML = '<p class="beta-note">Sélectionner un tracker.</p>';
+      return;
+    }
+    const trackerStatus = (betaOverview?.trackerStatuses || []).find(item => item.id === stat.id);
+    const mode = trackerModeLabel(trackerStatus);
+    const readMethod = mode === 'cookie-only' ? 'Cookie de session collé (login auto désactivé)'
+      : mode === 'captcha' ? 'Cookie requis (captcha / anti-bot)'
+      : mode === 'fonctionne' ? 'Login automatique'
+      : 'Non déterminé';
+    const cred = cachedTrackerCredentials.get(stat.id) || {};
+    const lastOkRow = historyForSelectedTracker().filter(row => row.status === 'ok')
+      .sort((a, b) => String(b.capturedAt || '').localeCompare(String(a.capturedAt || '')))[0];
+    const lastOk = lastOkRow ? formatDateTime(lastOkRow.capturedAt) : (stat.status === 'ok' ? formatDateTime(stat.lastUpdated) : '—');
+    const etat = stat.status === 'error' ? 'En erreur' : (stat.stale ? 'Données anciennes' : 'OK');
+    const row = (label, value, dot) => `
+      <div class="beta-card-row">
+        <div><strong>${escapeHtml(label)}</strong><span>${escapeHtml(value)}</span></div>
+        ${dot ? `<i class="nav-sub-dot ${dot}"></i>` : ''}
+      </div>`;
     container.innerHTML = `
-      ${['fonctionne', 'cassé', 'captcha', 'cookie-only'].map(mode => `
-        <div class="beta-card-row">
-          <div><strong>${escapeHtml(mode)}</strong><span>État détecté côté bêta</span></div>
-          <span>${counts[mode] || 0}</span>
-        </div>
-      `).join('')}
-      <p class="beta-note" style="margin-top:8px">La classification repose sur les erreurs connues, l'accessibilité, les cookies collés et le mode cookieOnly des définitions.</p>`;
+      ${row('État actuel', etat, hasTrackerProblem(stat) ? 'bad' : 'ok')}
+      ${row('Mode de lecture', readMethod)}
+      ${row('Dernière lecture réussie', lastOk)}
+      ${row('Cookie de session', cred.hasCookie ? 'défini' : 'non défini')}
+      ${row('Secret 2FA (TOTP)', cred.hasTotp ? 'défini' : 'non défini')}
+      <p class="beta-note" style="margin-top:8px">Mode déduit des définitions, des erreurs connues, de l'accessibilité et du cookie collé.</p>`;
   }
 
   function historyForSelectedTracker() {
