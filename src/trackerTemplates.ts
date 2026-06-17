@@ -1,0 +1,279 @@
+// ─── Templates de moteurs de trackers (mode guidé) ────────────────────────────
+// Chaque template encode la structure login + fetch typique d'une famille de
+// logiciels de tracker. Les valeurs proviennent des définitions réelles présentes
+// dans config/trackers/ (Redacted pour Gazelle, Seedpool/TheOldSchool pour UNIT3D,
+// TorrentLeech, MyAnonamouse, C411 pour l'API JSON) — pas de devinette.
+//
+// Un template fournit des DÉFAUTS pré-remplis dans le formulaire guidé : l'utilisateur
+// n'a plus qu'à renseigner nom, URL et identifiants. Il peut tout ajuster ensuite.
+
+import { type TrackerConfig } from './types.js';
+
+export type EngineId = 'unit3d' | 'gazelle' | 'torrentleech' | 'mam' | 'jsonapi' | 'other';
+
+export interface EngineTemplate {
+  id: EngineId;
+  label: string;
+  /** Description courte affichée dans le sélecteur du mode guidé. */
+  description: string;
+  /** Exemples de trackers connus tournant sous ce moteur (aide à la reconnaissance). */
+  examples: string[];
+  /** Aide spécifique : comment reconnaître ce moteur, où trouver les infos. */
+  hint: string;
+  /** Fragment de config pré-rempli (login + fetch + options), sans id/name/baseUrl. */
+  preset: Pick<TrackerConfig, 'login' | 'fetch'> & Partial<Pick<TrackerConfig, 'curlBinary' | 'ratioless' | 'dashboard'>>;
+}
+
+export const ENGINE_TEMPLATES: Record<EngineId, EngineTemplate> = {
+  unit3d: {
+    id: 'unit3d',
+    label: 'UNIT3D',
+    description: 'Moteur moderne très répandu (interface épurée, barre de ratio en haut).',
+    examples: ['Seedpool', 'Aither', 'Blutopia', 'GenerationFree', 'TheOldSchool'],
+    hint: "Si la page de connexion affiche un formulaire « auth-form » et que ton profil montre une barre Uploaded/Downloaded/Ratio stylée, c'est UNIT3D. Login : ton nom d'utilisateur + mot de passe.",
+    preset: {
+      login: {
+        url: 'login',
+        method: 'POST',
+        contentType: 'form',
+        preStep: {
+          url: 'login',
+          includeHiddenInputs: true,
+          extract: {
+            _csrf: { regex: '(?:name="_token"[^>]*?\\svalue="|name="csrf-token"[^>]*?\\scontent=")(?<value>[^"]+)"' },
+          },
+        },
+        body: {
+          _token: '{{_csrf}}',
+          username: '{{username}}',
+          password: '{{password}}',
+          remember: 'on',
+        },
+        failurePatterns: [
+          'auth-form__form',
+          'type="password"',
+          'name="password"',
+        ],
+      },
+      fetch: {
+        url: '/',
+        mode: 'browser',
+        responseType: 'html',
+        fields: {
+          uploadedBytes:   { regex: 'ratio-bar__uploaded[\\s\\S]*?<i[^>]*>[\\s\\S]*?</i>\\s*(?<value>[\\d\\s.,]+\\s*[KMGTPE]?i?B)', transform: 'bytes' },
+          downloadedBytes: { regex: 'ratio-bar__downloaded[\\s\\S]*?<i[^>]*>[\\s\\S]*?</i>\\s*(?<value>[\\d\\s.,]+\\s*[KMGTPE]?i?B)', transform: 'bytes' },
+          ratio:           { regex: 'ratio-bar__ratio[\\s\\S]*?<i[^>]*>[\\s\\S]*?</i>\\s*(?<value>[\\d\\s.,]+)', transform: 'number' },
+          seeding:         { regex: 'ratio-bar__seeding[\\s\\S]*?<i[^>]*>[\\s\\S]*?</i>\\s*(?<value>\\d+)', transform: 'integer' },
+          leeching:        { regex: 'ratio-bar__leeching[\\s\\S]*?<i[^>]*>[\\s\\S]*?</i>\\s*(?<value>\\d+)', transform: 'integer' },
+        },
+      },
+      dashboard: { byteUnit: 'binary' },
+    },
+  },
+
+  gazelle: {
+    id: 'gazelle',
+    label: 'Gazelle',
+    description: 'Moteur historique (musique/general), pages login.php / index.php.',
+    examples: ['Redacted', 'Orpheus', 'BrokenStones', 'HD-Forever'],
+    hint: "Si les URLs du site finissent en .php (login.php, index.php) et que tes stats sont en haut de page (Uploaded / Downloaded / Ratio), c'est Gazelle. Login : nom d'utilisateur + mot de passe.",
+    preset: {
+      login: {
+        url: 'login.php',
+        method: 'POST',
+        contentType: 'form',
+        preStep: { url: 'login.php', extract: {}, includeHiddenInputs: true },
+        body: {
+          username: '{{username}}',
+          password: '{{password}}',
+          keeplogged: '1',
+          login: 'Log in',
+        },
+        otpField: 'qrcode_confirm',
+        failurePatterns: ['type="password"', 'name="password"'],
+      },
+      fetch: {
+        url: 'index.php',
+        mode: 'browser',
+        responseType: 'html',
+        fields: {
+          uploadedBytes:   { regex: 'id="stats_seeding"[^>]*title="Uploaded: (?<value>[^"]+)"', transform: 'bytes' },
+          downloadedBytes: { regex: 'id="stats_leeching"[^>]*title="Downloaded: (?<value>[^"]+)"', transform: 'bytes' },
+          ratio:           { regex: 'id="stats_ratio"[^>]*title="Ratio: (?<value>[^"]+)"', transform: 'number' },
+        },
+      },
+      dashboard: { byteUnit: 'binary' },
+    },
+  },
+
+  torrentleech: {
+    id: 'torrentleech',
+    label: 'TorrentLeech (et similaires)',
+    description: 'Login simple sans token, stats dans la barre du haut (title="Uploaded…").',
+    examples: ['TorrentLeech'],
+    hint: "Login direct nom d'utilisateur + mot de passe, sans étape intermédiaire. Les stats sont dans des éléments avec un attribut title (Uploaded, Downloaded, Ratio).",
+    preset: {
+      login: {
+        url: 'user/account/login/',
+        method: 'POST',
+        contentType: 'form',
+        body: { username: '{{username}}', password: '{{password}}' },
+        failurePatterns: ['Invalid Username and/or Password'],
+      },
+      fetch: {
+        url: '/',
+        mode: 'browser',
+        responseType: 'html',
+        fields: {
+          uploadedBytes:   { regex: 'title="Uploaded \\(Seeding\\)"[\\s\\S]*?<span[^>]*>(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:B|io|o)|B))</span>', transform: 'bytes' },
+          downloadedBytes: { regex: 'title="Downloaded \\(Leeching\\)"[\\s\\S]*?<span[^>]*>(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:B|io|o)|B))</span>', transform: 'bytes' },
+          ratio:           { regex: 'title="Ratio"[\\s\\S]*?<i[^>]*></i>\\s*(?<value>[\\d\\s.,]+)', transform: 'number' },
+        },
+      },
+      dashboard: { byteUnit: 'decimal' },
+    },
+  },
+
+  mam: {
+    id: 'mam',
+    label: 'MyAnonamouse (MAM)',
+    description: 'Login par email, page login.php, conservation de session recommandée.',
+    examples: ['MyAnonamouse'],
+    hint: "MAM utilise ton ADRESSE EMAIL comme identifiant (pas le pseudo). Le site plafonne les logins automatiques : si possible, colle plutôt un cookie de session (option « Cookie uniquement »).",
+    preset: {
+      login: {
+        url: 'login.php?returnto=%2Fu%2F',
+        method: 'POST',
+        contentType: 'form',
+        preStep: { url: 'login.php?returnto=%2Fu%2F', extract: {}, includeHiddenInputs: true },
+        body: {
+          email: '{{username}}',
+          password: '{{password}}',
+          rememberMe: 'yes',
+          returnto: '/u/',
+        },
+        failurePatterns: ['Not logged in!', 'name="password"', 'loginIssueBlock'],
+      },
+      fetch: {
+        url: '/u/',
+        mode: 'browser',
+        responseType: 'html',
+        fields: {
+          uploadedBytes:   { regex: 'Uploaded:[\\s\\S]{0,120}?(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE]i?B|B))', transform: 'bytes' },
+          downloadedBytes: { regex: 'Downloaded:[\\s\\S]{0,120}?(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE]i?B|B))', transform: 'bytes' },
+          ratio:           { regex: 'Ratio:[\\s\\S]{0,120}?(?<value>[\\d.,]+)', transform: 'number' },
+        },
+      },
+      dashboard: { byteUnit: 'binary' },
+    },
+  },
+
+  jsonapi: {
+    id: 'jsonapi',
+    label: 'API JSON (avancé)',
+    description: 'Tracker exposant une API JSON (login + stats en JSON, ex: C411).',
+    examples: ['C411'],
+    hint: "À choisir seulement si tu sais que le tracker expose une API JSON (login via /api/auth/login, stats via /api/auth/me…). Les champs s'extraient par chemin (ex: user.uploaded), pas par regex.",
+    preset: {
+      login: {
+        url: 'login',
+        postUrl: 'api/auth/login',
+        method: 'POST',
+        contentType: 'json',
+        preStep: {
+          url: 'login',
+          extract: { _csrf: { regex: '<meta name="csrf-token" content="(?<value>[^"]+)"' } },
+        },
+        csrfHeader: 'csrf-token',
+        body: { username: '{{username}}', password: '{{password}}' },
+        successField: 'authenticated',
+        failurePatterns: ['"message":"Unauthenticated', '"authenticated":false'],
+      },
+      fetch: {
+        url: 'api/auth/me',
+        mode: 'http',
+        responseType: 'json',
+        fields: {
+          uploadedBytes:   { path: 'user.uploaded', transform: 'bytes' },
+          downloadedBytes: { path: 'user.downloaded', transform: 'bytes' },
+          ratio:           { path: 'user.ratio', transform: 'number' },
+        },
+      },
+      dashboard: { byteUnit: 'decimal' },
+    },
+  },
+
+  other: {
+    id: 'other',
+    label: 'Autre / inconnu',
+    description: "Le moteur n'est pas dans la liste : formulaire guidé champ par champ, à remplir soi-même.",
+    examples: [],
+    hint: "On part d'un formulaire de login classique (nom d'utilisateur + mot de passe). Tu ajusteras les champs et les regex de stats selon ton site. Le bouton « Tester » t'aidera à valider.",
+    preset: {
+      login: {
+        url: 'login.php',
+        method: 'POST',
+        contentType: 'form',
+        body: { username: '{{username}}', password: '{{password}}' },
+        failurePatterns: ['type="password"', 'name="password"'],
+      },
+      fetch: {
+        url: '/',
+        mode: 'browser',
+        responseType: 'html',
+        fields: {
+          uploadedBytes:   { regex: '(?<value>[\\d.,]+\\s*[KMGTP]?i?B)', transform: 'bytes' },
+          ratio:           { regex: 'Ratio[:\\s]*(?<value>[\\d.,]+)', transform: 'number' },
+        },
+      },
+      dashboard: { byteUnit: 'decimal' },
+    },
+  },
+};
+
+/** Liste publique (pour l'UI) sans les presets volumineux. */
+export function listEngines(): Array<Pick<EngineTemplate, 'id' | 'label' | 'description' | 'examples' | 'hint'>> {
+  return Object.values(ENGINE_TEMPLATES).map(({ id, label, description, examples, hint }) => ({
+    id, label, description, examples, hint,
+  }));
+}
+
+export function getEngineTemplate(id: string): EngineTemplate | null {
+  return (ENGINE_TEMPLATES as Record<string, EngineTemplate>)[id] ?? null;
+}
+
+/**
+ * Détecte le moteur à partir du HTML d'une page (login de préférence) et de l'URL.
+ * Heuristiques basées sur des marqueurs distinctifs. Renvoie null si rien de sûr.
+ * Volontairement conservateur : mieux vaut « inconnu » qu'un faux positif qui
+ * pré-remplirait de mauvaises regex.
+ */
+export function detectEngineFromHtml(html: string, baseUrl: string): EngineId | null {
+  const h = (html || '').toLowerCase();
+  const url = (baseUrl || '').toLowerCase();
+
+  // UNIT3D : classe de formulaire très spécifique + Laravel _token.
+  if (h.includes('auth-form__form') || (h.includes('name="_token"') && h.includes('unit3d'))) {
+    return 'unit3d';
+  }
+  // TorrentLeech : domaine ou endpoint de login caractéristique.
+  if (url.includes('torrentleech') || h.includes('user/account/login')) {
+    return 'torrentleech';
+  }
+  // MyAnonamouse : libellé/branding distinctif.
+  if (url.includes('myanonamouse') || h.includes('my anonamouse') || h.includes('loginissueblock')) {
+    return 'mam';
+  }
+  // Gazelle : le champ "keeplogged" est très spécifique à Gazelle. On exige ce
+  // marqueur précis plutôt qu'un simple "login.php + username + password" qui
+  // matcherait beaucoup de moteurs maison (IPTorrents, TBDev, XBTit…).
+  if (h.includes('name="keeplogged"') || h.includes("name='keeplogged'")) {
+    return 'gazelle';
+  }
+  // UNIT3D (repli) : barre de ratio spécifique. On NE retombe PAS sur un
+  // "auth-form" générique seul, trop ambigu.
+  if (h.includes('ratio-bar__')) {
+    return 'unit3d';
+  }
+  return null;
+}
