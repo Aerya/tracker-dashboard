@@ -419,6 +419,34 @@ export function deleteTrackerCredentials(trackerId: string): void {
     .run(trackerId);
 }
 
+/**
+ * Supprime entierement un tracker custom : config, identifiants, planning et
+ * historique de snapshots. Cookie/TOTP (stockes dans la table settings sous forme
+ * de map JSON) sont nettoyes par l'appelant via setTrackerCookie/setTrackerTotpSecret.
+ * A reserver aux trackers ajoutes par l'utilisateur (absents de default-trackers/),
+ * car syncDefaultTrackerDefinitions() reseederait un tracker embarque au prochain boot.
+ */
+export function deleteTrackerConfig(trackerId: string): void {
+  const db = getDb();
+  db.exec('BEGIN');
+  try {
+    db.prepare('DELETE FROM tracker_configs WHERE tracker_id = ?').run(trackerId);
+    db.prepare('DELETE FROM tracker_credentials WHERE tracker_id = ?').run(trackerId);
+    db.prepare('DELETE FROM tracker_schedule WHERE tracker_id = ?').run(trackerId);
+    db.prepare('DELETE FROM stat_snapshots WHERE tracker_id = ?').run(trackerId);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
+/** True si une definition embarquee (default-trackers/) existe pour cet id. */
+export function isDefaultTracker(trackerId: string): boolean {
+  if (!fs.existsSync(DEFAULT_TRACKERS_DIR)) return false;
+  return fs.existsSync(path.join(DEFAULT_TRACKERS_DIR, `${trackerId}.json`));
+}
+
 export function ensureTrackerSchedules(trackers: TrackerConfig[]): void {
   const stmt = getDb().prepare(`
     INSERT INTO tracker_schedule (tracker_id, enabled, interval_hours, next_run_at)

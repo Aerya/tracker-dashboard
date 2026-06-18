@@ -4,8 +4,13 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import axios from 'axios';
 import { fetchTracker, invalidateAllSessions, invalidateSession } from './fetcher.js';
-import { resetBrowserProfile, closeBrowserSession } from './browserFetcher.js';
+import { resetBrowserProfile, closeBrowserSession, fetchRawHtmlWithBrowser } from './browserFetcher.js';
 import { type FieldExtractor, type TrackerConfig, type TrackerStats } from './types.js';
+import {
+  listEngines,
+  getEngineTemplate,
+  detectEngineFromHtml,
+} from './trackerTemplates.js';
 import {
   loadProxySettings, saveProxySettings, buildProxyConfig, logProxyStatus, resolveProxyForTracker, ensureProxyReady,
   loadProxyOverrides, saveProxyOverrides, toSshConfig,
@@ -21,6 +26,8 @@ import {
 } from './logos.js';
 import {
   deleteTrackerCredentials,
+  deleteTrackerConfig,
+  isDefaultTracker,
   getTrackerCredentials,
   importLegacyCredentialsIfNeeded,
   importLegacySettingsIfNeeded,
@@ -40,8 +47,10 @@ import {
   saveTrackerConfig,
   setJsonSetting,
   hasTrackerCookie,
+  getTrackerCookie,
   setTrackerCookie,
   hasTrackerTotpSecret,
+  getTrackerTotpSecret,
   setTrackerTotpSecret,
 } from './db.js';
 import {
@@ -985,6 +994,204 @@ function normalizeTrackerConfigs(): TrackerConfig[] {
   }
   return loadTrackerConfigsFromDb();
 }
+
+/**
+ * Valide et normalise une definition de tracker recue depuis le formulaire UI
+ * (ou /api/trackers). Renvoie une config typee propre, ou un message d'erreur FR.
+ * Tolere les champs optionnels absents ; rejette les formes manifestement cassees
+ * (id invalide, body de login vide, aucun champ a extraire, regex/path manquant).
+ */
+function sanitizeTrackerConfigInput(
+  raw: unknown,
+  opts: { isNew?: boolean } = {},
+): { config: TrackerConfig | null; error?: string } {
+  const fail = (error: string) => ({ config: null, error });
+  if (!raw || typeof raw !== 'object') return fail('Config tracker absente ou invalide.');
+  const input = raw as Record<string, any>;
+
+  const id = String(input.id ?? '').trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9_-]{1,39}$/.test(id)) {
+    return fail('Identifiant invalide : 2 a 40 caracteres, minuscules/chiffres/tiret/underscore, commencant par une lettre ou un chiffre.');
+  }
+  const name = String(input.name ?? '').trim();
+  if (!name) return fail('Nom du tracker requis.');
+
+  let baseUrl = String(input.baseUrl ?? '').trim();
+  if (!/^https?:\/\//i.test(baseUrl)) return fail('URL de base invalide : doit commencer par http:// ou https://');
+  baseUrl = baseUrl.replace(/\/+$/, '');
+
+  const login = input.login;
+  if (!login || typeof login !== 'object') return fail('Bloc « login » manquant.');
+  const loginUrl = String(login.url ?? '').trim();
+  if (!loginUrl) return fail('URL de login requise.');
+
+  const cookieOnly = Boolean(login.cookieOnly);
+  const body = login.body && typeof login.body === 'object' ? login.body as Record<string, string> : {};
+  const bodyEntries = Object.entries(body).filter(([k]) => k.trim());
+  if (!cookieOnly && bodyEntries.length === 0) {
+    return fail('Corps du login vide : ajoute au moins un champ (ex: username = {{username}}).');
+  }
+
+  const failurePatterns = Array.isArray(login.failurePatterns)
+    ? login.failurePatterns.map((p: unknown) => String(p)).filter((p: string) => p.length > 0)
+    : [];
+
+  const loginOut: TrackerConfig['login'] = {
+    url: loginUrl,
+    method: login.method === 'GET' ? 'GET' : 'POST',
+    contentType: login.contentType === 'json' ? 'json' : 'form',
+    body: Object.fromEntries(bodyEntries.map(([k, v]) => [k.trim(), String(v)])),
+    failurePatterns,
+  };
+  if (cookieOnly) loginOut.cookieOnly = true;
+  if (String(login.postUrl ?? '').trim()) loginOut.postUrl = String(login.postUrl).trim();
+  if (String(login.otpField ?? '').trim()) loginOut.otpField = String(login.otpField).trim();
+  if (String(login.csrfHeader ?? '').trim()) loginOut.csrfHeader = String(login.csrfHeader).trim();
+  if (String(login.tokenField ?? '').trim()) loginOut.tokenField = String(login.tokenField).trim();
+  if (String(login.successField ?? '').trim()) loginOut.successField = String(login.successField).trim();
+  if (Array.isArray(login.preVisitUrls)) {
+    const urls = login.preVisitUrls.map((u: unknown) => String(u).trim()).filter(Boolean);
+    if (urls.length) loginOut.preVisitUrls = urls;
+  }
+  // preStep (CSRF) : optionnel.
+  if (login.preStep && typeof login.preStep === 'object' && String(login.preStep.url ?? '').trim()) {
+    const extractRaw = login.preStep.extract && typeof login.preStep.extract === 'object' ? login.preStep.extract : {};
+    const extract: Record<string, { regex: string }> = {};
+    for (const [k, v] of Object.entries(extractRaw)) {
+      const regex = String((v as any)?.regex ?? '').trim();
+      if (k.trim() && regex) extract[k.trim()] = { regex };
+    }
+    loginOut.preStep = {
+      url: String(login.preStep.url).trim(),
+      extract,
+      ...(login.preStep.includeHiddenInputs ? { includeHiddenInputs: true } : {}),
+    };
+  }
+  // otpStep (2FA page dediee, ex: Nexum).
+  if (login.otpStep && typeof login.otpStep === 'object'
+      && String(login.otpStep.urlContains ?? '').trim() && String(login.otpStep.field ?? '').trim()) {
+    loginOut.otpStep = {
+      urlContains: String(login.otpStep.urlContains).trim(),
+      field: String(login.otpStep.field).trim(),
+    };
+  }
+  // mfaStep (login API JSON en 2 etapes, ex: C411).
+  if (login.mfaStep && typeof login.mfaStep === 'object'
+      && String(login.mfaStep.url ?? '').trim()
+      && String(login.mfaStep.triggerField ?? '').trim()
+      && String(login.mfaStep.codeField ?? '').trim()) {
+    loginOut.mfaStep = {
+      url: String(login.mfaStep.url).trim(),
+      triggerField: String(login.mfaStep.triggerField).trim(),
+      codeField: String(login.mfaStep.codeField).trim(),
+      ...(String(login.mfaStep.successField ?? '').trim() ? { successField: String(login.mfaStep.successField).trim() } : {}),
+    };
+  }
+
+  // ── fetch ──────────────────────────────────────────────────────────────────
+  const fetchIn = input.fetch;
+  if (!fetchIn || typeof fetchIn !== 'object') return fail('Bloc « fetch » manquant.');
+  const fetchUrl = String(fetchIn.url ?? '').trim();
+  if (!fetchUrl) return fail('URL de lecture (fetch) requise.');
+  const responseType = fetchIn.responseType === 'json' ? 'json' : 'html';
+  const mode = fetchIn.mode === 'http' ? 'http' : 'browser';
+
+  const fieldsIn = fetchIn.fields && typeof fetchIn.fields === 'object' ? fetchIn.fields : {};
+  const fields: Record<string, FieldExtractor> = {};
+  const allowedTransforms = new Set(['bytes', 'number', 'integer', 'string']);
+  for (const [key, val] of Object.entries(fieldsIn)) {
+    const name = key.trim();
+    if (!name) continue;
+    const v = (val ?? {}) as Record<string, any>;
+    const path = String(v.path ?? '').trim();
+    const regex = String(v.regex ?? '').trim();
+    if (responseType === 'json' && !path) {
+      return fail(`Champ « ${name} » : un chemin JSON (path) est requis en mode JSON.`);
+    }
+    if (responseType === 'html' && !regex) {
+      return fail(`Champ « ${name} » : une regex est requise en mode HTML.`);
+    }
+    if (regex) {
+      try { new RegExp(regex); } catch { return fail(`Champ « ${name} » : regex invalide.`); }
+      if (!/\(\?<value>/.test(regex)) {
+        return fail(`Champ « ${name} » : la regex doit capturer un groupe nomme (?<value>...).`);
+      }
+    }
+    const extractor: FieldExtractor = {};
+    if (path) extractor.path = path;
+    if (regex) extractor.regex = regex;
+    if (typeof v.transform === 'string' && allowedTransforms.has(v.transform)) extractor.transform = v.transform as FieldExtractor['transform'];
+    fields[name] = extractor;
+  }
+  if (Object.keys(fields).length === 0) {
+    return fail('Ajoute au moins un champ a extraire (ex: uploadedBytes, ratio...).');
+  }
+
+  const fetchOut: TrackerConfig['fetch'] = {
+    url: fetchUrl,
+    mode,
+    responseType,
+    fields,
+  };
+  // unreadFetch (compteur de MP secondaire).
+  if (fetchIn.unreadFetch && typeof fetchIn.unreadFetch === 'object' && String(fetchIn.unreadFetch.url ?? '').trim()) {
+    const uf = fetchIn.unreadFetch as Record<string, any>;
+    const ufPath = String(uf.path ?? '').trim();
+    const ufRegex = String(uf.regex ?? '').trim();
+    if (ufRegex) { try { new RegExp(ufRegex); } catch { return fail('unreadFetch : regex invalide.'); } }
+    const ufTransform = allowedTransforms.has(uf.transform) ? (uf.transform as FieldExtractor['transform']) : undefined;
+    fetchOut.unreadFetch = {
+      url: String(uf.url).trim(),
+      ...(uf.responseType === 'html' || uf.responseType === 'json' ? { responseType: uf.responseType } : {}),
+      ...(ufPath ? { path: ufPath } : {}),
+      ...(ufRegex ? { regex: ufRegex } : {}),
+      ...(ufTransform ? { transform: ufTransform } : {}),
+    };
+  }
+
+  const config: TrackerConfig = {
+    id,
+    name,
+    baseUrl,
+    enabled: input.enabled === false ? false : true,
+    login: loginOut,
+    fetch: fetchOut,
+  };
+  if (input.ratioless) config.ratioless = true;
+  if (input.curlBinary === 'curl_firefox133' || input.curlBinary === 'curl_firefox135') {
+    config.curlBinary = input.curlBinary;
+  }
+  const byteUnit = input.dashboard?.byteUnit;
+  if (byteUnit === 'binary' || byteUnit === 'decimal') {
+    config.dashboard = { byteUnit };
+  }
+
+  void opts; // isNew reserve pour de futures regles differenciees creation/edition
+  return { config };
+}
+
+/**
+ * Liste de toutes les definitions visibles dans l'UI : celles posees en fichier
+ * (default-trackers seedees dans config/trackers/) PLUS les trackers custom qui
+ * n'existent qu'en base (ajoutes via le formulaire, sans fichier sur le volume).
+ * Sans ce merge, un tracker perso enregistre via /api/trackers serait invisible
+ * dans « Configurer les actifs » et n'aurait jamais d'identifiants.
+ */
+function listAllTrackerSummaries(): Array<{ id: string; name: string; baseUrl: string; file: string; enabled: boolean }> {
+  const fromFiles = listTrackerDefinitionFiles();
+  const seen = new Set(fromFiles.map(d => d.id));
+  const dbOnly = loadTrackerConfigsFromDb()
+    .filter(cfg => !seen.has(cfg.id))
+    .map(cfg => ({
+      id: cfg.id,
+      name: cfg.name,
+      baseUrl: cfg.baseUrl,
+      file: `${cfg.id} (perso)`,
+      enabled: cfg.enabled !== false,
+    }));
+  return [...fromFiles, ...dbOnly];
+}
+
 
 function proxyAllowsTrackerConnections(): boolean {
   const proxy = loadProxySettings();
@@ -3101,13 +3308,15 @@ export async function start(): Promise<void> {
     importLegacyTrackersIfNeeded();
     trackers = normalizeTrackerConfigs();
     const configured = new Map(trackers.map(tracker => [tracker.id, tracker]));
-    const definitions = listTrackerDefinitionFiles()
+    const definitions = listAllTrackerSummaries()
       .map(definition => {
         const configuredTracker = configured.get(definition.id);
         return {
           ...definition,
           enabled: Boolean(configuredTracker && configuredTracker.enabled !== false),
           configured: Boolean(configuredTracker),
+          isDefault: isDefaultTracker(definition.id),
+          isCustom: !isDefaultTracker(definition.id),
         };
       })
       .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
@@ -3152,12 +3361,19 @@ export async function start(): Promise<void> {
 
   app.post('/api/trackers', (req, res) => {
     try {
-      const config = req.body as TrackerConfig;
-      if (!config.id || !config.name || !config.baseUrl || !config.login || !config.fetch) {
-        return res.status(400).json({ ok: false, error: 'Config tracker incomplete' });
+      const { config, error } = sanitizeTrackerConfigInput(req.body, { isNew: !isDefaultTracker(String(req.body?.id ?? '')) });
+      if (!config) return res.status(400).json({ ok: false, error });
+
+      // Interdit d'ecraser une definition embarquee via ce formulaire : ses champs
+      // techniques (login/fetch/curlBinary) seraient de toute facon reecrits par
+      // normalizeTrackerConfigs() au prochain boot. Les trackers integres se gerent
+      // via « Ajouter / Configurer les actifs », pas via ce formulaire de creation.
+      if (isDefaultTracker(config.id)) {
+        return res.status(409).json({ ok: false, error: `L'identifiant « ${config.id} » est reserve a un tracker integre. Configure-le depuis « Configurer les actifs ».` });
       }
+
       saveTrackerConfig(config);
-      trackers = loadTrackerConfigsFromDb();
+      trackers = normalizeTrackerConfigs();
       res.json({ ok: true, tracker: config });
     } catch (err: unknown) {
       res.status(400).json({
@@ -3165,6 +3381,170 @@ export async function start(): Promise<void> {
         error: err instanceof Error ? err.message : String(err),
       });
     }
+  });
+
+  // Test reel d'une definition de tracker AVANT enregistrement : on tente un
+  // login + fetch complet avec la vraie mecanique (fetchTracker), sans persister
+  // la config. On sauvegarde temporairement la config + identifiants pour que les
+  // helpers de session/cookie/TOTP (indexes par tracker.id) fonctionnent, puis on
+  // restaure l'etat anterieur quoi qu'il arrive.
+  app.post('/api/trackers/test', async (req, res) => {
+    const body = req.body ?? {};
+    const { config, error } = sanitizeTrackerConfigInput(body.config, { isNew: true });
+    if (!config) return res.status(400).json({ ok: false, error });
+
+    const username = typeof body.username === 'string' ? body.username.trim() : '';
+    const password = typeof body.password === 'string' ? body.password : '';
+    const cookie = typeof body.cookie === 'string' ? body.cookie : '';
+    const totp = typeof body.totp === 'string' ? body.totp : '';
+
+    if (!config.login.cookieOnly && (!username || !password)) {
+      return res.status(400).json({ ok: false, error: 'Utilisateur et mot de passe requis pour tester (sauf mode cookie uniquement).' });
+    }
+    if (config.login.cookieOnly && !cookie) {
+      return res.status(400).json({ ok: false, error: 'Mode cookie uniquement : colle un cookie de session pour tester.' });
+    }
+
+    // Snapshot de l'etat existant pour restauration.
+    const existing = loadTrackerConfigsFromDb().find(t => t.id === config.id) ?? null;
+    const prevCookie = getTrackerCookie(config.id);
+    const prevTotp = getTrackerTotpSecret(config.id);
+    const prevCreds = getTrackerCredentials(config.id);
+
+    try {
+      saveTrackerConfig({ ...config, enabled: true });
+      if (cookie) setTrackerCookie(config.id, cookie);
+      if (totp) setTrackerTotpSecret(config.id, totp);
+      if (username && password) saveTrackerCredentials(config.id, username, password);
+      invalidateSession(config.id);
+
+      // Meme garde qu'en production : si aucun proxy et connexion directe interdite,
+      // le test doit le signaler clairement plutot que d'echouer de maniere opaque.
+      if (!proxyAllowsTrackerConnections()) {
+        return res.status(200).json({
+          ok: false,
+          error: 'Connexions aux trackers bloquees : aucun proxy actif et connexion directe non autorisee. Active un proxy ou autorise la connexion directe dans Proxies.',
+        });
+      }
+
+      const stat = await fetchTracker(
+        { ...config, enabled: true },
+        { username, password },
+      );
+      const fields = stat.fields ?? {};
+      if (stat.status !== 'ok' || Object.keys(fields).length === 0) {
+        return res.status(200).json({
+          ok: false,
+          error: stat.error || 'Aucune donnee extraite — verifie les regex/chemins des champs.',
+        });
+      }
+      res.json({ ok: true, stat: { fields, status: stat.status, byteUnit: stat.byteUnit } });
+    } catch (err: unknown) {
+      res.status(200).json({
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      // Restauration de l'etat anterieur (la config testee ne doit pas fuiter).
+      invalidateSession(config.id);
+      if (existing) saveTrackerConfig(existing);
+      else deleteTrackerConfig(config.id);
+      setTrackerCookie(config.id, prevCookie);
+      setTrackerTotpSecret(config.id, prevTotp);
+      if (prevCreds) saveTrackerCredentials(config.id, prevCreds.username, prevCreds.password);
+      else if (!existing) deleteTrackerCredentials(config.id);
+      trackers = normalizeTrackerConfigs();
+    }
+  });
+
+  app.delete('/api/trackers/:trackerId', (req, res) => {
+    const trackerId = req.params.trackerId;
+    if (isDefaultTracker(trackerId)) {
+      return res.status(403).json({ ok: false, error: 'Tracker integre : non supprimable (utilise « Retirer » pour le desactiver).' });
+    }
+    const exists = loadTrackerConfigsFromDb().some(t => t.id === trackerId);
+    if (!exists) return res.status(404).json({ ok: false, error: 'Tracker introuvable' });
+
+    invalidateSession(trackerId);
+    deleteTrackerConfig(trackerId);
+    setTrackerCookie(trackerId, '');
+    setTrackerTotpSecret(trackerId, '');
+    trackers = normalizeTrackerConfigs();
+    res.json({ ok: true });
+  });
+
+  // Liste des moteurs disponibles pour le mode guidé (sans les presets volumineux).
+  app.get('/api/tracker-engines', (_req, res) => {
+    res.json({ ok: true, engines: listEngines() });
+  });
+
+  // Renvoie le preset complet (login/fetch/dashboard…) d'un moteur donné.
+  app.get('/api/tracker-engines/:engineId/preset', (req, res) => {
+    const tpl = getEngineTemplate(req.params.engineId);
+    if (!tpl) return res.status(404).json({ ok: false, error: 'Moteur inconnu' });
+    res.json({ ok: true, engine: tpl.id, preset: tpl.preset, hint: tpl.hint, label: tpl.label });
+  });
+
+  // Détection auto du moteur depuis l'URL du site : GET HTTP d'abord, navigateur
+  // en repli si le HTTP échoue ou ne suffit pas (JS/Cloudflare). Fallback déclaratif
+  // côté client si on ne détecte rien. Best-effort, ne persiste rien.
+  app.post('/api/tracker-engines/detect', async (req, res) => {
+    let baseUrl = String(req.body?.baseUrl ?? '').trim();
+    if (!/^https?:\/\//i.test(baseUrl)) {
+      return res.status(400).json({ ok: false, error: 'URL invalide : commence par http:// ou https://' });
+    }
+    baseUrl = baseUrl.replace(/\/+$/, '');
+
+    // On tente quelques pages probables de login (là où les marqueurs sont les plus nets).
+    const candidates = [`${baseUrl}/login`, `${baseUrl}/login.php`, baseUrl];
+    let html = '';
+    let via: 'http' | 'browser' | null = null;
+    let reachable = false;
+
+    // 1) GET HTTP rapide (UA navigateur), sur chaque candidate jusqu'à obtenir du HTML.
+    for (const url of candidates) {
+      try {
+        const r = await axios.get(url, {
+          timeout: 12_000,
+          maxRedirects: 5,
+          validateStatus: () => true,
+          responseType: 'text',
+          headers: { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:135.0) Gecko/20100101 Firefox/135.0', 'Accept': 'text/html,*/*;q=0.8' },
+        });
+        if (typeof r.data === 'string' && r.data.length > 0) {
+          reachable = true;
+          html = r.data;
+          via = 'http';
+          if (detectEngineFromHtml(html, baseUrl)) break; // marqueur trouvé, inutile de continuer
+        }
+      } catch {
+        // candidate suivante
+      }
+    }
+
+    let engine = detectEngineFromHtml(html, baseUrl);
+
+    // 2) Repli navigateur si le HTTP n'a rien donné de concluant (JS/anti-bot).
+    if (!engine) {
+      for (const url of candidates) {
+        const rendered = await fetchRawHtmlWithBrowser(url).catch(() => '');
+        if (rendered && rendered.length > 0) {
+          reachable = true;
+          html = rendered;
+          via = 'browser';
+          engine = detectEngineFromHtml(rendered, baseUrl);
+          if (engine) break;
+        }
+      }
+    }
+
+    res.json({
+      ok: true,
+      reachable,
+      via,                 // 'http' | 'browser' | null
+      engine,              // EngineId | null (null => fallback déclaratif côté UI)
+      preset: engine ? getEngineTemplate(engine)?.preset ?? null : null,
+    });
   });
 
   // ── Proxy settings ─────────────────────────────────────────────────────────
@@ -3204,7 +3584,7 @@ export async function start(): Promise<void> {
     const credentials = new Map(listTrackerCredentialSummaries().map(c => [c.trackerId, c]));
     const configured = new Map(trackers.map(tracker => [tracker.id, tracker]));
     res.json({
-      credentials: listTrackerDefinitionFiles()
+      credentials: listAllTrackerSummaries()
         .map(definition => {
           const tracker = configured.get(definition.id);
           return {
@@ -3422,7 +3802,7 @@ export async function start(): Promise<void> {
   // ── Cookie de session manuel (sites a CAPTCHA / Cloudflare Turnstile) ──────
   app.post('/api/trackers/:trackerId/cookie', async (req, res) => {
     const id = req.params.trackerId;
-    if (!new Set(listTrackerDefinitionFiles().map(t => t.id)).has(id)) {
+    if (!new Set(listAllTrackerSummaries().map(t => t.id)).has(id)) {
       return res.status(404).json({ ok: false, error: 'Tracker inconnu' });
     }
     const cookie = typeof req.body?.cookie === 'string' ? req.body.cookie : '';
@@ -3439,7 +3819,7 @@ export async function start(): Promise<void> {
   // ── Secret TOTP (2FA) par tracker ─────────────────────────────────────────
   app.post('/api/trackers/:trackerId/totp', (req, res) => {
     const id = req.params.trackerId;
-    if (!new Set(listTrackerDefinitionFiles().map(t => t.id)).has(id)) {
+    if (!new Set(listAllTrackerSummaries().map(t => t.id)).has(id)) {
       return res.status(404).json({ ok: false, error: 'Tracker inconnu' });
     }
     const secret = typeof req.body?.secret === 'string' ? req.body.secret : '';
