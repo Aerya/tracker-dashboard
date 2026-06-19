@@ -583,6 +583,10 @@ async function doLogin(
 
   const jsonHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
+    // Indispensable pour les API qui négocient le contenu (ex. Nuxt/C411) :
+    // sans cet en-tête, un POST de login renvoie une redirection HTML vers /login
+    // (302) au lieu d'un JSON, et le login échoue (« champ authenticated absent »).
+    'Accept': 'application/json',
     'Origin': new URL(base).origin,
     'Referer': refererUrl,
   };
@@ -984,6 +988,8 @@ export async function fetchTracker(
         'Origin': new URL(base).origin,
         'Referer': referer,
       };
+      // API JSON (Nuxt/C411…) : exiger une réponse JSON, sinon redirection HTML.
+      if (isJson) postHeaders['Accept'] = 'application/json';
       if (cfg.csrfHeader && cvars._csrf) postHeaders[cfg.csrfHeader] = cvars._csrf;
       const postRes = await sess.request(loginUrl, {
         method: 'POST',
@@ -1015,6 +1021,7 @@ export async function fetchTracker(
           const mfaUrl = resolveUrl(base, cfg.mfaStep.url);
           const mfaHeaders: Record<string, string> = {
             'Content-Type': 'application/json',
+            'Accept': 'application/json',
             'Origin': new URL(base).origin,
             'Referer': referer,
           };
