@@ -1,0 +1,48 @@
+{
+  "id": "iptorrents",
+  "name": "IPTorrents",
+  "baseUrl": "https://www.iptorrents.com",
+  "enabled": true,
+  "login": {
+    "url": "do-login.php",
+    "method": "POST",
+    "contentType": "form",
+    "body": {
+      "username": "{{username}}",
+      "password": "{{password}}"
+    },
+    "failurePatterns": [
+      "do-login.php",
+      "iPT &ndash; Sign In",
+      "iPT – Sign In",
+      "name=\"password\"",
+      "type=\"password\""
+    ]
+  },
+  "fetch": {
+    "url": "/",
+    "mode": "browser",
+    "responseType": "html",
+    "fields": {
+      "uploadedBytes": {
+        "regex": ">Uploaded</div>\\s*<i[^>]*></i>\\s*(?<value>[\\d.,]+\\s*(?:[KMGTPE]i?B|B))",
+        "transform": "bytes"
+      },
+      "downloadedBytes": {
+        "regex": ">Downloaded</div>\\s*<i[^>]*></i>\\s*(?<value>[\\d.,]+\\s*(?:[KMGTPE]i?B|B))",
+        "transform": "bytes"
+      },
+      "ratio": {
+        "regex": "c_ratio[\\s\\S]{0,120}?</i>\\s*(?<value>[\\d.,]+)",
+        "transform": "number"
+      },
+      "seedBonus": {
+        "regex": ">Bonus Points</div>\\s*<i[^>]*></i>\\s*(?<value>[\\d.,]+)",
+        "transform": "string"
+      }
+    }
+  },
+  "dashboard": {
+    "byteUnit": "decimal"
+  }
+}
