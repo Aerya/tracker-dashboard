@@ -252,6 +252,39 @@ export function importLegacyTrackersIfNeeded(): void {
   syncDefaultTrackerDefinitions();
 }
 
+// Migration corrective unique. L'import legacy (importLegacyTrackersIfNeeded) inscrit en
+// base TOUS les fichiers de trackers livres avec l'image, avec enabled=true, y compris ceux
+// que l'utilisateur n'a jamais configures. Resultat : des trackers sans aucun identifiant
+// apparaissaient comme « actifs » dans le menu « Configurer les actifs » et dans les
+// tableaux de graphiques, et manquaient dans « Ajouter un tracker ». On les remet une seule
+// fois en « disponibles » (enabled=false). On ne touche jamais :
+//   - un tracker perso (non livre dans l'image, isDefaultTracker === false) ;
+//   - un tracker reellement configure (mot de passe, cookie de session ou secret 2FA).
+const DISABLE_UNCREDENTIALED_DEFAULTS_KEY = 'migration_disable_uncredentialed_default_trackers_v1';
+
+export function disableUncredentialedDefaultTrackersOnce(): void {
+  if (getJsonSetting(DISABLE_UNCREDENTIALED_DEFAULTS_KEY, { done: false }).done) return;
+
+  const withPassword = new Set(
+    listTrackerCredentialSummaries()
+      .filter(credential => credential.hasPassword)
+      .map(credential => credential.trackerId),
+  );
+  const hasAnyCredential = (trackerId: string): boolean =>
+    withPassword.has(trackerId)
+    || hasTrackerCookie(trackerId)
+    || hasTrackerTotpSecret(trackerId);
+
+  for (const config of loadTrackerConfigsFromDb()) {
+    if (config.enabled === false) continue;        // deja disponible
+    if (!isDefaultTracker(config.id)) continue;    // tracker perso : on n'y touche pas
+    if (hasAnyCredential(config.id)) continue;     // reellement configure : reste actif
+    saveTrackerConfig({ ...config, enabled: false });
+  }
+
+  setJsonSetting(DISABLE_UNCREDENTIALED_DEFAULTS_KEY, { done: true });
+}
+
 export function syncDefaultTrackerDefinitions(): void {
   if (!fs.existsSync(DEFAULT_TRACKERS_DIR)) return;
   const trackersDir = path.join(CONFIG_DIR, 'trackers');
