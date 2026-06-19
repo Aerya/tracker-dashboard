@@ -29,6 +29,7 @@ import {
   deleteTrackerConfig,
   isDefaultTracker,
   getTrackerCredentials,
+  disableUncredentialedDefaultTrackersOnce,
   importLegacyCredentialsIfNeeded,
   importLegacySettingsIfNeeded,
   importLegacyTrackersIfNeeded,
@@ -3017,6 +3018,7 @@ export async function start(): Promise<void> {
   importLegacySettingsIfNeeded();
   importLegacyCredentialsIfNeeded();
   importLegacyTrackersIfNeeded();
+  disableUncredentialedDefaultTrackersOnce();
   let trackers = normalizeTrackerConfigs();
 
   const app = express();
