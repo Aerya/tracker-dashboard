@@ -1785,14 +1785,30 @@
       <span class="nav-caret">▸</span>
     </button>
     <div class="nav-sub" id="nav-sub-config">
-      <button class="nav-item" data-nav="tracker-guided" onclick="openGuidedTrackerForm()" type="button"><span class="nav-icon">✦</span> Ajouter un tracker (guidé)</button>
-      <button class="nav-item" data-nav="tracker-new" onclick="openNewTrackerForm()" type="button"><span class="nav-icon">＋</span> Ajouter un tracker (expert)</button>
       <div class="nav-group" data-nav-group="add">
         <button class="nav-item nav-group-toggle" onclick="toggleNavGroup(event, 'add')" type="button">
           <span class="nav-icon">＋</span> Ajouter un tracker
           <span class="nav-caret">▸</span>
         </button>
-        <div class="nav-sub" id="nav-sub-add"></div>
+        <div class="nav-sub" id="nav-sub-add-menu">
+          <div class="nav-group" data-nav-group="add-integrated">
+            <button class="nav-item nav-group-toggle" onclick="toggleNavGroup(event, 'add-integrated')" type="button">
+              <span class="nav-icon">▣</span> Tracker intégré
+              <span class="nav-caret">▸</span>
+            </button>
+            <div class="nav-sub" id="nav-sub-add"></div>
+          </div>
+          <div class="nav-group" data-nav-group="add-personal">
+            <button class="nav-item nav-group-toggle" onclick="toggleNavGroup(event, 'add-personal')" type="button">
+              <span class="nav-icon">✦</span> Tracker personnel
+              <span class="nav-caret">▸</span>
+            </button>
+            <div class="nav-sub" id="nav-sub-personal">
+              <button class="nav-sub-item" data-nav="tracker-guided" onclick="openGuidedTrackerForm()" type="button"><span class="nav-sub-name">Guidé</span></button>
+              <button class="nav-sub-item" data-nav="tracker-new" onclick="openNewTrackerForm()" type="button"><span class="nav-sub-name">Expert</span></button>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="nav-group" data-nav-group="configure">
         <button class="nav-item nav-group-toggle" onclick="toggleNavGroup(event, 'configure')" type="button">
@@ -3094,7 +3110,14 @@
   // « Configurer les actifs ») : la vue n'affiche que ce tracker.
   function openTrackerConfig(trackerId) {
     configSelectedTrackerId = trackerId;
+    const definition = cachedTrackerDefinitions.find(item => item.id === trackerId);
     setNavGroupOpen('config', true);
+    if (definition?.enabled) {
+      setNavGroupOpen('configure', true);
+    } else {
+      setNavGroupOpen('add', true);
+      setNavGroupOpen('add-integrated', true);
+    }
     showView('trackers');
     renderSelectedTrackerCard();
     renderTrackerConfigNav();
@@ -3160,6 +3183,8 @@
   function openNewTrackerForm() {
     ntEditingTrackerId = null;
     setNavGroupOpen('config', true);
+    setNavGroupOpen('add', true);
+    setNavGroupOpen('add-personal', true);
     showView('tracker-new');
     document.getElementById('newtracker-title').textContent = 'Configurer un nouveau tracker';
     ['nt-id','nt-name','nt-baseurl','nt-login-url','nt-login-posturl','nt-login-otpfield','nt-login-successfield','nt-login-csrfheader','nt-login-tokenfield','nt-login-previsit','nt-prestep-url','nt-prestep-csrf','nt-otpstep-url','nt-otpstep-field','nt-fetch-url','nt-login-failures','nt-test-user','nt-test-pass','nt-test-totp','nt-test-cookie']
@@ -3365,6 +3390,8 @@
 
   function openGuidedTrackerForm() {
     setNavGroupOpen('config', true);
+    setNavGroupOpen('add', true);
+    setNavGroupOpen('add-personal', true);
     showView('tracker-guided');
     gdSelectedEngine = null; gdSuggestedEngine = null; gdPreset = null;
     ['gd-baseurl','gd-name','gd-user','gd-pass','gd-totp','gd-cookie'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
