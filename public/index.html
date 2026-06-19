@@ -1802,6 +1802,7 @@
         <div class="nav-sub" id="nav-sub-configure"></div>
       </div>
       <button class="nav-item" data-nav="qbit" onclick="showView('qbit')" type="button"><span class="nav-icon">⬇</span> Clients BitTorrent</button>
+      <button class="nav-item" data-nav="visual-settings" onclick="showView('visual-settings')" type="button"><span class="nav-icon">◫</span> Affichage</button>
       <div class="nav-group" data-nav-group="notif">
         <button class="nav-item nav-group-toggle" onclick="toggleNavGroup(event, 'notif')" type="button">
           <span class="nav-icon">⚑</span> Notifications
@@ -2372,6 +2373,17 @@
         </div>
   </section>
 
+  <section class="tab-view" data-view="visual-settings">
+    <section class="beta-panel" style="width:100%">
+      <h3>Affichage</h3>
+      <p class="beta-note" style="margin-bottom:10px">Active ou masque les fonctions graphiques de l'interface. Les données restent conservées.</p>
+      <div id="beta-feature-settings"></div>
+      <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap">
+        <button class="beta-icon-btn primary" onclick="saveBetaSettings()" type="button">Enregistrer</button>
+      </div>
+    </section>
+  </section>
+
   <section class="tab-view" data-view="scraping">
     <section class="beta-panel" style="width:100%">
       <h3>Planification des logins (AutoVisit)</h3>
@@ -2847,10 +2859,10 @@
   const expandedIncidents = new Set();
   let viewMode = 'cards'; // 'cards' | 'rows'
   // Vue active pilotée par la barre latérale.
-  // 'dashboard' | 'trackers' | 'proxies' | 'incidents' | 'graphs' | 'qbit' | 'scraping' | 'notif-canaux' | 'notif-globales' | 'notif-tracker' | 'fiche'
+  // 'dashboard' | 'trackers' | 'proxies' | 'incidents' | 'graphs' | 'qbit' | 'visual-settings' | 'scraping' | 'notif-canaux' | 'notif-globales' | 'notif-tracker' | 'fiche'
   let currentView = 'dashboard';
   // Vues alimentées par les données bêta (overview + historique).
-  const BETA_VIEWS = ['calendar', 'graphs', 'qbit', 'scraping', 'notif-canaux', 'notif-globales', 'notif-tracker', 'fiche'];
+  const BETA_VIEWS = ['calendar', 'graphs', 'qbit', 'visual-settings', 'scraping', 'notif-canaux', 'notif-globales', 'notif-tracker', 'fiche'];
   let betaStatusFilter = 'all'; // 'all' | 'problems' | 'healthy'
   let betaCalendarMonth = new Date();
   let betaOverview = null;
@@ -2858,6 +2870,10 @@
     qbitClients: [],
     notificationTargets: [],
     notificationPreferences: {},
+    features: {
+      graphsEnabled: true,
+      calendarEnabled: true,
+    },
     schedule: {},
     scheduleOverrides: [],
     trackerAlerts: {},
@@ -2910,6 +2926,31 @@
 
   function isBetaView(view = currentView) {
     return BETA_VIEWS.includes(view);
+  }
+
+  function betaFeatures() {
+    return {
+      graphsEnabled: betaSettings.features?.graphsEnabled !== false,
+      calendarEnabled: betaSettings.features?.calendarEnabled !== false,
+    };
+  }
+
+  function isViewEnabled(view) {
+    const features = betaFeatures();
+    if (view === 'graphs') return features.graphsEnabled;
+    if (view === 'calendar') return features.calendarEnabled;
+    return true;
+  }
+
+  function applyBetaFeatureVisibility() {
+    const features = betaFeatures();
+    document.querySelectorAll('[data-nav="graphs"], [data-view="graphs"]').forEach(el => {
+      el.hidden = !features.graphsEnabled;
+    });
+    document.querySelectorAll('[data-nav="calendar"], [data-view="calendar"]').forEach(el => {
+      el.hidden = !features.calendarEnabled;
+    });
+    if (!isViewEnabled(currentView)) showView('dashboard');
   }
 
   function hasTrackerProblem(stat) {
@@ -2965,6 +3006,7 @@
       if (overview.ok) {
         betaOverview = overview;
         betaSettings = overview.settings || betaSettings;
+        applyBetaFeatureVisibility();
       }
       if (history.ok) betaHistory = history.snapshots || [];
       renderBetaLab();
@@ -4853,6 +4895,21 @@
     renderBetaNotificationPreferences();
     renderBetaNotificationTargets();
     renderBetaTrackerAlerts();
+    renderBetaFeatureSettings();
+    applyBetaFeatureVisibility();
+  }
+
+  function renderBetaFeatureSettings() {
+    const container = document.getElementById('beta-feature-settings');
+    if (!container) return;
+    const features = betaFeatures();
+    container.innerHTML = `
+      <div class="beta-form-row" style="grid-template-columns:1fr">
+        <label><input id="beta-feature-graphs" type="checkbox" ${features.graphsEnabled ? 'checked' : ''}> Activer les graphiques</label>
+        <label><input id="beta-feature-calendar" type="checkbox" ${features.calendarEnabled ? 'checked' : ''}> Activer le calendrier</label>
+      </div>
+      <p class="beta-note">Quand une option est désactivée, son entrée disparaît de la barre latérale et la page associée n'est plus accessible.</p>
+    `;
   }
 
   function collectBetaSettingsFromDom() {
@@ -4943,11 +5000,17 @@
       sessionEnabled: document.getElementById('beta-global-session-enabled')?.checked === true,
       sessionDays: Number(document.getElementById('beta-global-session-days')?.value || 30),
     } : { ...(betaSettings.globalAlerts || {}) };
+    const features = {
+      ...(betaSettings.features || {}),
+      graphsEnabled: document.getElementById('beta-feature-graphs')?.checked ?? betaFeatures().graphsEnabled,
+      calendarEnabled: document.getElementById('beta-feature-calendar')?.checked ?? betaFeatures().calendarEnabled,
+    };
     return {
       ...betaSettings,
       qbitClients,
       announceMappings,
       notificationTargets,
+      features,
       schedule,
       scheduleOverrides,
       notificationPreferences,
@@ -5055,6 +5118,7 @@
     const data = await r.json();
     if (data.ok) {
       betaSettings = data.settings;
+      applyBetaFeatureVisibility();
       await loadBetaData();
     } else {
       alert(data.error || 'Erreur de sauvegarde bêta');
@@ -5118,12 +5182,12 @@
     alert(data.ok ? 'Notification envoyée' : `Notification KO: ${data.error}`);
   }
 
-  const ALL_VIEWS = ['dashboard', 'trackers', 'tracker-new', 'tracker-guided', 'proxies', 'calendar', 'graphs', 'qbit', 'scraping', 'notif-canaux', 'notif-globales', 'notif-tracker', 'fiche'];
+  const ALL_VIEWS = ['dashboard', 'trackers', 'tracker-new', 'tracker-guided', 'proxies', 'calendar', 'graphs', 'qbit', 'visual-settings', 'scraping', 'notif-canaux', 'notif-globales', 'notif-tracker', 'fiche'];
 
   // Affiche la vue demandée : bascule les sections de <main>, le panneau proxy
   // (sibling de <main>) et l'état actif de la barre latérale.
   function showView(view) {
-    currentView = ALL_VIEWS.includes(view) ? view : 'dashboard';
+    currentView = ALL_VIEWS.includes(view) && isViewEnabled(view) ? view : 'dashboard';
     localStorage.setItem('tracker-dashboard-view-active', currentView);
 
     const proxyPanel = document.getElementById('proxy-panel');
@@ -5138,6 +5202,7 @@
       btn.classList.toggle('active', btn.getAttribute('data-nav') === currentView);
     });
     if (currentView.startsWith('notif-')) setNavGroupOpen('notif', true);
+    applyBetaFeatureVisibility();
 
     if (isBetaView()) loadBetaData();
     renderGrid();
@@ -5179,6 +5244,19 @@
     const params = new URLSearchParams(window.location.search);
     betaStatusFilter = localStorage.getItem('tracker-dashboard-beta-filter') || 'all';
     betaSelectedTrackerId = params.get('tracker') || betaSelectedTrackerId;
+  }
+
+  async function loadBetaSettingsFromServer() {
+    try {
+      const response = await fetch('/api/beta/settings');
+      const data = await response.json();
+      if (data.ok) {
+        betaSettings = data.settings || betaSettings;
+        applyBetaFeatureVisibility();
+      }
+    } catch (error) {
+      console.warn('Unable to load beta settings', error);
+    }
   }
 
   // Re-rend la grille a partir des dernieres stats (sans re-fetch), en preservant
@@ -6397,6 +6475,7 @@
     await showMigrationNoticeIfNeeded();
     loadViewMode();
     loadBetaSettings();
+    await loadBetaSettingsFromServer();
     loadActiveView();
     await loadPresentationMode();
     await loadProxySettings();

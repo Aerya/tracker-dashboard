@@ -223,6 +223,10 @@ interface BetaSettings {
   qbitClients: BetaQbitClient[];
   announceMappings: BetaAnnounceMapping[];
   notificationTargets: BetaNotificationTarget[];
+  features: {
+    graphsEnabled: boolean;
+    calendarEnabled: boolean;
+  };
   schedule: BetaScheduleSettings;
   scheduleOverrides: BetaTrackerScheduleOverride[];
   notificationPreferences: BetaNotificationPreferences;
@@ -2202,6 +2206,10 @@ function defaultBetaSettings(): BetaSettings {
     qbitClients: [],
     announceMappings: [],
     notificationTargets: [],
+    features: {
+      graphsEnabled: true,
+      calendarEnabled: true,
+    },
     scheduleOverrides: [],
     schedule: {
       enabled: false,
@@ -2250,6 +2258,7 @@ function loadBetaSettings(): BetaSettings {
     ...defaultBetaSettings(),
     ...settings,
     defaults: { ...defaultBetaSettings().defaults, ...(settings.defaults ?? {}) },
+    features: { ...defaultBetaSettings().features, ...(settings.features ?? {}) },
     qbitClients: Array.isArray(settings.qbitClients) ? settings.qbitClients : [],
     announceMappings: Array.isArray(settings.announceMappings) ? settings.announceMappings : [],
     notificationTargets: Array.isArray(settings.notificationTargets) ? settings.notificationTargets : [],
@@ -2382,6 +2391,12 @@ function saveBetaSettingsPayload(raw: unknown): BetaSettings {
     siteDownEnabled: body.defaults?.siteDownEnabled !== false,
   };
 
+  const rawFeatures = body.features ?? current.features;
+  const features = {
+    graphsEnabled: rawFeatures.graphsEnabled !== false,
+    calendarEnabled: rawFeatures.calendarEnabled !== false,
+  };
+
   const rawSchedule = body.schedule ?? current.schedule;
   const mode: BetaScheduleSettings['mode'] = ['hours', 'weekdays'].includes(String(rawSchedule.mode))
     ? rawSchedule.mode as BetaScheduleSettings['mode']
@@ -2462,7 +2477,7 @@ function saveBetaSettingsPayload(raw: unknown): BetaSettings {
     sessionDays: Number.isFinite(Number(rawGlobal.sessionDays)) ? Number(rawGlobal.sessionDays) : 30,
   };
 
-  const next = { qbitClients, announceMappings, notificationTargets, schedule, scheduleOverrides, notificationPreferences, trackerAlerts, globalAlerts, defaults };
+  const next = { qbitClients, announceMappings, notificationTargets, features, schedule, scheduleOverrides, notificationPreferences, trackerAlerts, globalAlerts, defaults };
   setJsonSetting(BETA_SETTINGS_KEY, next);
   return next;
 }
