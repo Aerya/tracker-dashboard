@@ -704,6 +704,51 @@ const COOKIE_ONLY_TRACKERS = new Set([
   'tr4ker',       // Cloudflare + login SPA
   'yggreborn',    // Cloudflare Turnstile
 ]);
+
+/**
+ * Applique le preset moteur (ENGINE_TEMPLATES) à une config qui déclare `engine`.
+ * RÈGLE D'OR : le JSON du tracker gagne TOUJOURS sur le preset, champ par champ.
+ * - login / dashboard / curlBinary / ratioless : le bloc du JSON, s'il est présent,
+ *   remplace celui du preset (au niveau du bloc login, on fusionne clé par clé pour
+ *   qu'un tracker puisse surcharger seulement `url` sans réécrire body/preStep/…).
+ * - fetch.fields : MERGE field par field (preset d'abord, JSON ensuite) pour qu'un
+ *   site au skin modifié puisse surcharger 2 fields sur 9 sans réécrire les 7 autres.
+ * - fetch (hors fields) : le JSON gagne champ par champ.
+ * Un tracker sans `engine`, ou avec un `engine` inconnu, est renvoyé inchangé.
+ * Idempotent : ré-appliquer ne change rien.
+ */
+function applyEnginePreset(config: TrackerConfig): TrackerConfig {
+  if (!config.engine) return config;
+  const tpl = getEngineTemplate(config.engine);
+  if (!tpl) return config;
+  const preset = tpl.preset;
+
+  // login : preset comme base, le JSON surcharge clé par clé.
+  const mergedLogin = { ...preset.login, ...config.login };
+
+  // fetch : preset comme base, le JSON surcharge clé par clé, SAUF fields qui mergent.
+  const mergedFields = {
+    ...(preset.fetch?.fields ?? {}),
+    ...(config.fetch?.fields ?? {}),
+  };
+  const mergedFetch = { ...preset.fetch, ...config.fetch, fields: mergedFields };
+
+  // dashboard : preset comme base, JSON surcharge clé par clé.
+  const mergedDashboard =
+    config.dashboard || preset.dashboard
+      ? { ...(preset.dashboard ?? {}), ...(config.dashboard ?? {}) }
+      : undefined;
+
+  return {
+    ...config,
+    curlBinary: config.curlBinary ?? preset.curlBinary,
+    ratioless: config.ratioless ?? preset.ratioless,
+    login: mergedLogin,
+    fetch: mergedFetch,
+    ...(mergedDashboard ? { dashboard: mergedDashboard } : {}),
+  };
+}
+
 function normalizeTrackerConfigs(): TrackerConfig[] {
   const trackers = loadTrackerConfigsFromDb();
   for (const tracker of trackers) {
@@ -728,6 +773,33 @@ function normalizeTrackerConfigs(): TrackerConfig[] {
       }
       if (tracker.curlBinary !== definition.curlBinary) {
         tracker.curlBinary = definition.curlBinary;
+        changed = true;
+      }
+    }
+    // Mécanisme `engine` : si le tracker déclare une famille de moteur, on applique
+    // le preset (ENGINE_TEMPLATES) — le JSON gagne toujours sur le preset (cf.
+    // applyEnginePreset). Tant qu'aucun JSON ne porte `engine`, ceci est un no-op.
+    // À terme, ce mécanisme remplace les patches par-tracker ci-dessous.
+    if (tracker.engine) {
+      const merged = applyEnginePreset(tracker);
+      if (JSON.stringify(merged.login) !== JSON.stringify(tracker.login)) {
+        tracker.login = merged.login;
+        changed = true;
+      }
+      if (JSON.stringify(merged.fetch) !== JSON.stringify(tracker.fetch)) {
+        tracker.fetch = merged.fetch;
+        changed = true;
+      }
+      if (JSON.stringify(merged.dashboard) !== JSON.stringify(tracker.dashboard)) {
+        tracker.dashboard = merged.dashboard;
+        changed = true;
+      }
+      if (merged.curlBinary !== tracker.curlBinary) {
+        tracker.curlBinary = merged.curlBinary;
+        changed = true;
+      }
+      if (merged.ratioless !== tracker.ratioless) {
+        tracker.ratioless = merged.ratioless;
         changed = true;
       }
     }
@@ -1166,6 +1238,14 @@ function sanitizeTrackerConfigInput(
   if (input.ratioless) config.ratioless = true;
   if (input.curlBinary === 'curl_firefox133' || input.curlBinary === 'curl_firefox135') {
     config.curlBinary = input.curlBinary;
+  }
+  // engine (famille de moteur) : optionnel, doit correspondre à un preset connu.
+  if (input.engine != null && String(input.engine).trim()) {
+    const eng = String(input.engine).trim();
+    if (!getEngineTemplate(eng)) {
+      return fail(`Moteur « ${eng} » inconnu (valeurs : unit3d, gazelle, torrentleech, mam, jsonapi, other).`);
+    }
+    config.engine = eng as TrackerConfig['engine'];
   }
   const byteUnit = input.dashboard?.byteUnit;
   if (byteUnit === 'binary' || byteUnit === 'decimal') {
