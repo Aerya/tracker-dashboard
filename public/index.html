@@ -76,6 +76,7 @@
     .header-logo { display: none; }
     .header-brand { display: flex; align-items: center; gap: 8px; }
     .brand-logo { height: 30px; width: auto; display: block; flex: 0 0 auto; }
+    :root[data-theme="dark"] .brand-logo { content: url("/logo-dark.png"); }
     .header-logo-text {
       font-family: var(--mono);
       font-size: 15px;
@@ -1691,6 +1692,60 @@
       background: var(--blue);
       color: #fff;
     }
+    /* ── Formulaire « nouveau tracker » ──────────────────────────────────── */
+    .newtracker-h {
+      margin: 20px 0 10px; font-size: 13px; font-weight: 700;
+      padding-bottom: 6px; border-bottom: 1px solid var(--border);
+    }
+    .nt-subh { margin: 14px 0 6px; font-size: 12px; font-weight: 700; color: var(--muted); }
+    .newtracker-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px 14px; align-items: end;
+    }
+    .nt-hint { color: var(--muted); font-weight: 400; font-size: 10px; }
+    .nt-toggle { align-self: center; }
+    .nt-add { padding: 5px 10px; margin-top: 8px; }
+    .nt-kv-list, .nt-field-list { display: flex; flex-direction: column; gap: 8px; }
+    .nt-kv-row, .nt-field-row {
+      display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    }
+    .nt-kv-row input { flex: 1 1 140px; }
+    .nt-field-row .nt-fname { flex: 1 1 150px; }
+    .nt-field-row .nt-fextract { flex: 2 1 240px; font-family: monospace; font-size: 11px; }
+    .nt-field-row .nt-ftransform { flex: 0 1 130px; }
+    .nt-row-del {
+      background: transparent; border: 1px solid var(--border); color: var(--muted);
+      border-radius: 6px; cursor: pointer; padding: 6px 9px; line-height: 1; font-size: 13px;
+    }
+    .nt-row-del:hover { color: var(--red); border-color: var(--red); }
+
+    /* ── Assistant guidé ─────────────────────────────────────────────────── */
+    .guided-steps { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0 18px; }
+    .guided-step {
+      font-size: 11px; font-weight: 600; padding: 5px 10px; border-radius: 999px;
+      background: var(--surface-2, rgba(127,127,127,.08)); color: var(--muted);
+      border: 1px solid var(--border);
+    }
+    .guided-step.active { background: var(--green, #2ecc71); color: #fff; border-color: transparent; }
+    .guided-step.done { color: var(--green); border-color: var(--green); }
+    .guided-engine-list { display: flex; flex-direction: column; gap: 8px; }
+    .guided-engine-card {
+      display: block; width: 100%; text-align: left; cursor: pointer;
+      border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px;
+      background: var(--surface-2, rgba(127,127,127,.05)); transition: border-color .12s, background .12s;
+    }
+    .guided-engine-card:hover { border-color: var(--green); }
+    .guided-engine-card.selected { border-color: var(--green); background: rgba(46,204,113,.10); }
+    .guided-engine-card .ge-title { font-weight: 700; font-size: 14px; }
+    .guided-engine-card .ge-suggested { font-size: 10px; font-weight: 700; color: var(--green); margin-left: 8px; }
+    .guided-engine-card .ge-desc { font-size: 12px; color: var(--muted); margin-top: 3px; }
+    .guided-engine-card .ge-examples { font-size: 11px; color: var(--muted); margin-top: 4px; font-style: italic; }
+    .guided-engine-card .ge-hint { font-size: 11px; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border); }
+    .guided-summary {
+      font-size: 13px; border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px;
+      background: var(--surface-2, rgba(127,127,127,.05));
+    }
+    .guided-summary b { font-weight: 700; }
   </style>
   <link rel="stylesheet" href="/responsive.css">
 </head>
@@ -1730,6 +1785,8 @@
       <span class="nav-caret">▸</span>
     </button>
     <div class="nav-sub" id="nav-sub-config">
+      <button class="nav-item" data-nav="tracker-guided" onclick="openGuidedTrackerForm()" type="button"><span class="nav-icon">✦</span> Ajouter un tracker (guidé)</button>
+      <button class="nav-item" data-nav="tracker-new" onclick="openNewTrackerForm()" type="button"><span class="nav-icon">＋</span> Ajouter un tracker (expert)</button>
       <div class="nav-group" data-nav-group="add">
         <button class="nav-item nav-group-toggle" onclick="toggleNavGroup(event, 'add')" type="button">
           <span class="nav-icon">＋</span> Ajouter un tracker
@@ -1919,6 +1976,293 @@
     </div>
   </section>
 
+  <section class="tab-view" data-view="tracker-new">
+    <div class="beta-stack" style="width:100%; max-width:920px">
+      <section class="beta-panel">
+        <h3 id="newtracker-title">Configurer un nouveau tracker</h3>
+        <p class="beta-note" style="margin-top:4px">
+          Ajoute un tracker absent de la liste intégrée. Renseigne sa page de login, sa page de stats et les champs à extraire.
+          Les définitions techniques d'un tracker perso sont conservées telles quelles (jamais écrasées par une mise à jour d'image).
+          Astuce : inspire-toi d'un tracker existant du même type (UNIT3D, Gazelle…).
+        </p>
+
+        <!-- Général -->
+        <h4 class="newtracker-h">1 · Général</h4>
+        <div class="newtracker-grid">
+          <div class="beta-field">
+            <label for="nt-id">Identifiant <span class="nt-hint">unique, minuscules (ex: montracker)</span></label>
+            <input class="tracker-input" id="nt-id" autocomplete="off" placeholder="montracker">
+          </div>
+          <div class="beta-field">
+            <label for="nt-name">Nom affiché</label>
+            <input class="tracker-input" id="nt-name" autocomplete="off" placeholder="Mon Tracker">
+          </div>
+          <div class="beta-field">
+            <label for="nt-baseurl">URL de base</label>
+            <input class="tracker-input" id="nt-baseurl" autocomplete="off" placeholder="https://montracker.org">
+          </div>
+          <div class="beta-field">
+            <label for="nt-curlbinary">Profil curl-impersonate <span class="nt-hint">(anti-Cloudflare, optionnel)</span></label>
+            <select class="tracker-input" id="nt-curlbinary">
+              <option value="">Aucun</option>
+              <option value="curl_firefox135">curl_firefox135</option>
+              <option value="curl_firefox133">curl_firefox133</option>
+            </select>
+          </div>
+          <div class="beta-field">
+            <label for="nt-byteunit">Unité d'octets</label>
+            <select class="tracker-input" id="nt-byteunit">
+              <option value="binary">Binaire (Kio/Mio/Gio)</option>
+              <option value="decimal">Décimale (KB/MB/GB)</option>
+            </select>
+          </div>
+          <label class="toggle-switch nt-toggle" title="Tracker sans système de ratio">
+            <input type="checkbox" id="nt-ratioless">
+            <div class="toggle-track"><div class="toggle-knob"></div></div>
+            <span>Sans ratio (ratioless)</span>
+          </label>
+        </div>
+
+        <!-- Login -->
+        <h4 class="newtracker-h">2 · Connexion (login)</h4>
+        <div class="newtracker-grid">
+          <div class="beta-field">
+            <label for="nt-login-url">Page / endpoint de login <span class="nt-hint">relatif à l'URL de base (ex: login.php)</span></label>
+            <input class="tracker-input" id="nt-login-url" autocomplete="off" placeholder="login.php">
+          </div>
+          <div class="beta-field">
+            <label for="nt-login-method">Méthode</label>
+            <select class="tracker-input" id="nt-login-method">
+              <option value="POST">POST</option>
+              <option value="GET">GET</option>
+            </select>
+          </div>
+          <div class="beta-field">
+            <label for="nt-login-contenttype">Type de corps</label>
+            <select class="tracker-input" id="nt-login-contenttype">
+              <option value="form">Formulaire (x-www-form-urlencoded)</option>
+              <option value="json">JSON</option>
+            </select>
+          </div>
+          <label class="toggle-switch nt-toggle" title="Login automatique désactivé : seul un cookie de session est utilisé">
+            <input type="checkbox" id="nt-login-cookieonly">
+            <div class="toggle-track"><div class="toggle-knob"></div></div>
+            <span>Cookie uniquement (pas de login auto)</span>
+          </label>
+        </div>
+
+        <div class="beta-field" style="margin-top:6px">
+          <label>Corps du login <span class="nt-hint">placeholders : {{username}} {{password}} {{otp}} {{_csrf}}</span></label>
+          <div id="nt-login-body" class="nt-kv-list"></div>
+          <button class="btn-test nt-add" type="button" onclick="ntAddBodyRow()">+ Ajouter un champ</button>
+        </div>
+
+        <div class="beta-field">
+          <label>Motifs d'échec (failurePatterns) <span class="nt-hint">une chaîne HTML par ligne — présence = login échoué</span></label>
+          <textarea class="tracker-input" id="nt-login-failures" rows="3" spellcheck="false" style="font-family:monospace; font-size:11px; white-space:pre" placeholder='type="password"&#10;name="password"&#10;Identifiants incorrects'></textarea>
+        </div>
+
+        <details class="definition-advanced">
+          <summary>Options de login avancées (CSRF, 2FA, API JSON…)</summary>
+          <div class="definition-advanced-body">
+            <div class="newtracker-grid">
+              <div class="beta-field">
+                <label for="nt-login-posturl">postUrl <span class="nt-hint">cible du POST si ≠ page de login</span></label>
+                <input class="tracker-input" id="nt-login-posturl" autocomplete="off" placeholder="(optionnel)">
+              </div>
+              <div class="beta-field">
+                <label for="nt-login-otpfield">Champ code 2FA (otpField)</label>
+                <input class="tracker-input" id="nt-login-otpfield" autocomplete="off" placeholder="ex: two_step_code">
+              </div>
+              <div class="beta-field">
+                <label for="nt-login-successfield">successField <span class="nt-hint">(login API JSON)</span></label>
+                <input class="tracker-input" id="nt-login-successfield" autocomplete="off" placeholder="(optionnel)">
+              </div>
+              <div class="beta-field">
+                <label for="nt-login-csrfheader">csrfHeader</label>
+                <input class="tracker-input" id="nt-login-csrfheader" autocomplete="off" placeholder="ex: csrf-token">
+              </div>
+              <div class="beta-field">
+                <label for="nt-login-tokenfield">tokenField <span class="nt-hint">jeton Bearer pour le fetch</span></label>
+                <input class="tracker-input" id="nt-login-tokenfield" autocomplete="off" placeholder="(optionnel)">
+              </div>
+            </div>
+            <div class="beta-field">
+              <label>preVisitUrls <span class="nt-hint">GET préalables pour initialiser des cookies — une URL par ligne</span></label>
+              <textarea class="tracker-input" id="nt-login-previsit" rows="2" spellcheck="false" style="font-family:monospace; font-size:11px" placeholder="login.php"></textarea>
+            </div>
+            <h5 class="nt-subh">preStep — récupération CSRF</h5>
+            <div class="newtracker-grid">
+              <div class="beta-field">
+                <label for="nt-prestep-url">URL de la preStep</label>
+                <input class="tracker-input" id="nt-prestep-url" autocomplete="off" placeholder="login.php">
+              </div>
+              <label class="toggle-switch nt-toggle" title="Inclure tous les champs cachés du formulaire">
+                <input type="checkbox" id="nt-prestep-hidden">
+                <div class="toggle-track"><div class="toggle-knob"></div></div>
+                <span>includeHiddenInputs</span>
+              </label>
+            </div>
+            <div class="beta-field">
+              <label for="nt-prestep-csrf">Regex extraction _csrf <span class="nt-hint">groupe (?&lt;value&gt;…)</span></label>
+              <input class="tracker-input" id="nt-prestep-csrf" autocomplete="off" spellcheck="false" style="font-family:monospace; font-size:11px" placeholder='name=&quot;_token&quot;\s+value=&quot;(?<value>[^&quot;]+)&quot;'>
+            </div>
+            <h5 class="nt-subh">otpStep — page 2FA dédiée (ex: Nexum)</h5>
+            <div class="newtracker-grid">
+              <div class="beta-field">
+                <label for="nt-otpstep-url">urlContains</label>
+                <input class="tracker-input" id="nt-otpstep-url" autocomplete="off" placeholder="/login/2fa">
+              </div>
+              <div class="beta-field">
+                <label for="nt-otpstep-field">Champ du code</label>
+                <input class="tracker-input" id="nt-otpstep-field" autocomplete="off" placeholder="code">
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <!-- Fetch -->
+        <h4 class="newtracker-h">3 · Lecture des stats (fetch)</h4>
+        <div class="newtracker-grid">
+          <div class="beta-field">
+            <label for="nt-fetch-url">Page / endpoint de stats <span class="nt-hint">relatif à l'URL de base</span></label>
+            <input class="tracker-input" id="nt-fetch-url" autocomplete="off" placeholder="index.php">
+          </div>
+          <div class="beta-field">
+            <label for="nt-fetch-mode">Mode</label>
+            <select class="tracker-input" id="nt-fetch-mode" onchange="ntSyncResponseHint()">
+              <option value="browser">Navigateur (rendu JS)</option>
+              <option value="http">HTTP (rapide)</option>
+            </select>
+          </div>
+          <div class="beta-field">
+            <label for="nt-fetch-responsetype">Type de réponse</label>
+            <select class="tracker-input" id="nt-fetch-responsetype" onchange="ntSyncResponseHint(); ntRenderFields()">
+              <option value="html">HTML (regex)</option>
+              <option value="json">JSON (chemin)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="beta-field" style="margin-top:6px">
+          <label>Champs à extraire <span class="nt-hint" id="nt-fields-hint">HTML : regex avec (?&lt;value&gt;…) · transform = bytes / number / integer / string</span></label>
+          <div id="nt-fetch-fields" class="nt-field-list"></div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px">
+            <button class="btn-test nt-add" type="button" onclick="ntAddFieldRow()">+ Ajouter un champ</button>
+            <button class="btn-test nt-add" type="button" onclick="ntAddCommonFields()" title="Pré-remplit uploadedBytes, downloadedBytes, ratio, seeding…">+ Champs courants</button>
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="proxy-actions" style="margin-top:18px; align-items:center; flex-wrap:wrap">
+          <button class="btn-test" type="button" onclick="ntTestTracker(this)">Tester la connexion</button>
+          <button class="btn-save" type="button" onclick="ntSaveTracker(this)">Enregistrer</button>
+          <button class="btn-test" type="button" id="nt-delete-btn" onclick="ntDeleteTracker(this)" style="display:none; color:var(--red); border-color:var(--red)">Supprimer ce tracker</button>
+          <button class="btn-test" type="button" onclick="openNewTrackerForm()">Réinitialiser le formulaire</button>
+          <span id="nt-result" style="font-size:12px"></span>
+        </div>
+
+        <div id="nt-test-credentials" class="beta-panel" style="margin-top:14px; padding:12px; background:var(--surface-2, rgba(127,127,127,.06))">
+          <p class="beta-note" style="margin:0 0 8px">Identifiants utilisés <b>uniquement pour le test</b> (enregistrés séparément après création via « Configurer les actifs ») :</p>
+          <div class="newtracker-grid">
+            <div class="beta-field"><label for="nt-test-user">Utilisateur</label><input class="tracker-input" id="nt-test-user" autocomplete="off"></div>
+            <div class="beta-field"><label for="nt-test-pass">Mot de passe</label><input class="tracker-input" id="nt-test-pass" type="password" autocomplete="new-password"></div>
+            <div class="beta-field"><label for="nt-test-totp">Secret 2FA (TOTP) <span class="nt-hint">optionnel</span></label><input class="tracker-input" id="nt-test-totp" type="password" autocomplete="off"></div>
+          </div>
+          <div class="beta-field" style="margin-top:8px">
+            <label for="nt-test-cookie">Cookie de session <span class="nt-hint">requis si « cookie uniquement »</span></label>
+            <textarea class="tracker-input" id="nt-test-cookie" rows="2" spellcheck="false" style="font-family:monospace; font-size:11px; white-space:pre" placeholder="nom=valeur; nom2=valeur2  (ou export cookies.txt / Cookie-Editor)"></textarea>
+          </div>
+        </div>
+      </section>
+    </div>
+  </section>
+
+  <section class="tab-view" data-view="tracker-guided">
+    <div class="beta-stack" style="width:100%; max-width:820px">
+      <section class="beta-panel">
+        <h3>Ajouter un tracker — assistant guidé</h3>
+        <div class="guided-steps" id="guided-stepbar">
+          <span class="guided-step active" data-step="1">1 · Adresse</span>
+          <span class="guided-step" data-step="2">2 · Type de tracker</span>
+          <span class="guided-step" data-step="3">3 · Identifiants</span>
+          <span class="guided-step" data-step="4">4 · Vérification</span>
+        </div>
+
+        <!-- Étape 1 : URL -->
+        <div class="guided-pane" data-pane="1">
+          <p class="beta-note">Colle l'adresse de ton tracker. On va essayer de reconnaître automatiquement quel logiciel il utilise pour pré-remplir la configuration.</p>
+          <div class="beta-field">
+            <label for="gd-baseurl">Adresse du site</label>
+            <input class="tracker-input" id="gd-baseurl" autocomplete="off" placeholder="https://montracker.org" onkeydown="if(event.key==='Enter')gdDetect(this)">
+          </div>
+          <div class="proxy-actions" style="margin-top:12px">
+            <button class="btn-save" type="button" onclick="gdDetect(this)">Continuer</button>
+            <span id="gd-detect-result" style="font-size:12px"></span>
+          </div>
+        </div>
+
+        <!-- Étape 2 : moteur -->
+        <div class="guided-pane" data-pane="2" style="display:none">
+          <p class="beta-note" id="gd-engine-intro">Choisis le logiciel qui correspond à ton tracker. En cas de doute, lis les indices et choisis « Autre ».</p>
+          <div id="gd-engine-list" class="guided-engine-list"></div>
+          <div class="proxy-actions" style="margin-top:12px">
+            <button class="btn-test" type="button" onclick="gdGoStep(1)">← Retour</button>
+            <button class="btn-save" type="button" onclick="gdPickEngineContinue()">Continuer</button>
+            <span id="gd-engine-result" style="font-size:12px"></span>
+          </div>
+        </div>
+
+        <!-- Étape 3 : identifiants -->
+        <div class="guided-pane" data-pane="3" style="display:none">
+          <p class="beta-note" id="gd-creds-hint"></p>
+          <div class="newtracker-grid">
+            <div class="beta-field">
+              <label for="gd-name">Nom affiché</label>
+              <input class="tracker-input" id="gd-name" autocomplete="off" placeholder="Mon Tracker">
+            </div>
+            <div class="beta-field">
+              <label for="gd-user" id="gd-user-label">Nom d'utilisateur</label>
+              <input class="tracker-input" id="gd-user" autocomplete="off">
+            </div>
+            <div class="beta-field">
+              <label for="gd-pass">Mot de passe</label>
+              <input class="tracker-input" id="gd-pass" type="password" autocomplete="new-password">
+            </div>
+            <div class="beta-field">
+              <label for="gd-totp">Secret 2FA (TOTP) <span class="nt-hint">si activé, sinon laisse vide</span></label>
+              <input class="tracker-input" id="gd-totp" type="password" autocomplete="off">
+            </div>
+          </div>
+          <details class="definition-advanced" id="gd-cookie-wrap">
+            <summary>J'ai un cookie de session (sites à CAPTCHA / Cloudflare)</summary>
+            <div class="definition-advanced-body">
+              <p class="beta-note">Si le login automatique échoue (Cloudflare, captcha), connecte-toi dans ton navigateur, exporte tes cookies et colle-les ici.</p>
+              <textarea class="tracker-input" id="gd-cookie" rows="3" spellcheck="false" style="font-family:monospace; font-size:11px; white-space:pre" placeholder="nom=valeur; nom2=valeur2  (ou export cookies.txt / Cookie-Editor)"></textarea>
+            </div>
+          </details>
+          <div class="proxy-actions" style="margin-top:12px">
+            <button class="btn-test" type="button" onclick="gdGoStep(2)">← Retour</button>
+            <button class="btn-save" type="button" onclick="gdGoStep(4)">Continuer</button>
+          </div>
+        </div>
+
+        <!-- Étape 4 : test + enregistrement -->
+        <div class="guided-pane" data-pane="4" style="display:none">
+          <p class="beta-note">On teste la connexion réelle avec tes identifiants. Si ça marche, tu pourras enregistrer. Sinon, tu peux revenir en arrière ou affiner en mode expert.</p>
+          <div id="gd-summary" class="guided-summary"></div>
+          <div class="proxy-actions" style="margin-top:12px; flex-wrap:wrap; align-items:center">
+            <button class="btn-test" type="button" onclick="gdGoStep(3)">← Retour</button>
+            <button class="btn-test" type="button" onclick="gdTest(this)">Tester la connexion</button>
+            <button class="btn-save" type="button" onclick="gdSave(this)">Enregistrer le tracker</button>
+            <button class="btn-test" type="button" onclick="gdOpenInExpert()" title="Ouvre la config complète pour ajustement manuel">Affiner en mode expert</button>
+            <span id="gd-final-result" style="font-size:12px"></span>
+          </div>
+        </div>
+      </section>
+    </div>
+  </section>
+
   <section class="tab-view" data-view="fiche">
     <div class="beta-stack" style="width:100%">
       <section class="beta-panel">
@@ -1953,6 +2297,12 @@
 
   <section class="tab-view" data-view="graphs">
         <div class="beta-stack" style="width:100%">
+        <section class="beta-panel" style="padding:10px 14px">
+          <div class="beta-chart-controls" style="margin:0">
+            <div class="beta-field"><label for="beta-chart-unit">Unité des graphiques</label><select id="beta-chart-unit" onchange="drawBetaCharts()"><option value="auto">Auto (décimal en comparaison, unité du site sinon)</option><option value="decimal">Décimale (GB / TB)</option><option value="binary">Binaire (GiB / TiB)</option></select></div>
+            <div class="beta-note">En mode comparaison multi-trackers, une unité commune est nécessaire pour superposer les courbes : par défaut décimale (GB). « Auto » suit l'unité du site sur les graphes d'un seul tracker.</div>
+          </div>
+        </section>
         <section class="beta-panel">
           <h3>Global</h3>
           <div class="beta-chart-controls">
@@ -2520,12 +2870,39 @@
   // État déplié/replié de la section « Fréquences individuelles » (AutoVisit).
   // Conservé en mémoire pour survivre aux re-renders périodiques de la vue.
   let betaOverridesExpanded = false;
-  const betaMetricDefs = {
-    uploadedBytes: { label: 'UP', color: '#22c55e', format: value => bytesText(value).replace(/<[^>]+>/g, ''), axis: value => formatBytes(value, 'binary').join(' ') },
-    downloadedBytes: { label: 'DL', color: '#3b82f6', format: value => bytesText(value).replace(/<[^>]+>/g, ''), axis: value => formatBytes(value, 'binary').join(' ') },
-    ratio: { label: 'Ratio', color: '#eab308', format: value => Number.isFinite(value) ? value.toFixed(2) : '-', axis: value => Number.isFinite(value) ? value.toFixed(2) : '-' },
-    seedTimeDays: { label: 'Seedtime', color: '#eab308', format: value => `${Number(value || 0).toFixed(1)} j`, axis: value => `${Number(value || 0).toFixed(1)} j` },
-  };
+  // Fabrique les définitions de métriques pour une unité d'octets donnée
+  // (decimal/binary). Les graphes superposant plusieurs trackers imposent une
+  // unité commune (sinon l'axe Y serait ambigu) ; les graphes mono-tracker
+  // suivent l'unité du tracker. Le sélecteur de la page graphiques peut forcer.
+  function betaMetricDefsFor(byteUnit) {
+    const u = byteUnit === 'decimal' ? 'decimal' : 'binary';
+    return {
+      uploadedBytes:   { label: 'UP', color: '#22c55e', format: value => bytesText(value, u).replace(/<[^>]+>/g, ''), axis: value => formatBytes(value, u).join(' ') },
+      downloadedBytes: { label: 'DL', color: '#3b82f6', format: value => bytesText(value, u).replace(/<[^>]+>/g, ''), axis: value => formatBytes(value, u).join(' ') },
+      ratio:           { label: 'Ratio', color: '#eab308', format: value => Number.isFinite(value) ? value.toFixed(2) : '-', axis: value => Number.isFinite(value) ? value.toFixed(2) : '-' },
+      seedTimeDays:    { label: 'Seedtime', color: '#eab308', format: value => `${Number(value || 0).toFixed(1)} j`, axis: value => `${Number(value || 0).toFixed(1)} j` },
+    };
+  }
+  // Alias par défaut (unité binaire) — conservé pour compat avec d'anciens appels.
+  const betaMetricDefs = betaMetricDefsFor('binary');
+
+  // Unité forcée par le sélecteur de la page graphiques : 'auto' | 'decimal' | 'binary'.
+  function betaChartUnitOverride() {
+    return document.getElementById('beta-chart-unit')?.value || 'auto';
+  }
+  // Unité d'un graphe mono-tracker : override du sélecteur sinon unité du tracker.
+  function resolveMonoTrackerUnit(trackerId) {
+    const ov = betaChartUnitOverride();
+    if (ov !== 'auto') return ov;
+    const stat = latestSortedStats.find(s => s.id === trackerId);
+    return statByteUnit(stat);
+  }
+  // Unité d'un graphe agrégé/multi-trackers : override sinon décimal (commun, GO).
+  function resolveAggregateUnit() {
+    const ov = betaChartUnitOverride();
+    return ov !== 'auto' ? ov : 'decimal';
+  }
+
 
   function getActiveGrid() {
     return document.getElementById('grid');
@@ -2680,6 +3057,526 @@
     renderSelectedTrackerCard();
     renderTrackerConfigNav();
   }
+
+  // ── Formulaire « Configurer un nouveau tracker » ───────────────────────────
+  // editingTrackerId : non-null si on edite un tracker custom existant.
+  let ntEditingTrackerId = null;
+
+  function ntSetVal(id, value) { const el = document.getElementById(id); if (el) el.value = value ?? ''; }
+  function ntGetVal(id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; }
+  function ntSetChecked(id, v) { const el = document.getElementById(id); if (el) el.checked = Boolean(v); }
+  function ntGetChecked(id) { const el = document.getElementById(id); return el ? el.checked : false; }
+
+  function ntBodyRowHtml(key = '', value = '') {
+    return `<div class="nt-kv-row">
+      <input class="tracker-input nt-bk" autocomplete="off" placeholder="champ (ex: username)" value="${escapeHtml(key)}">
+      <input class="tracker-input nt-bv" autocomplete="off" placeholder="valeur (ex: {{username}})" value="${escapeHtml(value)}">
+      <button type="button" class="nt-row-del" onclick="this.parentElement.remove()" title="Supprimer">✕</button>
+    </div>`;
+  }
+  function ntAddBodyRow(key, value) {
+    const list = document.getElementById('nt-login-body');
+    if (list) list.insertAdjacentHTML('beforeend', ntBodyRowHtml(key, value));
+  }
+
+  function ntFieldRowHtml(name = '', extract = '', transform = '') {
+    const opts = ['', 'bytes', 'number', 'integer', 'string']
+      .map(t => `<option value="${t}" ${t === transform ? 'selected' : ''}>${t || '— transform —'}</option>`).join('');
+    return `<div class="nt-field-row">
+      <input class="tracker-input nt-fname" autocomplete="off" placeholder="nom (ex: uploadedBytes)" value="${escapeHtml(name)}">
+      <input class="tracker-input nt-fextract" autocomplete="off" spellcheck="false" placeholder="regex (?<value>…) ou chemin JSON" value="${escapeHtml(extract)}">
+      <select class="tracker-input nt-ftransform">${opts}</select>
+      <button type="button" class="nt-row-del" onclick="this.parentElement.remove()" title="Supprimer">✕</button>
+    </div>`;
+  }
+  function ntAddFieldRow(name, extract, transform) {
+    const list = document.getElementById('nt-fetch-fields');
+    if (list) list.insertAdjacentHTML('beforeend', ntFieldRowHtml(name, extract, transform));
+  }
+  function ntAddCommonFields() {
+    const isJson = ntGetVal('nt-fetch-responsetype') === 'json';
+    const common = isJson
+      ? [['uploadedBytes', 'uploaded', 'bytes'], ['downloadedBytes', 'downloaded', 'bytes'], ['ratio', 'ratio', 'number'], ['seeding', 'seeding', 'integer'], ['leeching', 'leeching', 'integer']]
+      : [['uploadedBytes', '(?<value>[\\d.,]+\\s*[KMGTP]?i?B)', 'bytes'], ['downloadedBytes', '(?<value>[\\d.,]+\\s*[KMGTP]?i?B)', 'bytes'], ['ratio', '(?<value>[\\d.,]+)', 'number'], ['seeding', '(?<value>\\d+)', 'integer'], ['leeching', '(?<value>\\d+)', 'integer']];
+    common.forEach(([n, e, t]) => ntAddFieldRow(n, e, t));
+  }
+
+  function ntSyncResponseHint() {
+    const isJson = ntGetVal('nt-fetch-responsetype') === 'json';
+    const hint = document.getElementById('nt-fields-hint');
+    if (hint) hint.innerHTML = isJson
+      ? 'JSON : chemin dot-notation (ex: response.stats.uploaded) · transform = bytes / number / integer / string'
+      : 'HTML : regex avec (?&lt;value&gt;…) · transform = bytes / number / integer / string';
+    // Met a jour les placeholders des lignes existantes.
+    document.querySelectorAll('#nt-fetch-fields .nt-fextract').forEach(input => {
+      input.placeholder = isJson ? 'chemin JSON (ex: response.uploaded)' : 'regex (?<value>…)';
+    });
+  }
+  function ntRenderFields() { ntSyncResponseHint(); }
+
+  // Ouvre le formulaire vierge (creation).
+  function openNewTrackerForm() {
+    ntEditingTrackerId = null;
+    setNavGroupOpen('config', true);
+    showView('tracker-new');
+    document.getElementById('newtracker-title').textContent = 'Configurer un nouveau tracker';
+    ['nt-id','nt-name','nt-baseurl','nt-login-url','nt-login-posturl','nt-login-otpfield','nt-login-successfield','nt-login-csrfheader','nt-login-tokenfield','nt-login-previsit','nt-prestep-url','nt-prestep-csrf','nt-otpstep-url','nt-otpstep-field','nt-fetch-url','nt-login-failures','nt-test-user','nt-test-pass','nt-test-totp','nt-test-cookie']
+      .forEach(id => ntSetVal(id, ''));
+    ntSetVal('nt-curlbinary', ''); ntSetVal('nt-byteunit', 'binary');
+    ntSetVal('nt-login-method', 'POST'); ntSetVal('nt-login-contenttype', 'form');
+    ntSetVal('nt-fetch-mode', 'browser'); ntSetVal('nt-fetch-responsetype', 'html');
+    ntSetChecked('nt-ratioless', false); ntSetChecked('nt-login-cookieonly', false); ntSetChecked('nt-prestep-hidden', false);
+    document.getElementById('nt-id').disabled = false;
+    document.getElementById('nt-login-body').innerHTML = '';
+    ntAddBodyRow('username', '{{username}}');
+    ntAddBodyRow('password', '{{password}}');
+    document.getElementById('nt-fetch-fields').innerHTML = '';
+    ntAddCommonFields();
+    document.getElementById('nt-delete-btn').style.display = 'none';
+    const r = document.getElementById('nt-result'); if (r) r.textContent = '';
+    ntSyncResponseHint();
+  }
+
+  // Construit l'objet TrackerConfig depuis le formulaire.
+  function ntBuildConfig() {
+    const body = {};
+    document.querySelectorAll('#nt-login-body .nt-kv-row').forEach(row => {
+      const k = row.querySelector('.nt-bk').value.trim();
+      const v = row.querySelector('.nt-bv').value;
+      if (k) body[k] = v;
+    });
+    const fields = {};
+    document.querySelectorAll('#nt-fetch-fields .nt-field-row').forEach(row => {
+      const name = row.querySelector('.nt-fname').value.trim();
+      if (!name) return;
+      const extract = row.querySelector('.nt-fextract').value.trim();
+      const transform = row.querySelector('.nt-ftransform').value;
+      const isJson = ntGetVal('nt-fetch-responsetype') === 'json';
+      fields[name] = isJson ? { path: extract } : { regex: extract };
+      if (transform) fields[name].transform = transform;
+    });
+    const failurePatterns = ntGetVal('nt-login-failures').split('\n').map(s => s.trim()).filter(Boolean);
+    const preVisit = ntGetVal('nt-login-previsit').split('\n').map(s => s.trim()).filter(Boolean);
+
+    const login = {
+      url: ntGetVal('nt-login-url'),
+      method: ntGetVal('nt-login-method'),
+      contentType: ntGetVal('nt-login-contenttype'),
+      body,
+      failurePatterns,
+    };
+    if (ntGetChecked('nt-login-cookieonly')) login.cookieOnly = true;
+    if (ntGetVal('nt-login-posturl')) login.postUrl = ntGetVal('nt-login-posturl');
+    if (ntGetVal('nt-login-otpfield')) login.otpField = ntGetVal('nt-login-otpfield');
+    if (ntGetVal('nt-login-successfield')) login.successField = ntGetVal('nt-login-successfield');
+    if (ntGetVal('nt-login-csrfheader')) login.csrfHeader = ntGetVal('nt-login-csrfheader');
+    if (ntGetVal('nt-login-tokenfield')) login.tokenField = ntGetVal('nt-login-tokenfield');
+    if (preVisit.length) login.preVisitUrls = preVisit;
+    if (ntGetVal('nt-prestep-url')) {
+      const extract = {};
+      const csrf = ntGetVal('nt-prestep-csrf');
+      if (csrf) extract._csrf = { regex: csrf };
+      login.preStep = { url: ntGetVal('nt-prestep-url'), extract };
+      if (ntGetChecked('nt-prestep-hidden')) login.preStep.includeHiddenInputs = true;
+    }
+    if (ntGetVal('nt-otpstep-url') && ntGetVal('nt-otpstep-field')) {
+      login.otpStep = { urlContains: ntGetVal('nt-otpstep-url'), field: ntGetVal('nt-otpstep-field') };
+    }
+
+    const config = {
+      id: ntGetVal('nt-id').toLowerCase(),
+      name: ntGetVal('nt-name'),
+      baseUrl: ntGetVal('nt-baseurl'),
+      enabled: true,
+      login,
+      fetch: {
+        url: ntGetVal('nt-fetch-url'),
+        mode: ntGetVal('nt-fetch-mode'),
+        responseType: ntGetVal('nt-fetch-responsetype'),
+        fields,
+      },
+    };
+    if (ntGetChecked('nt-ratioless')) config.ratioless = true;
+    if (ntGetVal('nt-curlbinary')) config.curlBinary = ntGetVal('nt-curlbinary');
+    if (ntGetVal('nt-byteunit')) config.dashboard = { byteUnit: ntGetVal('nt-byteunit') };
+    return config;
+  }
+
+  function ntFlash(msg, color) {
+    const r = document.getElementById('nt-result');
+    if (r) { r.textContent = msg; r.style.color = color || 'var(--muted)'; }
+  }
+
+  async function ntTestTracker(btn) {
+    const config = ntBuildConfig();
+    const prev = btn.textContent; btn.disabled = true; btn.textContent = 'Test en cours…';
+    ntFlash('Connexion et lecture en cours (cela peut prendre 10-40 s)…');
+    try {
+      const r = await fetch('/api/trackers/test', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          config,
+          username: ntGetVal('nt-test-user'),
+          password: document.getElementById('nt-test-pass').value,
+          totp: document.getElementById('nt-test-totp').value,
+          cookie: document.getElementById('nt-test-cookie').value,
+        }),
+      });
+      const d = await r.json();
+      if (d.ok) {
+        const pairs = Object.entries(d.stat.fields || {}).map(([k, v]) => `${k} = ${v}`).join(' · ');
+        ntFlash('✓ Test réussi — ' + (pairs || 'aucun champ extrait'), 'var(--green)');
+      } else {
+        ntFlash('✗ ' + (d.error || 'Échec du test'), 'var(--red)');
+      }
+    } catch (e) {
+      ntFlash('✗ Erreur réseau : ' + e.message, 'var(--red)');
+    } finally {
+      btn.disabled = false; btn.textContent = prev;
+    }
+  }
+
+  async function ntSaveTracker(btn) {
+    const config = ntBuildConfig();
+    const prev = btn.textContent; btn.disabled = true; btn.textContent = 'Enregistrement…';
+    try {
+      const r = await fetch('/api/trackers', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+      });
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.error || 'Erreur');
+      ntFlash('✓ Tracker enregistré. Renseigne ses identifiants dans « Configurer les actifs ».', 'var(--green)');
+      ntEditingTrackerId = config.id;
+      document.getElementById('nt-id').disabled = true;
+      document.getElementById('newtracker-title').textContent = 'Éditer : ' + config.name;
+      document.getElementById('nt-delete-btn').style.display = '';
+      await loadTrackerDefinitionsPanel();
+      await loadConfig();
+      await loadStats();
+    } catch (e) {
+      ntFlash('✗ ' + e.message, 'var(--red)');
+    } finally {
+      btn.disabled = false; btn.textContent = prev;
+    }
+  }
+
+  async function ntDeleteTracker(btn) {
+    const id = ntEditingTrackerId || ntGetVal('nt-id').toLowerCase();
+    if (!id) return;
+    if (!confirm(`Supprimer définitivement le tracker « ${id} » et toutes ses données (identifiants, historique) ?`)) return;
+    const prev = btn.textContent; btn.disabled = true; btn.textContent = 'Suppression…';
+    try {
+      const r = await fetch(`/api/trackers/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.error || 'Erreur');
+      await loadTrackerDefinitionsPanel();
+      await loadConfig();
+      await loadStats();
+      openNewTrackerForm();
+      ntFlash('✓ Tracker supprimé.', 'var(--green)');
+    } catch (e) {
+      ntFlash('✗ ' + e.message, 'var(--red)');
+      btn.disabled = false; btn.textContent = prev;
+    }
+  }
+
+  // Édite un tracker custom existant en pré-remplissant le formulaire.
+  function ntEditCustomTracker(trackerId) {
+    const def = cachedTrackerDefinitions.find(d => d.id === trackerId);
+    fetch(`/api/trackers`).then(r => r.json()).then(data => {
+      const cfg = (data.trackers || []).find(t => t.id === trackerId);
+      if (!cfg) { openNewTrackerForm(); return; }
+      openNewTrackerForm();
+      ntEditingTrackerId = trackerId;
+      document.getElementById('newtracker-title').textContent = 'Éditer : ' + cfg.name;
+      ntSetVal('nt-id', cfg.id); document.getElementById('nt-id').disabled = true;
+      ntSetVal('nt-name', cfg.name); ntSetVal('nt-baseurl', cfg.baseUrl);
+      ntSetVal('nt-curlbinary', cfg.curlBinary || ''); ntSetVal('nt-byteunit', cfg.dashboard?.byteUnit || 'binary');
+      ntSetChecked('nt-ratioless', cfg.ratioless);
+      const lg = cfg.login || {};
+      ntSetVal('nt-login-url', lg.url || ''); ntSetVal('nt-login-method', lg.method || 'POST');
+      ntSetVal('nt-login-contenttype', lg.contentType || 'form'); ntSetChecked('nt-login-cookieonly', lg.cookieOnly);
+      ntSetVal('nt-login-posturl', lg.postUrl || ''); ntSetVal('nt-login-otpfield', lg.otpField || '');
+      ntSetVal('nt-login-successfield', lg.successField || ''); ntSetVal('nt-login-csrfheader', lg.csrfHeader || '');
+      ntSetVal('nt-login-tokenfield', lg.tokenField || '');
+      ntSetVal('nt-login-previsit', (lg.preVisitUrls || []).join('\n'));
+      ntSetVal('nt-login-failures', (lg.failurePatterns || []).join('\n'));
+      if (lg.preStep) { ntSetVal('nt-prestep-url', lg.preStep.url || ''); ntSetVal('nt-prestep-csrf', lg.preStep.extract?._csrf?.regex || ''); ntSetChecked('nt-prestep-hidden', lg.preStep.includeHiddenInputs); }
+      if (lg.otpStep) { ntSetVal('nt-otpstep-url', lg.otpStep.urlContains || ''); ntSetVal('nt-otpstep-field', lg.otpStep.field || ''); }
+      document.getElementById('nt-login-body').innerHTML = '';
+      Object.entries(lg.body || {}).forEach(([k, v]) => ntAddBodyRow(k, v));
+      ntSetVal('nt-fetch-url', cfg.fetch?.url || ''); ntSetVal('nt-fetch-mode', cfg.fetch?.mode || 'browser');
+      ntSetVal('nt-fetch-responsetype', cfg.fetch?.responseType || 'html');
+      document.getElementById('nt-fetch-fields').innerHTML = '';
+      Object.entries(cfg.fetch?.fields || {}).forEach(([n, f]) => ntAddFieldRow(n, f.path || f.regex || '', f.transform || ''));
+      document.getElementById('nt-delete-btn').style.display = '';
+      ntSyncResponseHint();
+    });
+  }
+
+  // ── Assistant guidé ────────────────────────────────────────────────────────
+  let gdEngines = [];            // liste des moteurs (métadonnées)
+  let gdSelectedEngine = null;   // id du moteur choisi
+  let gdSuggestedEngine = null;  // id détecté auto (mis en avant)
+  let gdPreset = null;           // preset {login,fetch,dashboard,...} du moteur choisi
+
+  function openGuidedTrackerForm() {
+    setNavGroupOpen('config', true);
+    showView('tracker-guided');
+    gdSelectedEngine = null; gdSuggestedEngine = null; gdPreset = null;
+    ['gd-baseurl','gd-name','gd-user','gd-pass','gd-totp','gd-cookie'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
+    document.getElementById('gd-detect-result').textContent = '';
+    document.getElementById('gd-engine-result').textContent = '';
+    document.getElementById('gd-final-result').textContent = '';
+    gdGoStep(1);
+    gdLoadEngines();
+  }
+
+  async function gdLoadEngines() {
+    if (gdEngines.length) return;
+    try {
+      const r = await fetch('/api/tracker-engines');
+      const d = await r.json();
+      gdEngines = d.engines || [];
+    } catch (e) { console.warn('engines', e); }
+  }
+
+  function gdGoStep(n) {
+    document.querySelectorAll('[data-view="tracker-guided"] .guided-pane').forEach(p => {
+      p.style.display = Number(p.dataset.pane) === n ? '' : 'none';
+    });
+    document.querySelectorAll('#guided-stepbar .guided-step').forEach(s => {
+      const sn = Number(s.dataset.step);
+      s.classList.toggle('active', sn === n);
+      s.classList.toggle('done', sn < n);
+    });
+    if (n === 4) gdRenderSummary();
+  }
+
+  function gdFlash(id, msg, color) {
+    const el = document.getElementById(id);
+    if (el) { el.textContent = msg; el.style.color = color || 'var(--muted)'; }
+  }
+
+  async function gdDetect(btn) {
+    const baseUrl = document.getElementById('gd-baseurl').value.trim();
+    if (!/^https?:\/\//i.test(baseUrl)) {
+      gdFlash('gd-detect-result', 'Entre une adresse commençant par http:// ou https://', 'var(--red)');
+      return;
+    }
+    await gdLoadEngines();
+    const prev = btn.textContent; btn.disabled = true; btn.textContent = 'Analyse…';
+    gdFlash('gd-detect-result', 'Lecture du site en cours (cela peut prendre quelques secondes)…');
+    try {
+      const r = await fetch('/api/tracker-engines/detect', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ baseUrl }),
+      });
+      const d = await r.json();
+      gdSuggestedEngine = d.engine || null;
+      // pré-remplit le nom à partir du domaine
+      try { const host = new URL(baseUrl).hostname.replace(/^www\./, ''); const base = host.split('.')[0]; document.getElementById('gd-name').value = base.charAt(0).toUpperCase() + base.slice(1); } catch {}
+      if (d.engine) {
+        const lbl = (gdEngines.find(e => e.id === d.engine) || {}).label || d.engine;
+        gdFlash('gd-detect-result', `Détecté : ${lbl}`, 'var(--green)');
+        document.getElementById('gd-engine-intro').textContent = `On a reconnu « ${lbl} » (mis en avant ci-dessous). Confirme, ou choisis-en un autre si ce n'est pas ça.`;
+      } else if (d.reachable) {
+        gdFlash('gd-detect-result', 'Site lu, mais moteur non reconnu — choisis-le manuellement.', 'var(--muted)');
+        document.getElementById('gd-engine-intro').textContent = "On n'a pas pu reconnaître le moteur automatiquement. Choisis-le dans la liste (les indices t'aident).";
+      } else {
+        gdFlash('gd-detect-result', 'Site injoignable (Cloudflare/proxy ?) — choix manuel.', 'var(--muted)');
+        document.getElementById('gd-engine-intro').textContent = "Le site n'a pas pu être lu (protection anti-bot ou proxy requis). Choisis ton moteur manuellement.";
+      }
+      gdRenderEngineList();
+      gdGoStep(2);
+    } catch (e) {
+      gdFlash('gd-detect-result', 'Erreur réseau : ' + e.message, 'var(--red)');
+    } finally {
+      btn.disabled = false; btn.textContent = prev;
+    }
+  }
+
+  function gdRenderEngineList() {
+    const list = document.getElementById('gd-engine-list');
+    if (!list) return;
+    // suggéré en premier
+    const ordered = [...gdEngines].sort((a, b) => (b.id === gdSuggestedEngine ? 1 : 0) - (a.id === gdSuggestedEngine ? 1 : 0));
+    list.innerHTML = ordered.map(e => {
+      const suggested = e.id === gdSuggestedEngine;
+      const sel = e.id === gdSelectedEngine || (!gdSelectedEngine && suggested);
+      const ex = (e.examples && e.examples.length) ? `<div class="ge-examples">Ex : ${e.examples.map(escapeHtml).join(', ')}</div>` : '';
+      return `<button type="button" class="guided-engine-card ${sel ? 'selected' : ''}" data-engine="${escapeHtml(e.id)}" onclick="gdSelectEngine('${escapeHtml(e.id)}')">
+        <div class="ge-title">${escapeHtml(e.label)}${suggested ? '<span class="ge-suggested">✓ détecté</span>' : ''}</div>
+        <div class="ge-desc">${escapeHtml(e.description)}</div>
+        ${ex}
+        <div class="ge-hint">${escapeHtml(e.hint)}</div>
+      </button>`;
+    }).join('');
+    if (!gdSelectedEngine && gdSuggestedEngine) gdSelectedEngine = gdSuggestedEngine;
+  }
+
+  function gdSelectEngine(id) {
+    gdSelectedEngine = id;
+    document.querySelectorAll('#gd-engine-list .guided-engine-card').forEach(c => {
+      c.classList.toggle('selected', c.dataset.engine === id);
+    });
+  }
+
+  async function gdPickEngineContinue() {
+    if (!gdSelectedEngine) { gdFlash('gd-engine-result', 'Choisis un type de tracker.', 'var(--red)'); return; }
+    try {
+      const r = await fetch(`/api/tracker-engines/${encodeURIComponent(gdSelectedEngine)}/preset`);
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.error || 'Preset indisponible');
+      gdPreset = d.preset;
+      const meta = gdEngines.find(e => e.id === gdSelectedEngine) || {};
+      // adapte le libellé du champ identifiant (MAM = email)
+      const userLabel = gdSelectedEngine === 'mam' ? "Adresse email (identifiant MAM)" : "Nom d'utilisateur";
+      document.getElementById('gd-user-label').textContent = userLabel;
+      document.getElementById('gd-creds-hint').textContent = meta.hint || '';
+      // cookie-only -> rendre la section cookie ouverte par défaut
+      const cookieWrap = document.getElementById('gd-cookie-wrap');
+      if (cookieWrap) cookieWrap.open = Boolean(gdPreset?.login?.cookieOnly);
+      gdGoStep(3);
+    } catch (e) {
+      gdFlash('gd-engine-result', e.message, 'var(--red)');
+    }
+  }
+
+  // Construit le TrackerConfig final à partir du preset + saisies utilisateur.
+  function gdBuildConfig() {
+    const baseUrl = document.getElementById('gd-baseurl').value.trim().replace(/\/+$/, '');
+    const name = document.getElementById('gd-name').value.trim() || (gdSelectedEngine || 'tracker');
+    // id : slug du nom, fallback domaine
+    let id = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '').slice(0, 40);
+    if (id.length < 2) { try { id = new URL(baseUrl).hostname.replace(/^www\./, '').split('.')[0].replace(/[^a-z0-9]/g, ''); } catch {} }
+    const cfg = JSON.parse(JSON.stringify(gdPreset || {}));
+    // byteUnit n'est qu'une amorce : l'unité réelle est auto-détectée au scraping
+    // (suit ce que le site affiche). On garde le défaut du preset en attendant le 1er refresh.
+    const byteUnit = cfg.dashboard?.byteUnit || 'decimal';
+    return {
+      id,
+      name,
+      baseUrl,
+      enabled: true,
+      ...(cfg.curlBinary ? { curlBinary: cfg.curlBinary } : {}),
+      ...(cfg.ratioless ? { ratioless: true } : {}),
+      dashboard: { byteUnit },
+      login: cfg.login,
+      fetch: cfg.fetch,
+    };
+  }
+
+  function gdRenderSummary() {
+    const cfg = gdBuildConfig();
+    const meta = gdEngines.find(e => e.id === gdSelectedEngine) || {};
+    const fields = Object.keys(cfg.fetch?.fields || {}).join(', ') || '—';
+    document.getElementById('gd-summary').innerHTML = `
+      <div><b>Nom :</b> ${escapeHtml(cfg.name)} <span style="color:var(--muted)">(id: ${escapeHtml(cfg.id)})</span></div>
+      <div><b>Adresse :</b> ${escapeHtml(cfg.baseUrl)}</div>
+      <div><b>Type :</b> ${escapeHtml(meta.label || gdSelectedEngine || '—')}</div>
+      <div><b>Login :</b> ${escapeHtml(cfg.login?.url || '—')} (${escapeHtml(cfg.login?.method || 'POST')}/${escapeHtml(cfg.login?.contentType || 'form')})</div>
+      <div><b>Stats lues sur :</b> ${escapeHtml(cfg.fetch?.url || '—')} — champs : ${escapeHtml(fields)}</div>`;
+  }
+
+  function gdCredsPayload() {
+    return {
+      username: document.getElementById('gd-user').value.trim(),
+      password: document.getElementById('gd-pass').value,
+      totp: document.getElementById('gd-totp').value,
+      cookie: document.getElementById('gd-cookie').value,
+    };
+  }
+
+  async function gdTest(btn) {
+    const config = gdBuildConfig();
+    const creds = gdCredsPayload();
+    const prev = btn.textContent; btn.disabled = true; btn.textContent = 'Test…';
+    gdFlash('gd-final-result', 'Connexion et lecture en cours (10-40 s)…');
+    try {
+      const r = await fetch('/api/trackers/test', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ config, ...creds }),
+      });
+      const d = await r.json();
+      if (d.ok) {
+        const pairs = Object.entries(d.stat.fields || {}).map(([k, v]) => `${k} = ${v}`).join(' · ');
+        gdFlash('gd-final-result', '✓ Test réussi — ' + (pairs || 'aucun champ'), 'var(--green)');
+      } else {
+        gdFlash('gd-final-result', '✗ ' + (d.error || 'Échec'), 'var(--red)');
+      }
+    } catch (e) {
+      gdFlash('gd-final-result', '✗ Erreur réseau : ' + e.message, 'var(--red)');
+    } finally {
+      btn.disabled = false; btn.textContent = prev;
+    }
+  }
+
+  async function gdSave(btn) {
+    const config = gdBuildConfig();
+    const creds = gdCredsPayload();
+    const prev = btn.textContent; btn.disabled = true; btn.textContent = 'Enregistrement…';
+    try {
+      const r = await fetch('/api/trackers', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+      });
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.error || 'Erreur');
+      // enregistre identifiants / cookie / 2FA
+      if (creds.username && creds.password) {
+        await fetch(`/api/credentials/${encodeURIComponent(config.id)}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: creds.username, password: creds.password }),
+        });
+      }
+      if (creds.cookie) await fetch(`/api/trackers/${encodeURIComponent(config.id)}/cookie`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cookie: creds.cookie }) });
+      if (creds.totp) await fetch(`/api/trackers/${encodeURIComponent(config.id)}/totp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ secret: creds.totp }) });
+      gdFlash('gd-final-result', '✓ Tracker ajouté et configuré !', 'var(--green)');
+      await loadTrackerDefinitionsPanel();
+      await loadConfig();
+      await loadStats();
+    } catch (e) {
+      gdFlash('gd-final-result', '✗ ' + e.message, 'var(--red)');
+    } finally {
+      btn.disabled = false; btn.textContent = prev;
+    }
+  }
+
+  // Bascule vers le formulaire expert en pré-remplissant tout depuis le mode guidé.
+  function gdOpenInExpert() {
+    const config = gdBuildConfig();
+    const creds = gdCredsPayload();
+    openNewTrackerForm();
+    ntSetVal('nt-id', config.id);
+    ntSetVal('nt-name', config.name);
+    ntSetVal('nt-baseurl', config.baseUrl);
+    ntSetVal('nt-byteunit', config.dashboard?.byteUnit || 'binary');
+    ntSetVal('nt-curlbinary', config.curlBinary || '');
+    ntSetChecked('nt-ratioless', config.ratioless);
+    const lg = config.login || {};
+    ntSetVal('nt-login-url', lg.url || ''); ntSetVal('nt-login-method', lg.method || 'POST');
+    ntSetVal('nt-login-contenttype', lg.contentType || 'form'); ntSetChecked('nt-login-cookieonly', lg.cookieOnly);
+    ntSetVal('nt-login-posturl', lg.postUrl || ''); ntSetVal('nt-login-otpfield', lg.otpField || '');
+    ntSetVal('nt-login-successfield', lg.successField || ''); ntSetVal('nt-login-csrfheader', lg.csrfHeader || '');
+    ntSetVal('nt-login-tokenfield', lg.tokenField || '');
+    ntSetVal('nt-login-previsit', (lg.preVisitUrls || []).join('\n'));
+    ntSetVal('nt-login-failures', (lg.failurePatterns || []).join('\n'));
+    if (lg.preStep) { ntSetVal('nt-prestep-url', lg.preStep.url || ''); ntSetVal('nt-prestep-csrf', lg.preStep.extract?._csrf?.regex || ''); ntSetChecked('nt-prestep-hidden', lg.preStep.includeHiddenInputs); }
+    if (lg.otpStep) { ntSetVal('nt-otpstep-url', lg.otpStep.urlContains || ''); ntSetVal('nt-otpstep-field', lg.otpStep.field || ''); }
+    document.getElementById('nt-login-body').innerHTML = '';
+    Object.entries(lg.body || {}).forEach(([k, v]) => ntAddBodyRow(k, v));
+    ntSetVal('nt-fetch-url', config.fetch?.url || ''); ntSetVal('nt-fetch-mode', config.fetch?.mode || 'browser');
+    ntSetVal('nt-fetch-responsetype', config.fetch?.responseType || 'html');
+    document.getElementById('nt-fetch-fields').innerHTML = '';
+    Object.entries(config.fetch?.fields || {}).forEach(([n, f]) => ntAddFieldRow(n, f.path || f.regex || '', f.transform || ''));
+    ntSetVal('nt-test-user', creds.username); document.getElementById('nt-test-pass').value = creds.password;
+    document.getElementById('nt-test-totp').value = creds.totp; document.getElementById('nt-test-cookie').value = creds.cookie;
+    ntSyncResponseHint();
+  }
+
+
 
   function betaTrackerUrl(stat) {
     return stat.trackerUrl || trackerConfig.find(t => t.id === stat.id)?.baseUrl || '';
@@ -2907,17 +3804,18 @@
     const stat = selectedBetaTracker();
     if (!stat) return;
     const rows = chartRowsForTracker(stat.id, 'day', 'total', ficheChartSource());
+    const md = betaMetricDefsFor(statByteUnit(stat));
     const volDefs = [
-      { ...betaMetricDefs.uploadedBytes, value: row => row.uploadedBytes, area: true },
-      { ...betaMetricDefs.downloadedBytes, value: row => row.downloadedBytes, area: true },
+      { ...md.uploadedBytes, value: row => row.uploadedBytes, area: true },
+      { ...md.downloadedBytes, value: row => row.downloadedBytes, area: true },
     ];
     if (ficheBufferOn) {
-      volDefs.push({ label: 'Buffer', color: '#a855f7', value: row => row.uploadedBytes - row.downloadedBytes, format: betaMetricDefs.uploadedBytes.format, axis: betaMetricDefs.uploadedBytes.axis });
+      volDefs.push({ label: 'Buffer', color: '#a855f7', value: row => row.uploadedBytes - row.downloadedBytes, format: md.uploadedBytes.format, axis: md.uploadedBytes.axis });
     }
-    drawSeriesChart('beta-fiche-vol-chart', rows, volDefs, `Volumes (UP / DL${ficheBufferOn ? ' / buffer' : ''})`, { axisFormat: betaMetricDefs.uploadedBytes.axis });
+    drawSeriesChart('beta-fiche-vol-chart', rows, volDefs, `Volumes (UP / DL${ficheBufferOn ? ' / buffer' : ''})`, { axisFormat: md.uploadedBytes.axis });
     drawSeriesChart('beta-fiche-ratio-chart', rows, [
-      { ...betaMetricDefs.ratio, value: row => row.ratio },
-    ], 'Ratio', { axisFormat: betaMetricDefs.ratio.axis });
+      { ...md.ratio, value: row => row.ratio },
+    ], 'Ratio', { axisFormat: md.ratio.axis });
   }
 
   function renderBetaTrackerPage() {
@@ -3292,11 +4190,12 @@
     const period = document.getElementById('beta-global-period')?.value || 'day';
     const mode = document.getElementById('beta-global-mode')?.value || 'delta';
     const rows = latestSnapshotsByTrackerAndPeriod(period, mode, filterHistoryByRange('beta-global-from', 'beta-global-to'));
+    const defs = betaMetricDefsFor(resolveAggregateUnit());
     drawSeriesChart('beta-global-chart', rows, [
-      { ...betaMetricDefs.uploadedBytes, label: mode === 'delta' ? 'UP période' : 'UP total', value: row => row.uploadedBytes, area: true },
-      { ...betaMetricDefs.downloadedBytes, label: mode === 'delta' ? 'DL période' : 'DL total', value: row => row.downloadedBytes, area: true },
-      { ...betaMetricDefs.seedTimeDays, value: row => row.seedTimeDays },
-    ], mode === 'delta' ? 'Global: activité par période' : 'Global: cumuls', { axisFormat: betaMetricDefs.uploadedBytes.axis });
+      { ...defs.uploadedBytes, label: mode === 'delta' ? 'UP période' : 'UP total', value: row => row.uploadedBytes, area: true },
+      { ...defs.downloadedBytes, label: mode === 'delta' ? 'DL période' : 'DL total', value: row => row.downloadedBytes, area: true },
+      { ...defs.seedTimeDays, value: row => row.seedTimeDays },
+    ], mode === 'delta' ? 'Global: activité par période' : 'Global: cumuls', { axisFormat: defs.uploadedBytes.axis });
   }
 
   // Remplit la liste de trackers de l'« Évolution » (Tout + trackers activés),
@@ -3326,13 +4225,15 @@
       rows = chartRowsForTracker(trackerId, 'day', mode, source);
       title = latestSortedStats.find(stat => stat.id === trackerId)?.name || 'Tracker';
     }
+    const unit = trackerId === 'all' ? resolveAggregateUnit() : resolveMonoTrackerUnit(trackerId);
+    const md = betaMetricDefsFor(unit);
     const defs = [
-      { ...betaMetricDefs.uploadedBytes, value: row => row.uploadedBytes, area: true },
-      { ...betaMetricDefs.downloadedBytes, value: row => row.downloadedBytes, area: true },
-      { ...betaMetricDefs.ratio, value: row => row.ratio },
-    ].filter(def => metric === 'all' || def.label === betaMetricDefs[metric]?.label);
-    const axisDef = metric === 'ratio' ? betaMetricDefs.ratio : betaMetricDefs.uploadedBytes;
-    drawSeriesChart('beta-history-chart', rows, defs, `${title}: ${metric === 'all' ? 'UP / DL / ratio' : betaMetricDefs[metric].label}`, { axisFormat: axisDef.axis });
+      { ...md.uploadedBytes, value: row => row.uploadedBytes, area: true },
+      { ...md.downloadedBytes, value: row => row.downloadedBytes, area: true },
+      { ...md.ratio, value: row => row.ratio },
+    ].filter(def => metric === 'all' || def.label === md[metric]?.label);
+    const axisDef = metric === 'ratio' ? md.ratio : md.uploadedBytes;
+    drawSeriesChart('beta-history-chart', rows, defs, `${title}: ${metric === 'all' ? 'UP / DL / ratio' : md[metric].label}`, { axisFormat: axisDef.axis });
   }
 
   // Sélection des trackers affichés dans la comparaison multi-trackers.
@@ -3389,7 +4290,7 @@
       });
       return out;
     });
-    const metricDef = betaMetricDefs[metric];
+    const metricDef = betaMetricDefsFor(resolveAggregateUnit())[metric];
     const defs = rowsByTracker.map(item => ({
       label: trackerDisplayName(item.stat.id),
       color: trackerColor(item.stat.id, item.idx),
@@ -4217,7 +5118,7 @@
     alert(data.ok ? 'Notification envoyée' : `Notification KO: ${data.error}`);
   }
 
-  const ALL_VIEWS = ['dashboard', 'trackers', 'proxies', 'calendar', 'graphs', 'qbit', 'scraping', 'notif-canaux', 'notif-globales', 'notif-tracker', 'fiche'];
+  const ALL_VIEWS = ['dashboard', 'trackers', 'tracker-new', 'tracker-guided', 'proxies', 'calendar', 'graphs', 'qbit', 'scraping', 'notif-canaux', 'notif-globales', 'notif-tracker', 'fiche'];
 
   // Affiche la vue demandée : bascule les sections de <main>, le panneau proxy
   // (sibling de <main>) et l'état actif de la barre latérale.
@@ -4844,6 +5745,9 @@
                 <div class="definition-actions">
                   <button class="btn-test" style="padding:6px 10px" onclick="setTrackerEnabled('${safeId}', ${isEnabled ? 'false' : 'true'})">${isEnabled ? 'Retirer' : 'Ajouter'}</button>
                 </div>
+                ${definition.isCustom ? `<div class="definition-actions">
+                  <button class="btn-test" style="padding:6px 10px" title="Modifier la définition technique de ce tracker perso" onclick="ntEditCustomTracker('${safeId}')">Éditer la définition</button>
+                </div>` : ''}
                 <details class="definition-advanced" style="grid-column:1/-1">
                   <summary>Options avancées${credential.hasCookie ? ' · <b style="color:var(--green)">cookie défini</b>' : ''}${credential.hasTotp ? ' · <b style="color:var(--green)">2FA défini</b>' : ''}</summary>
                   <div class="definition-advanced-body">

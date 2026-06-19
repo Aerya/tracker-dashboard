@@ -814,6 +814,35 @@ export async function fetchWithBrowser(
   }
 }
 
+/**
+ * Recupere le HTML brut d'une URL via un navigateur EPHEMERE (contexte non
+ * persistant, sans profil ni cookies), pour la detection de moteur quand le GET
+ * HTTP echoue (Cloudflare/JS). Aucun login, aucune session : usage strictement
+ * lecture-seule d'une page publique (ex: page de login). Best-effort : renvoie '' en cas d'echec.
+ */
+export async function fetchRawHtmlWithBrowser(url: string, trackerId = '__detect__'): Promise<string> {
+  const contextOptions = {
+    userAgent: selectUserAgent(),
+    viewport: { width: 1365, height: 900 },
+    locale: 'fr-FR',
+  };
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | null = null;
+  try {
+    browser = await chromium.launch({ headless: true, proxy: playwrightProxy(trackerId) });
+    const context = await browser.newContext(contextOptions);
+    const page = await context.newPage();
+    await page.goto(url, { waitUntil: 'commit', timeout: 45_000 });
+    await page.waitForLoadState('domcontentloaded', { timeout: 30_000 }).catch(() => {});
+    await waitForAnubis(page).catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: 8_000 }).catch(() => {});
+    return await safeContent(page);
+  } catch {
+    return '';
+  } finally {
+    await browser?.close().catch(() => {});
+  }
+}
+
 export async function closeBrowserSessions(): Promise<void> {
   await Promise.all([...contexts.values()].map(context => context.close().catch(() => {})));
   contexts.clear();

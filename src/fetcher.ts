@@ -17,7 +17,7 @@ import { getProxyConfig, ensureProxyReady } from './proxy.js';
 import { closeAllSshTunnels } from './sshTunnel.js';
 import { curlImpersonateGet, CurlSession, fastFetchEnabled } from './curlImpersonate.js';
 import { buildCookieHeader } from './browserFetcher.js';
-import { getTrackerTotpSecret } from './db.js';
+import { getTrackerTotpSecret, loadTrackerConfigsFromDb, saveTrackerConfig } from './db.js';
 import { generateTotp } from './totp.js';
 import { selectUserAgent } from './userAgent.js';
 import { closeBrowserSession, closeBrowserSessions, fetchWithBrowser } from './browserFetcher.js';
@@ -48,6 +48,50 @@ function parseBytes(raw: unknown): number {
   return Math.round(n * (map[u] ?? 1));
 }
 
+/**
+ * Déduit l'unité d'affichage (decimal/binary) d'une chaîne d'octets scrapée.
+ * « 10 GB » -> 'decimal' (puissances de 1000), « 10 GiB »/« 10 Gio » -> 'binary'
+ * (puissances de 1024). Renvoie null si pas d'unité reconnaissable (nombre nu,
+ * « B »/« o » seuls qui sont ambigus). Suit ainsi la convention réelle du site.
+ */
+function detectByteUnitFromString(raw: unknown): 'decimal' | 'binary' | null {
+  if (typeof raw !== 'string') return null;
+  const s = raw.replace(/&nbsp;|&#160;|&#xa0;/gi, ' ').replace(/ /g, ' ');
+  const m = s.match(/[\d][\s.,\u202f]*\s*([KMGTPE])(i)?(?:B|o)/i);
+  if (!m) return null;
+  return m[2] ? 'binary' : 'decimal'; // présence du "i" (KiB/Gio) = binaire
+}
+
+/**
+ * Persiste l'unité détectée dans la config du tracker, UNIQUEMENT si elle a changé.
+ * Indispensable pour que les stats servies depuis un snapshot (démarrage à froid,
+ * entre deux refresh) affichent la bonne unité — la fonction de snapshot lit
+ * tracker.dashboard.byteUnit, pas la valeur live. Écriture rare (seulement au
+ * changement), donc pas d'amplification d'écriture. Ne touche jamais aux autres
+ * champs : on relit la config courante en base et on ne modifie que byteUnit.
+ */
+function maybePersistByteUnit(tracker: TrackerConfig, unit: 'decimal' | 'binary'): void {
+  if (tracker.dashboard?.byteUnit === unit) return; // déjà à jour en mémoire
+  try {
+    const current = loadTrackerConfigsFromDb().find(t => t.id === tracker.id);
+    if (!current) return; // tracker pas (encore) en base : rien à persister
+    if (current.dashboard?.byteUnit === unit) {
+      tracker.dashboard = { ...(tracker.dashboard ?? {}), byteUnit: unit };
+      return;
+    }
+    const updated: TrackerConfig = {
+      ...current,
+      dashboard: { ...(current.dashboard ?? {}), byteUnit: unit },
+    };
+    saveTrackerConfig(updated);
+    // Refléter aussi en mémoire pour les lectures suivantes du même cycle.
+    tracker.dashboard = { ...(tracker.dashboard ?? {}), byteUnit: unit };
+    console.log(`  [${tracker.name}] Unité d'affichage alignée sur le site : ${unit === 'decimal' ? 'GB (décimal)' : 'GiB (binaire)'}`);
+  } catch {
+    // best-effort : un échec de persistance ne doit jamais casser le refresh
+  }
+}
+
 function applyTransform(raw: unknown, tf?: string): string | number {
   if (raw === undefined || raw === null || raw === '') return '';
   switch (tf) {
@@ -74,27 +118,32 @@ function getPath(obj: unknown, path: string): unknown {
 function extractJson(
   json: unknown,
   fields: Record<string, FieldExtractor>,
-): Record<string, string | number> {
+): { values: Record<string, string | number>; byteUnit: 'decimal' | 'binary' | null } {
   const out: Record<string, string | number> = {};
+  let byteUnit: 'decimal' | 'binary' | null = null;
   for (const [name, ext] of Object.entries(fields)) {
     if (!ext.path) continue;
-    out[name] = applyTransform(getPath(json, ext.path), ext.transform);
+    const raw = getPath(json, ext.path);
+    out[name] = applyTransform(raw, ext.transform);
+    if (!byteUnit && ext.transform === 'bytes') byteUnit = detectByteUnitFromString(raw);
   }
-  return out;
+  return { values: out, byteUnit };
 }
 
 function extractHtml(
   html: string,
   fields: Record<string, FieldExtractor>,
-): Record<string, string | number> {
+): { values: Record<string, string | number>; byteUnit: 'decimal' | 'binary' | null } {
   const out: Record<string, string | number> = {};
+  let byteUnit: 'decimal' | 'binary' | null = null;
   for (const [name, ext] of Object.entries(fields)) {
     if (!ext.regex) continue;
     const match = new RegExp(ext.regex, 's').exec(html);
     const val   = match?.groups?.['value'] ?? match?.[1];
     out[name]   = applyTransform(val, ext.transform);
+    if (!byteUnit && ext.transform === 'bytes') byteUnit = detectByteUnitFromString(val);
   }
-  return out;
+  return { values: out, byteUnit };
 }
 
 function hasExtractedValues(fields: Record<string, string | number>): boolean {
@@ -163,7 +212,7 @@ export async function fetchUnreadMessages(
       unreadMessages: { path: uf.path, regex: uf.regex, transform: uf.transform },
     };
     const rt = uf.responseType ?? (uf.path ? 'json' : 'html');
-    let out: Record<string, string | number>;
+    let out: { values: Record<string, string | number>; byteUnit: 'decimal' | 'binary' | null };
     if (rt === 'json') {
       let json: unknown;
       try { json = JSON.parse(res.body); } catch { return ''; }
@@ -171,7 +220,7 @@ export async function fetchUnreadMessages(
     } else {
       out = extractHtml(res.body, single);
     }
-    return out.unreadMessages ?? '';
+    return out.values.unreadMessages ?? '';
   } catch {
     return '';
   }
@@ -808,6 +857,7 @@ export async function fetchTracker(
     }
 
     let fields: Record<string, string | number>;
+    let detectedByteUnit: 'decimal' | 'binary' | null = null;
     if (tracker.fetch.responseType === 'json') {
       let json: unknown;
       try {
@@ -815,9 +865,9 @@ export async function fetchTracker(
       } catch {
         throw new Error('Reponse attendue en JSON, recu du HTML (mauvais endpoint ?)');
       }
-      fields = extractJson(json, tracker.fetch.fields);
+      ({ values: fields, byteUnit: detectedByteUnit } = extractJson(json, tracker.fetch.fields));
     } else {
-      fields = extractHtml(html, tracker.fetch.fields);
+      ({ values: fields, byteUnit: detectedByteUnit } = extractHtml(html, tracker.fetch.fields));
     }
 
     if (!hasExtractedValues(fields)) {
@@ -832,6 +882,12 @@ export async function fetchTracker(
       console.log(`  [${tracker.name}] Champs manquants: ${missingFields.join(', ')}${dumpPath ? ` - dump: ${dumpPath}` : ''}`);
     }
 
+    // L'unité d'affichage suit ce que le site écrit réellement (« GB » -> décimal,
+    // « GiB » -> binaire), détectée au scraping. Repli sur le réglage du tracker
+    // puis 'binary' si la chaîne ne portait pas d'unité reconnaissable.
+    const resolvedByteUnit = detectedByteUnit ?? tracker.dashboard?.byteUnit ?? 'binary';
+    maybePersistByteUnit(tracker, resolvedByteUnit);
+
     return {
       id:          tracker.id,
       name:        tracker.name,
@@ -839,7 +895,7 @@ export async function fetchTracker(
       status:      'ok',
       lastUpdated: new Date().toISOString(),
       lastLoginAt: session.loggedInAt ? new Date(session.loggedInAt).toISOString() : undefined,
-      byteUnit:    tracker.dashboard?.byteUnit ?? 'binary',
+      byteUnit:    resolvedByteUnit,
       fields,
     };
   };
@@ -1170,6 +1226,7 @@ export async function fetchTracker(
 
     // Extraction des champs
     let fields: Record<string, string | number>;
+    let detectedByteUnit: 'decimal' | 'binary' | null = null;
     if (tracker.fetch.responseType === 'json') {
       let json: unknown;
       try {
@@ -1177,9 +1234,9 @@ export async function fetchTracker(
       } catch {
         throw new Error('Réponse attendue en JSON, reçu du HTML (mauvais endpoint ?)');
       }
-      fields = extractJson(json, tracker.fetch.fields);
+      ({ values: fields, byteUnit: detectedByteUnit } = extractJson(json, tracker.fetch.fields));
     } else {
-      fields = extractHtml(res.data, tracker.fetch.fields);
+      ({ values: fields, byteUnit: detectedByteUnit } = extractHtml(res.data, tracker.fetch.fields));
     }
 
     if (!hasExtractedValues(fields)) {
@@ -1199,6 +1256,9 @@ export async function fetchTracker(
       fields.unreadMessages = await fetchUnreadMessagesViaAxios(session.client, tracker, fetchHeaders);
     }
 
+    const resolvedByteUnit = detectedByteUnit ?? tracker.dashboard?.byteUnit ?? 'binary';
+    maybePersistByteUnit(tracker, resolvedByteUnit);
+
     return {
       id:          tracker.id,
       name:        tracker.name,
@@ -1206,7 +1266,7 @@ export async function fetchTracker(
       status:      'ok',
       lastUpdated: new Date().toISOString(),
       lastLoginAt: session.loggedInAt ? new Date(session.loggedInAt).toISOString() : undefined,
-      byteUnit:    tracker.dashboard?.byteUnit ?? 'binary',
+      byteUnit:    resolvedByteUnit,
       fields,
     };
   };
