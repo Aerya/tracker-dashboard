@@ -9,10 +9,10 @@
     "method": "POST",
     "contentType": "form",
     "body": {
-      "username":   "{{username}}",
-      "password":   "{{password}}",
+      "username": "{{username}}",
+      "password": "{{password}}",
       "keeplogged": "1",
-      "login":      "Se connecter"
+      "login": "Se connecter"
     },
     "failurePatterns": [
       "Identifiant ou mot de passe incorrect",
@@ -23,9 +23,21 @@
     "url": "index.php",
     "responseType": "html",
     "fields": {
-      "uploadedBytes":   { "regex": "Envoy[ée]\\s*:\\s*(?<value>[\\d\\.,]+\\s*[KMGTPE]?i?B)", "transform": "bytes" },
-      "downloadedBytes": { "regex": "Re[çc]u\\s*:\\s*(?<value>[\\d\\.,]+\\s*[KMGTPE]?i?B)",   "transform": "bytes" }
+      "uploadedBytes": {
+        "regex": "Envoy[\\s\\S]{0,160}?(?<value>[\\d\\s.,]+\\s*[KMGTPE]?i?B)",
+        "transform": "bytes"
+      },
+      "downloadedBytes": {
+        "regex": "Re[\\s\\S]{0,160}?(?<value>[\\d\\s.,]+\\s*[KMGTPE]?i?B)",
+        "transform": "bytes"
+      },
+      "unreadMessages": {
+        "regex": "data-notification-type=['\"]Inbox['\"][^>]*>[^<]*?(?<value>\\d+|\\bun) nouveau",
+        "transform": "string"
+      }
     }
   },
-  "dashboard": { "byteUnit": "decimal" }
+  "dashboard": {
+    "byteUnit": "decimal"
+  }
 }
