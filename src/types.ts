@@ -117,11 +117,21 @@ export interface FetchStep {
   } & FieldExtractor;
 }
 
+/** Famille de moteur de tracker — voir ENGINE_TEMPLATES dans trackerTemplates.ts. */
+export type EngineId = 'unit3d' | 'gazelle' | 'torrentleech' | 'mam' | 'jsonapi' | 'other';
+
 export interface TrackerConfig {
   id: string;
   name: string;
   baseUrl: string;
   enabled?: boolean;
+  /**
+   * Famille de moteur. Si présent, les blocs login/fetch/dashboard héritent du
+   * preset moteur (ENGINE_TEMPLATES) ; les champs déclarés dans ce JSON
+   * surchargent le preset (le JSON gagne toujours, champ par champ ;
+   * fetch.fields est mergé field par field).
+   */
+  engine?: EngineId;
   /** Tracker sans systeme de ratio (HD-Only, Nostradamus, etc.) */
   ratioless?: boolean;
   /** Profil curl-impersonate autorise pour le login HTTP complet. */

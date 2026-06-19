@@ -7,9 +7,9 @@
 // Un template fournit des DÉFAUTS pré-remplis dans le formulaire guidé : l'utilisateur
 // n'a plus qu'à renseigner nom, URL et identifiants. Il peut tout ajuster ensuite.
 
-import { type TrackerConfig } from './types.js';
+import { type TrackerConfig, type EngineId } from './types.js';
 
-export type EngineId = 'unit3d' | 'gazelle' | 'torrentleech' | 'mam' | 'jsonapi' | 'other';
+export type { EngineId };
 
 export interface EngineTemplate {
   id: EngineId;
@@ -65,6 +65,13 @@ export const ENGINE_TEMPLATES: Record<EngineId, EngineTemplate> = {
           ratio:           { regex: 'ratio-bar__ratio[\\s\\S]*?<i[^>]*>[\\s\\S]*?</i>\\s*(?<value>[\\d\\s.,]+)', transform: 'number' },
           seeding:         { regex: 'ratio-bar__seeding[\\s\\S]*?<i[^>]*>[\\s\\S]*?</i>\\s*(?<value>\\d+)', transform: 'integer' },
           leeching:        { regex: 'ratio-bar__leeching[\\s\\S]*?<i[^>]*>[\\s\\S]*?</i>\\s*(?<value>\\d+)', transform: 'integer' },
+          seedBonus:       { regex: 'ratio-bar__points[\\s\\S]*?<i[^>]*>[\\s\\S]*?</i>\\s*(?<value>[\\d\\s.,\\u202f]+)', transform: 'string' },
+          bufferBytes:     { regex: 'ratio-bar__buffer[\\s\\S]*?<i[^>]*>[\\s\\S]*?</i>\\s*(?<value>[\\d\\s.,]+\\s*[KMGTPE]?i?B)', transform: 'bytes' },
+          tokens:          { regex: 'ratio-bar__tokens[\\s\\S]*?<i[^>]*>[\\s\\S]*?</i>\\s*(?<value>\\d+)', transform: 'integer' },
+          // MP non lus : UNIT3D affiche une sphère animée (<animate>) près de l'icône
+          // envelope quand il y a des MP non lus. Pas de compteur : on capture la durée
+          // d'animation comme signal de présence ; toute valeur non vide => 1 MP.
+          unreadMessages:  { regex: 'Boîte de réception(?:(?!<\\/a>)[\\s\\S])*?<animate[^>]*?dur="(?<value>[^"]+)"', transform: 'string' },
         },
       },
       dashboard: { byteUnit: 'binary' },
