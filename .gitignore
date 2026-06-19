@@ -4,3 +4,7 @@ config/credentials.json
 config/tracker-dashboard.sqlite*
 config/browser-profile/
 config/debug/
+config/logos/auto/
+.DS_Store
+@eaDir/
+docker-compose.dev.yml
