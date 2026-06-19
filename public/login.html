@@ -8,12 +8,13 @@
   <title>Tracker Dashboard - Login</title>
   <style>
     :root {
-      --bg: #0f1117;
-      --surface: #1a1d27;
-      --border: #2a2d3a;
-      --text: #e2e4ed;
-      --muted: #6b7280;
-      --blue: #3b82f6;
+      --bg: #0d0f12;
+      --surface: #13161b;
+      --border: #252a35;
+      --text: #c8d0de;
+      --muted: #6b7a95;
+      --green: #4ade80;
+      --green-hover: #22c55e;
       --red: #ef4444;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -58,23 +59,26 @@
       font-size: 14px;
       margin-bottom: 14px;
     }
-    input:focus { outline: none; border-color: var(--blue); }
+    input:focus { outline: none; border-color: var(--green); }
     button {
       width: 100%;
-      background: var(--blue);
-      color: #fff;
+      background: var(--green);
+      color: #0d0f12;
       border: 0;
       border-radius: 8px;
       padding: 10px 14px;
       font-size: 14px;
+      font-weight: 600;
       cursor: pointer;
+      transition: background 0.15s;
     }
+    button:hover { background: var(--green-hover); }
     #error { color: var(--red); min-height: 18px; margin-top: 12px; font-size: 13px; }
   </style>
 </head>
 <body>
   <form onsubmit="submitAuth(event)">
-    <img class="login-logo" src="/logo.png" alt="Tracker Dashboard" />
+    <img class="login-logo" src="/logo-dark.png" alt="Tracker Dashboard" />
     <h1 id="title">Tracker Dashboard</h1>
     <p id="subtitle">Connexion requise</p>
     <label for="username">Utilisateur</label>
