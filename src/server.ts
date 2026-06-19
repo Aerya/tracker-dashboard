@@ -3035,6 +3035,10 @@ export async function start(): Promise<void> {
     res.sendFile(path.join(PUBLIC_DIR, 'logo.png'));
   });
 
+  app.get('/logo-dark.png', (_req, res) => {
+    res.sendFile(path.join(PUBLIC_DIR, 'logo-dark.png'));
+  });
+
   app.get('/favicon.png', (_req, res) => {
     res.sendFile(path.join(PUBLIC_DIR, 'favicon.png'));
   });
