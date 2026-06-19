@@ -1,6 +1,9 @@
 FROM node:22-bookworm-slim AS builder
 
 WORKDIR /app
+ARG NPM_VERSION=11.17.0
+RUN npm install -g "npm@${NPM_VERSION}" \
+  && node -e "const v=require('/usr/local/lib/node_modules/npm/node_modules/tar/package.json').version; const [a,b,c]=v.split('.').map(Number); if (a < 7 || (a === 7 && (b < 5 || (b === 5 && c < 16)))) throw new Error('npm embeds vulnerable tar '+v); console.log('npm tar', v);"
 COPY package*.json tsconfig.json ./
 RUN npm install && npm install --no-save playwright@1.60.0 top-user-agents@2.1.111
 COPY src/ ./src/
@@ -10,6 +13,9 @@ RUN npm run build
 FROM node:22-bookworm-slim
 
 WORKDIR /app
+ARG NPM_VERSION=11.17.0
+RUN npm install -g "npm@${NPM_VERSION}" \
+  && node -e "const v=require('/usr/local/lib/node_modules/npm/node_modules/tar/package.json').version; const [a,b,c]=v.split('.').map(Number); if (a < 7 || (a === 7 && (b < 5 || (b === 5 && c < 16)))) throw new Error('npm embeds vulnerable tar '+v); console.log('npm tar', v);"
 ARG APP_IMAGE_SOURCE=local
 ARG APP_IMAGE_VERSION=dev
 ARG APP_IMAGE_REVISION=unknown
