@@ -44,8 +44,14 @@
       "seedBonus": {
         "regex": "action=rate[^>]+>(?<value>[\\d,]+)<",
         "transform": "string"
+      },
+      "unreadMessages": {
+        "regex": "data-notification-type=['\"]Inbox['\"][^>]*>[^<]*?(?<value>\\d+|\\bun) nouveau",
+        "transform": "string"
       }
     }
   },
-  "dashboard": { "byteUnit": "decimal" }
+  "dashboard": {
+    "byteUnit": "decimal"
+  }
 }
