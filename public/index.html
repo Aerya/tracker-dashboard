@@ -1772,7 +1772,7 @@
     <span class="nav-subcontrol-icon">▦</span> <span id="view-toggle-label">Vue lignes</span>
   </button>
   <div class="nav-subcontrol nav-cardsize" id="cardsize-control" title="Taille des cartes (100% = taille par défaut)">
-    <input id="cardsize-range" type="range" min="60" max="160" step="5" value="100" oninput="applyCardWidth(this.value)" aria-label="Taille des cartes" />
+    <input id="cardsize-range" type="range" min="60" max="160" step="5" value="100" oninput="applyCardWidth(this.value)" onchange="saveCardWidth(this.value)" aria-label="Taille des cartes" />
     <span id="cardsize-value">100%</span>
   </div>
 
@@ -2901,6 +2901,7 @@
     features: {
       graphsEnabled: true,
       calendarEnabled: true,
+      cardWidthPct: 100,
     },
     schedule: {},
     scheduleOverrides: [],
@@ -2978,6 +2979,8 @@
     document.querySelectorAll('[data-nav="calendar"], [data-view="calendar"]').forEach(el => {
       el.hidden = !features.calendarEnabled;
     });
+    // Synchronise la taille des cartes avec le reglage serveur (autre appareil, save...).
+    applyCardWidth(currentCardWidthPct());
     if (!isViewEnabled(currentView)) showView('dashboard');
   }
 
@@ -5348,27 +5351,54 @@
   }
 
   // ── Taille des cartes (vue cartes) ──────────────────────────────────────────
-  // 100% = largeur par defaut (320px). Reglage persiste en localStorage : il
-  // survit a la fermeture de l'onglet comme au redemarrage du serveur.
+  // 100% = largeur par defaut (320px). Le reglage est persiste cote serveur dans
+  // betaSettings.features.cardWidthPct : il est donc partage entre appareils et
+  // survit au redemarrage du serveur.
   const CARD_WIDTH_BASE_PX = 320;
   const CARD_WIDTH_MIN_PCT = 60;
   const CARD_WIDTH_MAX_PCT = 160;
 
-  function applyCardWidth(pct) {
+  function clampCardWidthPct(pct) {
     const value = Math.round(Number(pct));
-    const clamped = Math.min(CARD_WIDTH_MAX_PCT, Math.max(CARD_WIDTH_MIN_PCT, Number.isFinite(value) ? value : 100));
+    return Math.min(CARD_WIDTH_MAX_PCT, Math.max(CARD_WIDTH_MIN_PCT, Number.isFinite(value) ? value : 100));
+  }
+
+  function currentCardWidthPct() {
+    return clampCardWidthPct(betaSettings.features?.cardWidthPct ?? 100);
+  }
+
+  // Applique la taille a l'UI (sans persister) : utilise pendant le glissement et
+  // a chaque (re)chargement des reglages serveur.
+  function applyCardWidth(pct) {
+    const clamped = clampCardWidthPct(pct);
     const widthPx = Math.round(CARD_WIDTH_BASE_PX * clamped / 100);
     document.documentElement.style.setProperty('--card-width', widthPx + 'px');
     const range = document.getElementById('cardsize-range');
     if (range && Number(range.value) !== clamped) range.value = clamped;
     const label = document.getElementById('cardsize-value');
     if (label) label.textContent = clamped + '%';
-    localStorage.setItem('tracker-dashboard-card-width', String(clamped));
   }
 
-  function loadCardWidth() {
-    const saved = parseInt(localStorage.getItem('tracker-dashboard-card-width') || '100', 10);
-    applyCardWidth(Number.isFinite(saved) ? saved : 100);
+  // Persiste la taille cote serveur (a la fin du glissement). On part de l'etat
+  // serveur courant (betaSettings) pour ne pas ecraser les autres reglages.
+  async function saveCardWidth(pct) {
+    const clamped = clampCardWidthPct(pct);
+    if (clamped === currentCardWidthPct()) return;
+    const settings = {
+      ...betaSettings,
+      features: { ...(betaSettings.features || {}), cardWidthPct: clamped },
+    };
+    try {
+      const r = await fetch('/api/beta/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      });
+      const data = await r.json();
+      if (data.ok) betaSettings = data.settings;
+    } catch (error) {
+      console.warn('Unable to save card width', error);
+    }
   }
 
   function toggleViewMode() {
@@ -6540,7 +6570,6 @@
     loadTheme();
     await showMigrationNoticeIfNeeded();
     loadViewMode();
-    loadCardWidth();
     loadBetaSettings();
     await loadBetaSettingsFromServer();
     loadActiveView();
