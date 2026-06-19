@@ -4,7 +4,7 @@
   "baseUrl": "https://www.iptorrents.com",
   "enabled": true,
   "login": {
-    "url": "take_login.php",
+    "url": "do-login.php",
     "method": "POST",
     "contentType": "form",
     "body": {
@@ -12,12 +12,12 @@
       "password": "{{password}}"
     },
     "failurePatterns": [
-      "take_login.php",
+      "do-login.php",
+      "iPT &ndash; Sign In",
+      "iPT – Sign In",
       "name=\"password\"",
-      "name='password'",
       "type=\"password\""
-    ],
-    "cookieOnly": true
+    ]
   },
   "fetch": {
     "url": "/",
