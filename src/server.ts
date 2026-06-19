@@ -227,6 +227,7 @@ interface BetaSettings {
   features: {
     graphsEnabled: boolean;
     calendarEnabled: boolean;
+    cardWidthPct: number;
   };
   schedule: BetaScheduleSettings;
   scheduleOverrides: BetaTrackerScheduleOverride[];
@@ -2210,6 +2211,7 @@ function defaultBetaSettings(): BetaSettings {
     features: {
       graphsEnabled: true,
       calendarEnabled: true,
+      cardWidthPct: 100,
     },
     scheduleOverrides: [],
     schedule: {
@@ -2396,6 +2398,7 @@ function saveBetaSettingsPayload(raw: unknown): BetaSettings {
   const features = {
     graphsEnabled: rawFeatures.graphsEnabled !== false,
     calendarEnabled: rawFeatures.calendarEnabled !== false,
+    cardWidthPct: Math.min(160, Math.max(60, Math.round(Number(rawFeatures.cardWidthPct)) || 100)),
   };
 
   const rawSchedule = body.schedule ?? current.schedule;
