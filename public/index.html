@@ -198,6 +198,9 @@
       text-align: left;
       transition: color .15s, background .15s;
     }
+    /* L'attribut [hidden] doit l'emporter sur le display:flex de .nav-item (meme
+       specificite : sans cette regle, masquer une entree via el.hidden reste sans effet). */
+    .nav-item[hidden], .nav-group[hidden] { display: none !important; }
     .nav-item:hover { color: var(--text); background: color-mix(in srgb, var(--bg) 60%, transparent); }
     .nav-item.active { color: var(--accent); border-left-color: var(--accent); background: rgba(74,222,128,.06); }
     .nav-icon { width: 16px; text-align: center; font-size: 14px; flex-shrink: 0; }
