@@ -21,5 +21,8 @@
         "transform": "integer"
       }
     }
+  },
+  "dashboard": {
+    "byteUnit": "decimal"
   }
 }
