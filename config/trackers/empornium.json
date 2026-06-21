@@ -3,6 +3,7 @@
   "name": "Empornium",
   "baseUrl": "https://www.empornium.sx",
   "enabled": false,
+  "engine": "gazelle",
   "login": {
     "url": "login",
     "method": "POST",
@@ -25,9 +26,6 @@
     ]
   },
   "fetch": {
-    "url": "index.php",
-    "mode": "browser",
-    "responseType": "html",
     "fields": {
       "seedBonus": {
         "regex": ">Credits</a>:\\s*</td>[\\s\\S]{0,140}?<span[^>]*class=['\"]stat['\"][^>]*>\\s*(?<value>[\\d\\s.,]+)",
@@ -46,8 +44,5 @@
         "transform": "number"
       }
     }
-  },
-  "dashboard": {
-    "byteUnit": "binary"
   }
 }

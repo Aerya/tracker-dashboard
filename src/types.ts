@@ -118,7 +118,7 @@ export interface FetchStep {
 }
 
 /** Famille de moteur de tracker — voir ENGINE_TEMPLATES dans trackerTemplates.ts. */
-export type EngineId = 'unit3d' | 'gazelle' | 'torrentleech' | 'mam' | 'jsonapi' | 'other';
+export type EngineId = 'unit3d' | 'gazelle' | 'jsonapi' | 'other';
 
 export interface TrackerConfig {
   id: string;

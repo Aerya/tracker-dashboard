@@ -3,38 +3,35 @@
   "name": "Orpheus",
   "baseUrl": "https://orpheus.network",
   "enabled": true,
+  "engine": "gazelle",
   "login": {
     "url": "login.php",
     "method": "POST",
     "contentType": "form",
-    "preStep": {
-      "url": "login.php",
-      "extract": {},
-      "includeHiddenInputs": true
-    },
-    "body": {
-      "username": "{{username}}",
-      "password": "{{password}}",
-      "keeplogged": "1",
-      "login": "Log in"
-    },
-    "otpField": "mfa",
-    "failurePatterns": [
-      "type=\"password\"",
-      "name=\"password\""
-    ]
+    "otpField": "mfa"
   },
   "fetch": {
-    "url": "index.php",
-    "mode": "browser",
-    "responseType": "html",
     "fields": {
-      "downloadedBytes": { "regex": "id=\"stats_leeching\"[\\s\\S]*?title=\"(?<value>[^\"]+)\"", "transform": "bytes" },
-      "uploadedBytes":   { "regex": "id=\"stats_seeding\"[\\s\\S]*?title=\"(?<value>[^\"]+)\"",  "transform": "bytes" },
-      "ratio":           { "regex": "id=\"stats_ratio\"[\\s\\S]*?title=\"(?<value>[^\"]+)\"",    "transform": "number" },
-      "seedBonus":       { "regex": "Bonus \\((?<value>[^)]+)\\)",                              "transform": "string" },
-      "unreadMessages":  { "regex": "data-noty-type=[\u0027\"]Inbox[\u0027\"][^>]*>[^<]*?(?<value>\\d+|\\ba) new message", "transform": "string" }
+      "downloadedBytes": {
+        "regex": "id=\"stats_leeching\"[\\s\\S]*?title=\"(?<value>[^\"]+)\"",
+        "transform": "bytes"
+      },
+      "uploadedBytes": {
+        "regex": "id=\"stats_seeding\"[\\s\\S]*?title=\"(?<value>[^\"]+)\"",
+        "transform": "bytes"
+      },
+      "ratio": {
+        "regex": "id=\"stats_ratio\"[\\s\\S]*?title=\"(?<value>[^\"]+)\"",
+        "transform": "number"
+      },
+      "seedBonus": {
+        "regex": "Bonus \\((?<value>[^)]+)\\)",
+        "transform": "string"
+      },
+      "unreadMessages": {
+        "regex": "data-noty-type=['\"]Inbox['\"][^>]*>[^<]*?(?<value>\\d+|\\ba) new message",
+        "transform": "string"
+      }
     }
-  },
-  "dashboard": { "byteUnit": "binary" }
+  }
 }

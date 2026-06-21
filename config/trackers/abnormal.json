@@ -13,7 +13,8 @@
         "_csrf": {
           "regex": "name=\"__RequestVerificationToken\"[^>]*value=\"(?<value>[^\"]+)\""
         }
-      }
+      },
+      "includeHiddenInputs": true
     },
     "body": {
       "Username": "{{username}}",
@@ -23,7 +24,10 @@
     },
     "failurePatterns": [
       "Mot de passe ou nom d'utilisateur incorrect",
-      "Invalid username or password"
+      "Invalid username or password",
+      "id=\"account\"",
+      "type=\"password\"",
+      "Connexion - ABN"
     ]
   },
   "fetch": {

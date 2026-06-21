@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { createRequire } from 'module';
 import { type Credentials, type TrackerConfig, type TrackerStats } from './types.js';
+import { applyEnginePreset } from './trackerTemplates.js';
 
 const require = createRequire(import.meta.url);
 const { DatabaseSync } = require('node:sqlite') as {
@@ -360,11 +361,26 @@ export function loadDefaultTrackerDefinition(trackerId: string): TrackerConfig |
   }
 }
 
-export function loadTrackerConfigsFromDb(): TrackerConfig[] {
+/**
+ * Lecture BRUTE des configs : exactement ce qui est stocké en base (surcharges du
+ * JSON, sans le preset moteur). Réservé à la synchro base↔image (normalizeTrackerConfigs)
+ * et à l'édition. Pour consommer une config (login, fetch, scraping), utiliser
+ * loadTrackerConfigsFromDb qui applique le preset moteur.
+ */
+export function loadRawTrackerConfigsFromDb(): TrackerConfig[] {
   return getDb()
     .prepare('SELECT config_json FROM tracker_configs ORDER BY name')
     .all()
     .map(row => JSON.parse(String(row.config_json)) as TrackerConfig);
+}
+
+/**
+ * Lecture des configs prêtes à l'emploi : le preset moteur (engine) est appliqué à la
+ * volée (applyEnginePreset), jamais persisté. La base ne contient que les surcharges ;
+ * le tronc commun moteur vit dans ENGINE_TEMPLATES (source unique).
+ */
+export function loadTrackerConfigsFromDb(): TrackerConfig[] {
+  return loadRawTrackerConfigsFromDb().map(applyEnginePreset);
 }
 
 export function saveTrackerConfig(config: TrackerConfig): void {
