@@ -3,10 +3,8 @@
   "name": "BrokenStones",
   "baseUrl": "https://brokenstones.is",
   "enabled": false,
+  "engine": "gazelle",
   "login": {
-    "url": "login.php",
-    "method": "POST",
-    "contentType": "form",
     "body": {
       "username": "{{username}}",
       "password": "{{password}}",
@@ -16,12 +14,11 @@
       "login.php",
       "type=\"password\"",
       "Please login"
-    ]
+    ],
+    "preStep": null
   },
   "fetch": {
-    "url": "index.php",
     "mode": "http",
-    "responseType": "html",
     "fields": {
       "uploadedBytes": {
         "regex": "stats_seeding[\\s\\S]{0,200}?<span[^>]*>\\s*(?<value>[\\d.]+ (?:TB|GB|MB|KB))\\s*</span>",
@@ -41,5 +38,7 @@
       }
     }
   },
-  "dashboard": { "byteUnit": "decimal" }
+  "dashboard": {
+    "byteUnit": "decimal"
+  }
 }

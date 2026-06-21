@@ -3,11 +3,8 @@
   "name": "HD-Only",
   "baseUrl": "https://hd-only.org",
   "enabled": true,
-  "ratioless": true,
+  "engine": "gazelle",
   "login": {
-    "url": "login.php",
-    "method": "POST",
-    "contentType": "form",
     "body": {
       "username": "{{username}}",
       "password": "{{password}}",
@@ -16,12 +13,13 @@
     },
     "failurePatterns": [
       "Identifiant ou mot de passe incorrect",
-      "type=\"password\""
+      "type=\"password\"",
+      "href=\"login.php\"",
+      "Entrer</a>"
     ]
   },
   "fetch": {
-    "url": "index.php",
-    "responseType": "html",
+    "mode": null,
     "fields": {
       "uploadedBytes": {
         "regex": "Envoy[\\s\\S]{0,160}?(?<value>[\\d\\s.,]+\\s*[KMGTPE]?i?B)",
@@ -39,5 +37,6 @@
   },
   "dashboard": {
     "byteUnit": "decimal"
-  }
+  },
+  "ratioless": true
 }

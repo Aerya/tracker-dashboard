@@ -3,74 +3,10 @@
   "name": "TeamFlix",
   "baseUrl": "https://tracker.teamflix.cc",
   "enabled": true,
+  "engine": "unit3d",
   "login": {
     "url": "login",
     "method": "POST",
-    "contentType": "form",
-    "preStep": {
-      "url": "login",
-      "extract": {
-        "_csrf": {
-          "regex": "name=\"_token\"\\s+value=\"(?<value>[^\"]+)\""
-        }
-      },
-      "includeHiddenInputs": true
-    },
-    "body": {
-      "_token": "{{_csrf}}",
-      "username": "{{username}}",
-      "password": "{{password}}",
-      "remember": "on"
-    },
-    "failurePatterns": [
-      "auth-form__form",
-      "Ces informations d'identification ne correspondent pas",
-      "These credentials do not match"
-    ]
-  },
-  "fetch": {
-    "url": "/",
-    "responseType": "html",
-    "fields": {
-      "uploadedBytes": {
-        "regex": "ratio-bar__uploaded[\\s\\S]*?<i[^>]*>[\\s\\S]*?</i>\\s*(?<value>[\\d\\s.,]+\\s*[KMGTPE]?i?B)",
-        "transform": "bytes"
-      },
-      "downloadedBytes": {
-        "regex": "ratio-bar__downloaded[\\s\\S]*?<i[^>]*>[\\s\\S]*?</i>\\s*(?<value>[\\d\\s.,]+\\s*[KMGTPE]?i?B)",
-        "transform": "bytes"
-      },
-      "ratio": {
-        "regex": "ratio-bar__ratio[\\s\\S]*?<i[^>]*>[\\s\\S]*?</i>\\s*(?<value>[\\d\\s.,]+)",
-        "transform": "number"
-      },
-      "seeding": {
-        "regex": "ratio-bar__seeding[\\s\\S]*?<i[^>]*>[\\s\\S]*?</i>\\s*(?<value>\\d+)",
-        "transform": "integer"
-      },
-      "leeching": {
-        "regex": "ratio-bar__leeching[\\s\\S]*?<i[^>]*>[\\s\\S]*?</i>\\s*(?<value>\\d+)",
-        "transform": "integer"
-      },
-      "seedBonus": {
-        "regex": "ratio-bar__points[\\s\\S]*?<i[^>]*>[\\s\\S]*?</i>\\s*(?<value>[\\d\\s.,\\u202f]+)",
-        "transform": "string"
-      },
-      "bufferBytes": {
-        "regex": "ratio-bar__buffer[\\s\\S]*?<i[^>]*>[\\s\\S]*?</i>\\s*(?<value>[\\d\\s.,]+\\s*[KMGTPE]?i?B)",
-        "transform": "bytes"
-      },
-      "tokens": {
-        "regex": "ratio-bar__tokens[\\s\\S]*?<i[^>]*>[\\s\\S]*?</i>\\s*(?<value>\\d+)",
-        "transform": "integer"
-      },
-      "unreadMessages": {
-        "regex": "Boîte de réception(?:(?!<\\/a>)[\\s\\S])*?<animate[^>]*?dur=\"(?<value>[^\"]+)\"",
-        "transform": "string"
-      }
-    }
-  },
-  "dashboard": {
-    "byteUnit": "binary"
+    "contentType": "form"
   }
 }

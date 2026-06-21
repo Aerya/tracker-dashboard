@@ -3,15 +3,11 @@
   "name": "HD-Forever",
   "baseUrl": "https://hdf.world",
   "enabled": true,
+  "engine": "gazelle",
   "login": {
     "url": "login.php",
     "method": "POST",
     "contentType": "form",
-    "preStep": {
-      "url": "login.php",
-      "extract": {},
-      "includeHiddenInputs": true
-    },
     "body": {
       "username": "{{username}}",
       "password": "{{password}}",
@@ -26,8 +22,6 @@
     ]
   },
   "fetch": {
-    "url": "index.php",
-    "responseType": "html",
     "fields": {
       "uploadedBytes": {
         "regex": "class=\"stat tooltip up\" title=\"(?<value>[^\"]+)\"",

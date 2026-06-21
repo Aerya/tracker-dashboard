@@ -57,7 +57,6 @@ export const ENGINE_TEMPLATES: Record<EngineId, EngineTemplate> = {
       },
       fetch: {
         url: '/',
-        mode: 'browser',
         responseType: 'html',
         fields: {
           uploadedBytes:   { regex: 'ratio-bar__uploaded[\\s\\S]*?<i[^>]*>[\\s\\S]*?</i>\\s*(?<value>[\\d\\s.,]+\\s*[KMGTPE]?i?B)', transform: 'bytes' },
@@ -96,7 +95,6 @@ export const ENGINE_TEMPLATES: Record<EngineId, EngineTemplate> = {
           keeplogged: '1',
           login: 'Log in',
         },
-        otpField: 'qrcode_confirm',
         failurePatterns: ['type="password"', 'name="password"'],
       },
       fetch: {
@@ -107,68 +105,6 @@ export const ENGINE_TEMPLATES: Record<EngineId, EngineTemplate> = {
           uploadedBytes:   { regex: 'id="stats_seeding"[^>]*title="Uploaded: (?<value>[^"]+)"', transform: 'bytes' },
           downloadedBytes: { regex: 'id="stats_leeching"[^>]*title="Downloaded: (?<value>[^"]+)"', transform: 'bytes' },
           ratio:           { regex: 'id="stats_ratio"[^>]*title="Ratio: (?<value>[^"]+)"', transform: 'number' },
-        },
-      },
-      dashboard: { byteUnit: 'binary' },
-    },
-  },
-
-  torrentleech: {
-    id: 'torrentleech',
-    label: 'TorrentLeech (et similaires)',
-    description: 'Login simple sans token, stats dans la barre du haut (title="Uploaded…").',
-    examples: ['TorrentLeech'],
-    hint: "Login direct nom d'utilisateur + mot de passe, sans étape intermédiaire. Les stats sont dans des éléments avec un attribut title (Uploaded, Downloaded, Ratio).",
-    preset: {
-      login: {
-        url: 'user/account/login/',
-        method: 'POST',
-        contentType: 'form',
-        body: { username: '{{username}}', password: '{{password}}' },
-        failurePatterns: ['Invalid Username and/or Password'],
-      },
-      fetch: {
-        url: '/',
-        mode: 'browser',
-        responseType: 'html',
-        fields: {
-          uploadedBytes:   { regex: 'title="Uploaded \\(Seeding\\)"[\\s\\S]*?<span[^>]*>(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:B|io|o)|B))</span>', transform: 'bytes' },
-          downloadedBytes: { regex: 'title="Downloaded \\(Leeching\\)"[\\s\\S]*?<span[^>]*>(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:B|io|o)|B))</span>', transform: 'bytes' },
-          ratio:           { regex: 'title="Ratio"[\\s\\S]*?<i[^>]*></i>\\s*(?<value>[\\d\\s.,]+)', transform: 'number' },
-        },
-      },
-      dashboard: { byteUnit: 'decimal' },
-    },
-  },
-
-  mam: {
-    id: 'mam',
-    label: 'MyAnonamouse (MAM)',
-    description: 'Login par email, page login.php, conservation de session recommandée.',
-    examples: ['MyAnonamouse'],
-    hint: "MAM utilise ton ADRESSE EMAIL comme identifiant (pas le pseudo). Le site plafonne les logins automatiques : si possible, colle plutôt un cookie de session (option « Cookie uniquement »).",
-    preset: {
-      login: {
-        url: 'login.php?returnto=%2Fu%2F',
-        method: 'POST',
-        contentType: 'form',
-        preStep: { url: 'login.php?returnto=%2Fu%2F', extract: {}, includeHiddenInputs: true },
-        body: {
-          email: '{{username}}',
-          password: '{{password}}',
-          rememberMe: 'yes',
-          returnto: '/u/',
-        },
-        failurePatterns: ['Not logged in!', 'name="password"', 'loginIssueBlock'],
-      },
-      fetch: {
-        url: '/u/',
-        mode: 'browser',
-        responseType: 'html',
-        fields: {
-          uploadedBytes:   { regex: 'Uploaded:[\\s\\S]{0,120}?(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE]i?B|B))', transform: 'bytes' },
-          downloadedBytes: { regex: 'Downloaded:[\\s\\S]{0,120}?(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE]i?B|B))', transform: 'bytes' },
-          ratio:           { regex: 'Ratio:[\\s\\S]{0,120}?(?<value>[\\d.,]+)', transform: 'number' },
         },
       },
       dashboard: { byteUnit: 'binary' },
@@ -226,7 +162,6 @@ export const ENGINE_TEMPLATES: Record<EngineId, EngineTemplate> = {
       },
       fetch: {
         url: '/',
-        mode: 'browser',
         responseType: 'html',
         fields: {
           uploadedBytes:   { regex: '(?<value>[\\d.,]+\\s*[KMGTP]?i?B)', transform: 'bytes' },
@@ -250,6 +185,46 @@ export function getEngineTemplate(id: string): EngineTemplate | null {
 }
 
 /**
+ * Applique le preset moteur (ENGINE_TEMPLATES) à une config qui déclare `engine`.
+ * RÈGLE D'OR : le JSON du tracker gagne TOUJOURS sur le preset, champ par champ.
+ * - login / dashboard / curlBinary / ratioless : fusion clé par clé, le JSON gagne.
+ * - fetch.fields : MERGE field par field (preset puis JSON) pour qu'un site au skin
+ *   modifié surcharge 2 fields sur 9 sans réécrire les 7 autres.
+ * - fetch (hors fields) : le JSON gagne clé par clé.
+ * Un tracker sans `engine` (ou engine inconnu) est renvoyé inchangé. Idempotent.
+ *
+ * IMPORTANT : cette fusion est appliquée à la LECTURE des configs
+ * (loadTrackerConfigsFromDb), jamais persistée en base — la base ne contient que
+ * les surcharges du JSON, le tronc commun reste dans le preset (source unique).
+ */
+export function applyEnginePreset(config: TrackerConfig): TrackerConfig {
+  if (!config.engine) return config;
+  const tpl = getEngineTemplate(config.engine);
+  if (!tpl) return config;
+  const preset = tpl.preset;
+
+  const mergedLogin = { ...preset.login, ...config.login };
+  const mergedFields = {
+    ...(preset.fetch?.fields ?? {}),
+    ...(config.fetch?.fields ?? {}),
+  };
+  const mergedFetch = { ...preset.fetch, ...config.fetch, fields: mergedFields };
+  const mergedDashboard =
+    config.dashboard || preset.dashboard
+      ? { ...(preset.dashboard ?? {}), ...(config.dashboard ?? {}) }
+      : undefined;
+
+  return {
+    ...config,
+    curlBinary: config.curlBinary ?? preset.curlBinary,
+    ratioless: config.ratioless ?? preset.ratioless,
+    login: mergedLogin,
+    fetch: mergedFetch,
+    ...(mergedDashboard ? { dashboard: mergedDashboard } : {}),
+  };
+}
+
+/**
  * Détecte le moteur à partir du HTML d'une page (login de préférence) et de l'URL.
  * Heuristiques basées sur des marqueurs distinctifs. Renvoie null si rien de sûr.
  * Volontairement conservateur : mieux vaut « inconnu » qu'un faux positif qui
@@ -262,14 +237,6 @@ export function detectEngineFromHtml(html: string, baseUrl: string): EngineId | 
   // UNIT3D : classe de formulaire très spécifique + Laravel _token.
   if (h.includes('auth-form__form') || (h.includes('name="_token"') && h.includes('unit3d'))) {
     return 'unit3d';
-  }
-  // TorrentLeech : domaine ou endpoint de login caractéristique.
-  if (url.includes('torrentleech') || h.includes('user/account/login')) {
-    return 'torrentleech';
-  }
-  // MyAnonamouse : libellé/branding distinctif.
-  if (url.includes('myanonamouse') || h.includes('my anonamouse') || h.includes('loginissueblock')) {
-    return 'mam';
   }
   // Gazelle : le champ "keeplogged" est très spécifique à Gazelle. On exige ce
   // marqueur précis plutôt qu'un simple "login.php + username + password" qui
