@@ -53,6 +53,10 @@
       "unreadMessages": {
         "regex": "(?<value>\\d+|\\bun) nouveau\\(x\\) message",
         "transform": "string"
+      },
+      "memberClass": {
+        "regex": "class=\"userclass_(?<value>[A-Za-z0-9]+)",
+        "transform": "string"
       }
     }
   },
