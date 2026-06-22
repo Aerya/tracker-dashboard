@@ -32,6 +32,10 @@
       "downloadedBytes": {
         "regex": "(?<value>\\d[\\d\\s.,]*\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))\\s*</div>[\\s\\S]{0,180}?>Download<",
         "transform": "bytes"
+      },
+      "memberClass": {
+        "regex": ">R[oô]le</span>[\\s\\S]*?uppercase\"[\\s\\S]*?>(?<value>[^<]+)</span>",
+        "transform": "string"
       }
     }
   },
