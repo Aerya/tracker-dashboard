@@ -247,6 +247,76 @@ async function fetchUnreadMessagesViaCurl(
   }, headers);
 }
 
+// Requête secondaire générique (fetch.extraFetch) : récupère un champ absent de la page
+// principale (ex. la classe de membre sur IPTorrents, exposée uniquement sur la page de
+// profil /u/<id>, ou sur Nexum via /user/<pseudo>). Le placeholder {{username}} est
+// toujours disponible (credentials du tracker) ; {{id}} est disponible si idExtract est
+// fourni (extrait du HTML/JSON de la page principale).
+// Best-effort : toute erreur renvoie null (champ absent), sans invalider le tracker.
+export async function fetchExtraField(
+  tracker: TrackerConfig,
+  primaryBody: string,
+  request: UnreadMessagesRequest,
+  headers: Record<string, string>,
+  creds: { username: string; password: string },
+): Promise<{ field: string; value: string | number } | null> {
+  const ef = tracker.fetch.extraFetch;
+  if (!ef) return null;
+  try {
+    const vars: Record<string, string> = { username: creds.username };
+    if (ef.idExtract) {
+      const idMatch = new RegExp(ef.idExtract.regex, 's').exec(primaryBody);
+      const id = idMatch?.groups?.['value'];
+      if (!id) return null;
+      vars.id = id;
+    }
+    const url = resolveUrl(tracker.baseUrl, interpolate(ef.url, vars));
+    const res = await request(url, headers);
+    if (!res || res.status >= 400) return null;
+    const single: Record<string, FieldExtractor> = {
+      [ef.field]: { path: ef.path, regex: ef.regex, transform: ef.transform },
+    };
+    const rt = ef.responseType ?? (ef.path ? 'json' : 'html');
+    let out: { values: Record<string, string | number>; byteUnit: 'decimal' | 'binary' | null };
+    if (rt === 'json') {
+      let json: unknown;
+      try { json = JSON.parse(res.body); } catch { return null; }
+      out = extractJson(json, single);
+    } else {
+      out = extractHtml(res.body, single);
+    }
+    const value = out.values[ef.field];
+    return value !== undefined && value !== '' ? { field: ef.field, value } : null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchExtraFieldViaAxios(
+  client: AxiosInstance,
+  tracker: TrackerConfig,
+  primaryBody: string,
+  headers: Record<string, string>,
+  creds: { username: string; password: string },
+): Promise<{ field: string; value: string | number } | null> {
+  return fetchExtraField(tracker, primaryBody, async (url, requestHeaders) => {
+    const res = await client.get<string>(url, { responseType: 'text', headers: requestHeaders });
+    return { status: res.status, body: res.data };
+  }, headers, creds);
+}
+
+async function fetchExtraFieldViaCurl(
+  session: CurlSession,
+  tracker: TrackerConfig,
+  primaryBody: string,
+  headers: Record<string, string>,
+  creds: { username: string; password: string },
+): Promise<{ field: string; value: string | number } | null> {
+  return fetchExtraField(tracker, primaryBody, async (url, requestHeaders) => {
+    return session.request(url, { headers: requestHeaders, timeoutMs: 30_000 });
+  }, headers, creds);
+}
+
 function writeDebugDump(
   tracker: TrackerConfig,
   url: string,
@@ -853,7 +923,7 @@ export async function fetchTracker(
     password: creds.password,
   };
 
-  const buildStatsFromHtml = (url: string, html: string): TrackerStats => {
+  const buildStatsFromHtml = (url: string, html: string, extraHtml?: string): TrackerStats => {
     if (isAnubisChallenge(html)) {
       const dumpPath = writeDebugDump(tracker, url, html, {}, 'anubis');
       const suffix = dumpPath ? ` - dump: ${dumpPath}` : '';
@@ -884,6 +954,15 @@ export async function fetchTracker(
     if (missingFields.length > 0) {
       const dumpPath = writeDebugDump(tracker, url, html, fields, 'partial');
       console.log(`  [${tracker.name}] Champs manquants: ${missingFields.join(', ')}${dumpPath ? ` - dump: ${dumpPath}` : ''}`);
+    }
+
+    // Champ secondaire générique capturé via une page navigateur distincte (ex. classe
+    // de membre TR4KER, profil hydraté en JS sur une autre route). Best-effort.
+    const ef = tracker.fetch.extraFetch;
+    if (ef && extraHtml) {
+      const extra = extractHtml(extraHtml, { [ef.field]: { path: ef.path, regex: ef.regex, transform: ef.transform } });
+      const value = extra.values[ef.field];
+      if (value !== undefined && value !== '') fields[ef.field] = value;
     }
 
     // L'unité d'affichage suit ce que le site écrit réellement (« GB » -> décimal,
@@ -1074,6 +1153,10 @@ export async function fetchTracker(
           if (tracker.fetch.unreadFetch) {
             stats.fields.unreadMessages = await fetchUnreadMessagesViaCurl(sess, tracker, fetchHeaders);
           }
+          if (tracker.fetch.extraFetch) {
+            const extra = await fetchExtraFieldViaCurl(sess, tracker, fetchRes.body, fetchHeaders, creds);
+            if (extra) stats.fields[extra.field] = extra.value;
+          }
           console.log(`  [${tracker.name}] Login+fetch via curl-impersonate OK (JSON/MFA)`);
           return stats;
         } catch {
@@ -1118,6 +1201,10 @@ export async function fetchTracker(
             { Referer: loginUrl },
           );
         }
+        if (tracker.fetch.extraFetch) {
+          const extra = await fetchExtraFieldViaCurl(sess, tracker, fetchRes.body, { Referer: loginUrl }, creds);
+          if (extra) stats.fields[extra.field] = extra.value;
+        }
         console.log(`  [${tracker.name}] Login+fetch via curl-impersonate OK (axios evite)`);
         return stats;
       } catch {
@@ -1160,7 +1247,7 @@ export async function fetchTracker(
         const suffix = dumpPath ? ` - dump: ${dumpPath}` : '';
         throw new Error(`Session navigateur non authentifiee - verifier les credentials ou valider le challenge dans le profil navigateur${suffix}`);
       }
-      return buildStatsFromHtml(browserResult.url, browserResult.html);
+      return buildStatsFromHtml(browserResult.url, browserResult.html, browserResult.extraHtml);
     }
 
     // Mode HTTP : on tente d'abord le login+fetch via curl-impersonate (empreinte
@@ -1258,6 +1345,12 @@ export async function fetchTracker(
     // MP non lus via requête secondaire (ex. C411) — best-effort, n'invalide pas le tracker.
     if (tracker.fetch.unreadFetch) {
       fields.unreadMessages = await fetchUnreadMessagesViaAxios(session.client, tracker, fetchHeaders);
+    }
+
+    // Champ secondaire générique (ex. classe de membre IPTorrents, page /u/<id>).
+    if (tracker.fetch.extraFetch) {
+      const extra = await fetchExtraFieldViaAxios(session.client, tracker, res.data, fetchHeaders, creds);
+      if (extra) fields[extra.field] = extra.value;
     }
 
     const resolvedByteUnit = detectedByteUnit ?? tracker.dashboard?.byteUnit ?? 'binary';

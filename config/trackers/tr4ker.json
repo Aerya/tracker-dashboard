@@ -38,6 +38,12 @@
         "regex": ">DOWNLOAD<[\\s\\S]{0,180}?_statValue[^>]*>\\s*(?<value>\\d[\\d\\s.,]*\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))\\s*<",
         "transform": "bytes"
       }
+    },
+    "extraFetch": {
+      "url": "api/me",
+      "field": "memberClass",
+      "regex": "\"role\":\"(?<value>[^\"]+)\"",
+      "transform": "string"
     }
   },
   "dashboard": {

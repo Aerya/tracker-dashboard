@@ -26,7 +26,8 @@
     "fields": {
       "downloadedBytes": { "path": "total_downloaded_bytes", "transform": "bytes" },
       "uploadedBytes":   { "path": "total_uploaded_bytes",   "transform": "bytes" },
-      "seedBonus":       { "path": "jeton_balance",          "transform": "integer" }
+      "seedBonus":       { "path": "jeton_balance",          "transform": "integer" },
+      "memberClass":     { "path": "role",                   "transform": "string" }
     },
     "unreadFetch": { "url": "https://api.torr9.net/api/v1/chat/unread-counts", "responseType": "json", "path": "total_dms", "transform": "integer" }
   },

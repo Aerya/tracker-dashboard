@@ -40,6 +40,15 @@
         "regex": ">Bonus Points</div>\\s*<i[^>]*></i>\\s*(?<value>[\\d.,]+)",
         "transform": "string"
       }
+    },
+    "extraFetch": {
+      "idExtract": {
+        "regex": "href=\"/u/(?<value>\\d+)\""
+      },
+      "url": "u/{{id}}",
+      "field": "memberClass",
+      "regex": "class=\"up-class-badge\">[\\s\\S]*?<\\/svg>\\s*(?<value>[^<]+?)\\s*<\\/span>",
+      "transform": "string"
     }
   },
   "dashboard": {

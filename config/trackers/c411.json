@@ -37,9 +37,10 @@
     "mode": "http",
     "responseType": "json",
     "fields": {
-      "downloadedBytes": { "path": "user.downloaded", "transform": "bytes" },
-      "uploadedBytes":   { "path": "user.uploaded",   "transform": "bytes" },
-      "ratio":           { "path": "user.ratio",      "transform": "number" }
+      "downloadedBytes": { "path": "user.downloaded",  "transform": "bytes" },
+      "uploadedBytes":   { "path": "user.uploaded",    "transform": "bytes" },
+      "ratio":           { "path": "user.ratio",       "transform": "number" },
+      "memberClass":     { "path": "user.badge.label", "transform": "string" }
     },
     "unreadFetch": { "url": "api/messages/unread-count", "responseType": "json", "path": "total", "transform": "integer" }
   },

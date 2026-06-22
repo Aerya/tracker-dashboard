@@ -40,6 +40,12 @@
       "level":         { "regex": "Niveau\\s*(?<value>\\d+)", "transform": "integer" },
       "xp":            { "regex": "Niveau\\s*\\d+\\s*·\\s*(?<value>[\\d\\s]+?)\\s*XP", "transform": "string" },
       "unreadMessages": { "regex": "id=['\"]pm-badge['\"][^>]*>(?<value>\\d+)", "transform": "integer" }
+    },
+    "extraFetch": {
+      "url": "user/{{username}}",
+      "field": "memberClass",
+      "regex": "class=\"user-badge[^\"]*\">(?<value>[^<]+)</span>",
+      "transform": "string"
     }
   },
   "dashboard": { "byteUnit": "binary" }

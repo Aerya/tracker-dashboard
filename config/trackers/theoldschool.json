@@ -4,5 +4,13 @@
   "baseUrl": "https://theoldschool.cc",
   "enabled": true,
   "engine": "unit3d",
-  "login": {}
+  "login": {},
+  "fetch": {
+    "extraFetch": {
+      "url": "users/{{username}}",
+      "field": "memberClass",
+      "regex": "profile__username[\\s\\S]*?title=\"(?<value>[^\"]+)\"",
+      "transform": "string"
+    }
+  }
 }
