@@ -105,6 +105,10 @@ export const ENGINE_TEMPLATES: Record<EngineId, EngineTemplate> = {
           uploadedBytes:   { regex: 'id="stats_seeding"[^>]*title="Uploaded: (?<value>[^"]+)"', transform: 'bytes' },
           downloadedBytes: { regex: 'id="stats_leeching"[^>]*title="Downloaded: (?<value>[^"]+)"', transform: 'bytes' },
           ratio:           { regex: 'id="stats_ratio"[^>]*title="Ratio: (?<value>[^"]+)"', transform: 'number' },
+          // Classe de membre courante, affichee dans le header utilisateur sur la plupart
+          // des skins Gazelle (Redacted, Orpheus, Phoenix Project...). Surchargee par site
+          // quand le skin diverge (ex: HD-Forever, classe entre parentheses).
+          memberClass:     { regex: 'class="hidden userclass">(?<value>[^<]+)<', transform: 'string' },
         },
       },
       dashboard: { byteUnit: 'binary' },

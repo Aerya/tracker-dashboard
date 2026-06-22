@@ -32,6 +32,10 @@
       "unreadMessages": {
         "regex": "data-notification-type=['\"]Inbox['\"][^>]*>[^<]*?(?<value>\\d+|\\bun) nouveau",
         "transform": "string"
+      },
+      "memberClass": {
+        "regex": "id=\"pseudo\"[\\s\\S]*?\\((?<value>[^)]+)\\)",
+        "transform": "string"
       }
     }
   },

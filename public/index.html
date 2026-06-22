@@ -1132,6 +1132,7 @@
     .badge-ratioless { background: color-mix(in srgb, var(--purple) 16%, transparent); color: var(--purple); }
     .badge-incident { background: color-mix(in srgb, var(--muted) 18%, transparent); color: var(--muted); }
     .badge-mp { background: color-mix(in srgb, var(--blue) 22%, transparent); color: var(--blue); }
+    .badge-memberclass { background: color-mix(in srgb, var(--muted) 18%, transparent); color: var(--muted); }
     .incident-box {
       margin: 8px 18px 12px;
       padding: 8px 10px;
@@ -2701,6 +2702,14 @@
     const n = unreadMessagesCount(stat);
     return n > 0
       ? `<span class="badge badge-mp" title="${n} message(s) prive(s) non lu(s)">MP : ${n}</span>`
+      : '';
+  }
+
+  // Classe de membre courante (champ optionnel memberClass, regex par site/preset).
+  function memberClassBadge(stat) {
+    const cls = (stat.fields || {}).memberClass;
+    return hasStatValue(cls)
+      ? `<span class="badge badge-memberclass" title="Classe de membre">${escapeHtml(String(cls))}</span>`
       : '';
   }
 
@@ -5655,7 +5664,7 @@
             ${cardRefreshButton(stat)}
           </div>
         </div>
-        <div class="card-badges">${mpBadge(stat)}${staleBadge(stat)}${ratiolessBadge(stat)}</div>
+        <div class="card-badges">${mpBadge(stat)}${memberClassBadge(stat)}${staleBadge(stat)}${ratiolessBadge(stat)}</div>
 
         <div class="stats">${hasXpFields ? xpGrid : standardGrid}
         </div>
