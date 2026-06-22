@@ -767,7 +767,7 @@ async function ensureLoggedIn(
 export async function fetchWithBrowser(
   tracker: TrackerConfig,
   credentials: { username: string; password: string },
-): Promise<{ html: string; url: string; authConfirmed: boolean }> {
+): Promise<{ html: string; url: string; authConfirmed: boolean; extraHtml?: string }> {
   const context = await getContext(tracker);
   const page = await context.newPage();
   const url = resolveUrl(tracker.baseUrl, interpolate(tracker.fetch.url, {
@@ -803,7 +803,32 @@ export async function fetchWithBrowser(
       await revealMilkieStats(page);
     }
     const authConfirmed = await waitForTrackerContent(tracker, page);
-    return { html: await safeContent(page), url: page.url(), authConfirmed };
+    const html = await safeContent(page);
+
+    let extraHtml: string | undefined;
+    const ef = tracker.fetch.extraFetch;
+    if (ef) {
+      try {
+        const vars: Record<string, string> = { username: credentials.username };
+        if (ef.idExtract) {
+          const idMatch = new RegExp(ef.idExtract.regex, 's').exec(html);
+          const id = idMatch?.groups?.['value'];
+          if (id) vars.id = id;
+        }
+        if (!ef.idExtract || vars.id) {
+          const extraUrl = resolveUrl(tracker.baseUrl, interpolate(ef.url, vars));
+          await page.goto(extraUrl, { waitUntil: 'commit', timeout: 45_000 });
+          await page.waitForLoadState('domcontentloaded', { timeout: 30_000 }).catch(() => {});
+          await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+          extraHtml = await safeContent(page);
+        }
+      } catch {
+        // Best-effort : la page secondaire (ex. classe de membre) ne doit jamais
+        // invalider le fetch principal, deja capture dans `html`.
+      }
+    }
+
+    return { html, url: page.url(), authConfirmed, extraHtml };
   } finally {
     await page.close().catch(() => {});
     // Fermer le contexte (= le process Chromium) apres chaque fetch. Sinon, avec

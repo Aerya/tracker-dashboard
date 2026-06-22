@@ -923,7 +923,7 @@ export async function fetchTracker(
     password: creds.password,
   };
 
-  const buildStatsFromHtml = (url: string, html: string): TrackerStats => {
+  const buildStatsFromHtml = (url: string, html: string, extraHtml?: string): TrackerStats => {
     if (isAnubisChallenge(html)) {
       const dumpPath = writeDebugDump(tracker, url, html, {}, 'anubis');
       const suffix = dumpPath ? ` - dump: ${dumpPath}` : '';
@@ -954,6 +954,15 @@ export async function fetchTracker(
     if (missingFields.length > 0) {
       const dumpPath = writeDebugDump(tracker, url, html, fields, 'partial');
       console.log(`  [${tracker.name}] Champs manquants: ${missingFields.join(', ')}${dumpPath ? ` - dump: ${dumpPath}` : ''}`);
+    }
+
+    // Champ secondaire générique capturé via une page navigateur distincte (ex. classe
+    // de membre TR4KER, profil hydraté en JS sur une autre route). Best-effort.
+    const ef = tracker.fetch.extraFetch;
+    if (ef && extraHtml) {
+      const extra = extractHtml(extraHtml, { [ef.field]: { path: ef.path, regex: ef.regex, transform: ef.transform } });
+      const value = extra.values[ef.field];
+      if (value !== undefined && value !== '') fields[ef.field] = value;
     }
 
     // L'unité d'affichage suit ce que le site écrit réellement (« GB » -> décimal,
@@ -1238,7 +1247,7 @@ export async function fetchTracker(
         const suffix = dumpPath ? ` - dump: ${dumpPath}` : '';
         throw new Error(`Session navigateur non authentifiee - verifier les credentials ou valider le challenge dans le profil navigateur${suffix}`);
       }
-      return buildStatsFromHtml(browserResult.url, browserResult.html);
+      return buildStatsFromHtml(browserResult.url, browserResult.html, browserResult.extraHtml);
     }
 
     // Mode HTTP : on tente d'abord le login+fetch via curl-impersonate (empreinte
