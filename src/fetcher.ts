@@ -247,6 +247,72 @@ async function fetchUnreadMessagesViaCurl(
   }, headers);
 }
 
+// Requête secondaire générique (fetch.extraFetch) : récupère un champ absent de la page
+// principale (ex. la classe de membre sur IPTorrents, exposée uniquement sur la page de
+// profil /u/<id>). Si idExtract est fourni, l'identifiant est extrait du HTML/JSON de la
+// page principale puis injecté dans extraFetch.url via le placeholder {{id}}.
+// Best-effort : toute erreur renvoie null (champ absent), sans invalider le tracker.
+export async function fetchExtraField(
+  tracker: TrackerConfig,
+  primaryBody: string,
+  request: UnreadMessagesRequest,
+  headers: Record<string, string>,
+): Promise<{ field: string; value: string | number } | null> {
+  const ef = tracker.fetch.extraFetch;
+  if (!ef) return null;
+  try {
+    let targetUrl = ef.url;
+    if (ef.idExtract) {
+      const idMatch = new RegExp(ef.idExtract.regex, 's').exec(primaryBody);
+      const id = idMatch?.groups?.['value'];
+      if (!id) return null;
+      targetUrl = targetUrl.replace('{{id}}', id);
+    }
+    const url = resolveUrl(tracker.baseUrl, targetUrl);
+    const res = await request(url, headers);
+    if (!res || res.status >= 400) return null;
+    const single: Record<string, FieldExtractor> = {
+      [ef.field]: { path: ef.path, regex: ef.regex, transform: ef.transform },
+    };
+    const rt = ef.responseType ?? (ef.path ? 'json' : 'html');
+    let out: { values: Record<string, string | number>; byteUnit: 'decimal' | 'binary' | null };
+    if (rt === 'json') {
+      let json: unknown;
+      try { json = JSON.parse(res.body); } catch { return null; }
+      out = extractJson(json, single);
+    } else {
+      out = extractHtml(res.body, single);
+    }
+    const value = out.values[ef.field];
+    return value !== undefined && value !== '' ? { field: ef.field, value } : null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchExtraFieldViaAxios(
+  client: AxiosInstance,
+  tracker: TrackerConfig,
+  primaryBody: string,
+  headers: Record<string, string>,
+): Promise<{ field: string; value: string | number } | null> {
+  return fetchExtraField(tracker, primaryBody, async (url, requestHeaders) => {
+    const res = await client.get<string>(url, { responseType: 'text', headers: requestHeaders });
+    return { status: res.status, body: res.data };
+  }, headers);
+}
+
+async function fetchExtraFieldViaCurl(
+  session: CurlSession,
+  tracker: TrackerConfig,
+  primaryBody: string,
+  headers: Record<string, string>,
+): Promise<{ field: string; value: string | number } | null> {
+  return fetchExtraField(tracker, primaryBody, async (url, requestHeaders) => {
+    return session.request(url, { headers: requestHeaders, timeoutMs: 30_000 });
+  }, headers);
+}
+
 function writeDebugDump(
   tracker: TrackerConfig,
   url: string,
@@ -1074,6 +1140,10 @@ export async function fetchTracker(
           if (tracker.fetch.unreadFetch) {
             stats.fields.unreadMessages = await fetchUnreadMessagesViaCurl(sess, tracker, fetchHeaders);
           }
+          if (tracker.fetch.extraFetch) {
+            const extra = await fetchExtraFieldViaCurl(sess, tracker, fetchRes.body, fetchHeaders);
+            if (extra) stats.fields[extra.field] = extra.value;
+          }
           console.log(`  [${tracker.name}] Login+fetch via curl-impersonate OK (JSON/MFA)`);
           return stats;
         } catch {
@@ -1117,6 +1187,10 @@ export async function fetchTracker(
             tracker,
             { Referer: loginUrl },
           );
+        }
+        if (tracker.fetch.extraFetch) {
+          const extra = await fetchExtraFieldViaCurl(sess, tracker, fetchRes.body, { Referer: loginUrl });
+          if (extra) stats.fields[extra.field] = extra.value;
         }
         console.log(`  [${tracker.name}] Login+fetch via curl-impersonate OK (axios evite)`);
         return stats;
@@ -1258,6 +1332,12 @@ export async function fetchTracker(
     // MP non lus via requête secondaire (ex. C411) — best-effort, n'invalide pas le tracker.
     if (tracker.fetch.unreadFetch) {
       fields.unreadMessages = await fetchUnreadMessagesViaAxios(session.client, tracker, fetchHeaders);
+    }
+
+    // Champ secondaire générique (ex. classe de membre IPTorrents, page /u/<id>).
+    if (tracker.fetch.extraFetch) {
+      const extra = await fetchExtraFieldViaAxios(session.client, tracker, res.data, fetchHeaders);
+      if (extra) fields[extra.field] = extra.value;
     }
 
     const resolvedByteUnit = detectedByteUnit ?? tracker.dashboard?.byteUnit ?? 'binary';

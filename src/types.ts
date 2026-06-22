@@ -127,6 +127,23 @@ export interface FetchStep {
     url: string;
     responseType?: 'json' | 'html';
   } & FieldExtractor;
+  /**
+   * Requête secondaire générique pour un champ absent de la page principale (ex:
+   * la classe de membre sur IPTorrents, exposée uniquement sur la page de profil
+   * /u/<id>, pas sur la page d'accueil). Si `idExtract` est fourni, son resultat
+   * remplace le placeholder {{id}} dans `url` (extrait depuis le HTML/JSON de la
+   * page principale, avant la requête secondaire). Le champ extrait (path JSON ou
+   * regex HTML + transform) alimente fields.<field>.
+   * Best-effort : un échec n'invalide jamais le tracker.
+   */
+  extraFetch?: {
+    url: string;
+    responseType?: 'json' | 'html';
+    /** Regex avec groupe nommé (?<value>...), appliquée sur la page principale. */
+    idExtract?: { regex: string };
+    /** Nom du champ de fields.* alimenté par cette requête (ex: "memberClass"). */
+    field: string;
+  } & FieldExtractor;
 }
 
 /** Famille de moteur de tracker — voir ENGINE_TEMPLATES dans trackerTemplates.ts. */
