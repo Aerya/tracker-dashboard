@@ -249,26 +249,28 @@ async function fetchUnreadMessagesViaCurl(
 
 // Requête secondaire générique (fetch.extraFetch) : récupère un champ absent de la page
 // principale (ex. la classe de membre sur IPTorrents, exposée uniquement sur la page de
-// profil /u/<id>). Si idExtract est fourni, l'identifiant est extrait du HTML/JSON de la
-// page principale puis injecté dans extraFetch.url via le placeholder {{id}}.
+// profil /u/<id>, ou sur Nexum via /user/<pseudo>). Le placeholder {{username}} est
+// toujours disponible (credentials du tracker) ; {{id}} est disponible si idExtract est
+// fourni (extrait du HTML/JSON de la page principale).
 // Best-effort : toute erreur renvoie null (champ absent), sans invalider le tracker.
 export async function fetchExtraField(
   tracker: TrackerConfig,
   primaryBody: string,
   request: UnreadMessagesRequest,
   headers: Record<string, string>,
+  creds: { username: string; password: string },
 ): Promise<{ field: string; value: string | number } | null> {
   const ef = tracker.fetch.extraFetch;
   if (!ef) return null;
   try {
-    let targetUrl = ef.url;
+    const vars: Record<string, string> = { username: creds.username };
     if (ef.idExtract) {
       const idMatch = new RegExp(ef.idExtract.regex, 's').exec(primaryBody);
       const id = idMatch?.groups?.['value'];
       if (!id) return null;
-      targetUrl = targetUrl.replace('{{id}}', id);
+      vars.id = id;
     }
-    const url = resolveUrl(tracker.baseUrl, targetUrl);
+    const url = resolveUrl(tracker.baseUrl, interpolate(ef.url, vars));
     const res = await request(url, headers);
     if (!res || res.status >= 400) return null;
     const single: Record<string, FieldExtractor> = {
@@ -295,11 +297,12 @@ async function fetchExtraFieldViaAxios(
   tracker: TrackerConfig,
   primaryBody: string,
   headers: Record<string, string>,
+  creds: { username: string; password: string },
 ): Promise<{ field: string; value: string | number } | null> {
   return fetchExtraField(tracker, primaryBody, async (url, requestHeaders) => {
     const res = await client.get<string>(url, { responseType: 'text', headers: requestHeaders });
     return { status: res.status, body: res.data };
-  }, headers);
+  }, headers, creds);
 }
 
 async function fetchExtraFieldViaCurl(
@@ -307,10 +310,11 @@ async function fetchExtraFieldViaCurl(
   tracker: TrackerConfig,
   primaryBody: string,
   headers: Record<string, string>,
+  creds: { username: string; password: string },
 ): Promise<{ field: string; value: string | number } | null> {
   return fetchExtraField(tracker, primaryBody, async (url, requestHeaders) => {
     return session.request(url, { headers: requestHeaders, timeoutMs: 30_000 });
-  }, headers);
+  }, headers, creds);
 }
 
 function writeDebugDump(
@@ -1141,7 +1145,7 @@ export async function fetchTracker(
             stats.fields.unreadMessages = await fetchUnreadMessagesViaCurl(sess, tracker, fetchHeaders);
           }
           if (tracker.fetch.extraFetch) {
-            const extra = await fetchExtraFieldViaCurl(sess, tracker, fetchRes.body, fetchHeaders);
+            const extra = await fetchExtraFieldViaCurl(sess, tracker, fetchRes.body, fetchHeaders, creds);
             if (extra) stats.fields[extra.field] = extra.value;
           }
           console.log(`  [${tracker.name}] Login+fetch via curl-impersonate OK (JSON/MFA)`);
@@ -1189,7 +1193,7 @@ export async function fetchTracker(
           );
         }
         if (tracker.fetch.extraFetch) {
-          const extra = await fetchExtraFieldViaCurl(sess, tracker, fetchRes.body, { Referer: loginUrl });
+          const extra = await fetchExtraFieldViaCurl(sess, tracker, fetchRes.body, { Referer: loginUrl }, creds);
           if (extra) stats.fields[extra.field] = extra.value;
         }
         console.log(`  [${tracker.name}] Login+fetch via curl-impersonate OK (axios evite)`);
@@ -1336,7 +1340,7 @@ export async function fetchTracker(
 
     // Champ secondaire générique (ex. classe de membre IPTorrents, page /u/<id>).
     if (tracker.fetch.extraFetch) {
-      const extra = await fetchExtraFieldViaAxios(session.client, tracker, res.data, fetchHeaders);
+      const extra = await fetchExtraFieldViaAxios(session.client, tracker, res.data, fetchHeaders, creds);
       if (extra) fields[extra.field] = extra.value;
     }
 

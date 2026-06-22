@@ -130,10 +130,11 @@ export interface FetchStep {
   /**
    * Requête secondaire générique pour un champ absent de la page principale (ex:
    * la classe de membre sur IPTorrents, exposée uniquement sur la page de profil
-   * /u/<id>, pas sur la page d'accueil). Si `idExtract` est fourni, son resultat
-   * remplace le placeholder {{id}} dans `url` (extrait depuis le HTML/JSON de la
-   * page principale, avant la requête secondaire). Le champ extrait (path JSON ou
-   * regex HTML + transform) alimente fields.<field>.
+   * /u/<id> ; ou sur Nexum, exposée sur /user/<pseudo>). `url` supporte les
+   * placeholders {{username}} (toujours disponible, credentials du tracker) et
+   * {{id}} (disponible si `idExtract` est fourni, extrait depuis le HTML/JSON de
+   * la page principale avant la requête secondaire). Le champ extrait (path JSON
+   * ou regex HTML + transform) alimente fields.<field>.
    * Best-effort : un échec n'invalide jamais le tracker.
    */
   extraFetch?: {
