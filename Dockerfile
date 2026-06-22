@@ -68,6 +68,11 @@ RUN npm install --omit=dev --no-save cloakbrowser playwright-core \
   && node -e "import('cloakbrowser').then(m => m.ensureBinary && m.ensureBinary()).catch(e => { console.error('CloakBrowser binary skip:', e.message); })" \
   || echo "::warning:: CloakBrowser indisponible a la construction — l'app utilisera Chromium par defaut."
 
+# npm/npx ne sont necessaires qu'a la construction. Les retirer du runtime evite
+# d'embarquer les dependances internes de npm dans l'image finale.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx \
+  && node -e "const fs=require('fs'); for (const p of ['/usr/local/lib/node_modules/npm','/usr/local/bin/npm','/usr/local/bin/npx']) if (fs.existsSync(p)) throw new Error('Artefact npm encore present: '+p); console.log('npm retire de l image runtime');"
+
 COPY --from=builder /app/dist ./dist
 COPY public/ ./public/
 COPY config/trackers/ ./default-trackers/
