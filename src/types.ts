@@ -67,6 +67,18 @@ export interface LoginConfig {
   otpStep?: {
     urlContains: string;
     field: string;
+    /**
+     * Cible du POST OTP, relative à la page OTP (ex: HD-Forever poste sur
+     * `login.php?act=otp`, pas sur l'URL d'atterrissage). Si absent, on poste
+     * sur l'URL atteinte après le login (comportement Nexum, inchangé).
+     */
+    action?: string;
+    /**
+     * Champs statiques additionnels à inclure dans le POST OTP (ex: bouton
+     * submit nommé comme `validate_otp` sur HD-Forever). Mergés après les
+     * hidden inputs, le champ OTP et le `_token`.
+     */
+    body?: Record<string, string>;
   };
   /**
    * Nom du champ de formulaire recevant le code 2FA (TOTP).

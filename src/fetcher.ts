@@ -721,7 +721,11 @@ async function doLogin(
     const otpBody: Record<string, string> = { ...extractHiddenInputs(verificationHtml) };
     otpBody[cfg.otpStep.field] = vars.otp;
     if (otpToken) otpBody['_token'] = otpToken;
-    const otpRes = await client.post<string>(landedUrl, new URLSearchParams(otpBody).toString(), {
+    if (cfg.otpStep.body) Object.assign(otpBody, cfg.otpStep.body);
+    // Resolution "frere" (semantique HTTP), pas "dossier" : resolveUrl forcerait
+    // un slash final et nicherait l'URL (login.php/act=otp). new URL est correct.
+    const otpPostUrl = cfg.otpStep.action ? new URL(cfg.otpStep.action, landedUrl).toString() : landedUrl;
+    const otpRes = await client.post<string>(otpPostUrl, new URLSearchParams(otpBody).toString(), {
       responseType: 'text',
       maxRedirects: 0,
       headers: {
@@ -734,7 +738,7 @@ async function doLogin(
     verificationHtml = otpRes.data;
     const otpLoc = otpRes.headers.location;
     if (otpRes.status >= 300 && otpRes.status < 400 && otpLoc) {
-      landedUrl = resolveUrl(landedUrl, Array.isArray(otpLoc) ? otpLoc[0] : otpLoc);
+      landedUrl = new URL(Array.isArray(otpLoc) ? otpLoc[0] : otpLoc, otpPostUrl).toString();
       const afterOtpRes = await client.get<string>(landedUrl, { responseType: 'text', maxRedirects: 0 });
       await storeResponseCookies(jar, afterOtpRes);
       verificationHtml = afterOtpRes.data;

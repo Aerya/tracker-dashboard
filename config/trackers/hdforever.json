@@ -14,6 +14,14 @@
       "login": "Se connecter",
       "keeplogged": "1"
     },
+    "otpStep": {
+      "urlContains": "login.php",
+      "action": "login.php?act=otp",
+      "field": "otp_code",
+      "body": {
+        "validate_otp": "Valider le code"
+      }
+    },
     "failurePatterns": [
       "Identifiant ou mot de passe incorrect",
       "type=\"password\"",
@@ -22,6 +30,7 @@
     ]
   },
   "fetch": {
+    "mode": "http",
     "fields": {
       "uploadedBytes": {
         "regex": "class=\"stat tooltip up\" title=\"(?<value>[^\"]+)\"",
