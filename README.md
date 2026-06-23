@@ -24,7 +24,7 @@ Au premier accès, l'application demande de créer le compte administrateur de l
 
 ## Changements récents
 
-- **Image principale allégée** : Playwright/Chromium/CloakBrowser sont sortis dans un service optionnel `tracker-dashboard-browser` (l'image principale ne les embarque plus). Statut/versions dans la WebUI. L'app reste pleinement utilisable sans lui pour les trackers HTTP ; les trackers `mode: browser` nécessitent ce service.
+- **Image principale allégée** : Playwright/Chromium/CloakBrowser sont sortis dans l'image parallèle `tracker-dashboard-browser`. Le compose principal ne change pas ; la WebUI affiche l'état, les versions, la commande de lancement et les alertes de mise à jour.
 - **Plusieurs comptes par tracker** : duplication d'un tracker, noms d'affichage personnalisables, regroupement sous le site, et attribution des torrents par passkey entre comptes.
 - Refonte de la navigation : barre latérale unique, thème clair/sombre/système, nouveau logo.
 - Fiches de trackers enrichies : statut clair, courbes d'évolution UP/DL/ratio (buffer en option), erreurs en cours / récentes / historique.
@@ -148,16 +148,24 @@ Avec le type **SSH**, le dashboard ouvre un tunnel SSH (SOCKS5 local adossé au 
 - Les secrets sont stockés côté serveur, jamais renvoyés en clair (masqués).
 - Le bouton **Tester** établit le tunnel et vérifie l'IP de sortie.
 
-## Runtime navigateur (mode simple / mode complet)
+## Runtime navigateur
 
-Le navigateur (Playwright/Chromium/CloakBrowser) est **externalisé** dans un service séparé : l'image principale ne l'embarque plus (image fortement allégée). Deux modes :
+Le navigateur (Playwright/Chromium/CloakBrowser) est externalisé dans l'image `ghcr.io/tracker-dashboard/tracker-dashboard-browser:latest`. L'image principale reste allégée, sans modifier le `docker-compose.yml` existant.
 
-- **Mode simple (par défaut)** : un seul container `tracker-dashboard`. Les trackers HTTP et le fast-path `curl-impersonate` fonctionnent. L'image n'embarque pas de navigateur.
-- **Mode complet** : ajoutez le service optionnel `tracker-dashboard-browser` et définissez `BROWSER_RUNTIME_URL` (voir `docker-compose.yml`, bloc commenté). **Nécessaire pour les trackers en `mode: browser`** (sinon ils affichent un message clair invitant à ajouter le service).
+Lancez le runtime navigateur en parallèle du conteneur principal :
 
-Les deux services partagent le volume `./config` (mêmes SQLite, trackers, cookies, TOTP, proxies, paramètres et `config/browser-profile`). Le service navigateur **ne touche pas la base** : l'app principale reste la source de vérité et lui transmet ce qu'il faut par appel interne. Si le runtime navigateur est absent, l'app reste utilisable : seuls les trackers `mode: browser` échouent avec un message clair. L'état (disponible/indisponible, versions Playwright/Chromium/CloakBrowser) est visible dans **Proxies → Moteur navigateur → Runtime navigateur** (bouton *Vérifier*).
+```bash
+docker run -d \
+  --name tracker-dashboard-browser \
+  --restart unless-stopped \
+  --network container:tracker-dashboard \
+  --volumes-from tracker-dashboard \
+  ghcr.io/tracker-dashboard/tracker-dashboard-browser:latest
+```
 
-Sécurité : ne publiez pas le port du runtime ; laissez-le joignable uniquement via le réseau Docker interne. Un token partagé optionnel (`BROWSER_RUNTIME_TOKEN` des deux côtés) protège l'API s'il est exposé par erreur.
+Avec `--network container:tracker-dashboard`, Tracker Dashboard joint automatiquement le runtime sur `http://127.0.0.1:3001`. Avec `--volumes-from tracker-dashboard`, les profils navigateur et cookies restent sur le même volume `./config`. Le service navigateur ne touche pas la base : l'app principale reste la source de vérité et lui transmet ce qu'il faut par appel interne.
+
+Si le runtime navigateur est absent, les trackers en `mode: browser` affichent une erreur claire et la WebUI donne la commande d'installation. L'état et les versions (Playwright/Chromium/CloakBrowser) sont visibles dans **Proxies → Moteur navigateur → Runtime navigateur**. La WebUI signale aussi si le runtime navigateur ne correspond pas à la révision de l'application.
 
 ### Moteur navigateur (CloakBrowser)
 

@@ -4,15 +4,14 @@
 // service separe `tracker-dashboard-browser` sans casser les installations
 // existantes.
 //
-// - Si `BROWSER_RUNTIME_URL` est defini -> backend DISTANT : l'app principale
+// - Par defaut -> backend DISTANT sur http://127.0.0.1:3001, lance en conteneur
+//   parallele avec `--network container:tracker-dashboard`.
+// - Si `BROWSER_RUNTIME_URL` est defini, il remplace cette URL.
+//   L'app principale
 //   resout cookie/TOTP/moteur/proxy depuis la DB, les envoie dans le payload, et
 //   le runtime execute le navigateur (il ne touche jamais la DB).
-// - Sinon -> backend LOCAL : import dynamique de `browserFetcher` (Playwright dans
-//   l'image principale, comportement historique strictement inchange).
-//
-// L'import de `browserFetcher` est dynamique pour que l'app principale puisse, a
-// terme (image allegee sans Playwright), fonctionner pour les trackers HTTP meme
-// sans ce module.
+// - L'image principale reste allegee : Playwright/Chromium/CloakBrowser vivent
+//   dans l'image tracker-dashboard-browser.
 
 import { resolveProxyForTracker, toSshConfig } from './proxy.js';
 import { getSshLocalEndpoint } from './sshTunnel.js';
@@ -36,23 +35,28 @@ export interface BrowserRuntimeStatus {
   playwright?: string;
   chromiumVersion?: string;
   chromiumExecutable?: string;
+  revision?: string;
+  expectedRevision?: string;
+  upToDate?: boolean;
   cloakbrowser?: { available: boolean; version?: string };
 }
 
 type ProxyPayload = { server: string; username?: string; password?: string } | null;
 
-const RUNTIME_URL = (process.env.BROWSER_RUNTIME_URL || '').replace(/\/+$/, '');
+const DEFAULT_RUNTIME_URL = 'http://127.0.0.1:3001';
+const RUNTIME_URL = (process.env.BROWSER_RUNTIME_URL || DEFAULT_RUNTIME_URL).replace(/\/+$/, '');
 const RUNTIME_TOKEN = process.env.BROWSER_RUNTIME_TOKEN || '';
+const EXPECTED_REVISION = process.env.APP_IMAGE_REVISION?.trim() || '';
 // Hote sous lequel le runtime peut joindre le tunnel SSH local de l'app principale
 // (le runtime tourne dans un autre conteneur, 127.0.0.1 ne conviendrait pas).
 const SELF_HOST_FOR_RUNTIME = process.env.SSH_TUNNEL_ADVERTISE_HOST || '';
 
 export function isRemoteRuntimeConfigured(): boolean {
-  return RUNTIME_URL.length > 0;
+  return true;
 }
 
 export const BROWSER_RUNTIME_UNAVAILABLE =
-  'Runtime navigateur non disponible. Ajoutez le service tracker-dashboard-browser ou désactivez les trackers en mode navigateur.';
+  'Runtime navigateur indisponible. Lancez le conteneur tracker-dashboard-browser en parallele de tracker-dashboard.';
 
 function runtimeHeaders(): Record<string, string> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -89,9 +93,8 @@ function buildOverrides(tracker: TrackerConfig) {
   };
 }
 
-// Charge le backend local (Playwright). Si le module est indisponible (image
-// allegee sans Playwright et aucun runtime distant configure), on renvoie le
-// message clair attendu plutot qu'une erreur d'import opaque.
+// Fallback de developpement local : utile uniquement si Playwright est present
+// dans node_modules. L'image publiee utilise le runtime navigateur separe.
 async function loadLocalBackend(): Promise<typeof import('./browserFetcher.js')> {
   try {
     return await import('./browserFetcher.js');
@@ -192,10 +195,6 @@ export async function resetBrowserProfile(trackerId: string): Promise<void> {
 }
 
 export async function getBrowserRuntimeStatus(): Promise<BrowserRuntimeStatus> {
-  if (!isRemoteRuntimeConfigured()) {
-    // Backend local : Playwright embarque dans l'image principale (cas historique).
-    return { mode: 'local', configured: false, available: true };
-  }
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 8_000);
@@ -205,22 +204,26 @@ export async function getBrowserRuntimeStatus(): Promise<BrowserRuntimeStatus> {
     }).finally(() => clearTimeout(timer));
     const data = await response.json().catch(() => ({} as Record<string, unknown>));
     if (!response.ok) {
-      return { mode: 'remote', configured: true, available: false, url: RUNTIME_URL, error: `HTTP ${response.status}` };
+      return { mode: 'remote', configured: Boolean(process.env.BROWSER_RUNTIME_URL), available: false, url: RUNTIME_URL, expectedRevision: EXPECTED_REVISION || undefined, error: `HTTP ${response.status}` };
     }
+    const revision = typeof data.revision === 'string' ? data.revision : undefined;
     return {
       mode: 'remote',
-      configured: true,
+      configured: Boolean(process.env.BROWSER_RUNTIME_URL),
       available: true,
       url: RUNTIME_URL,
       runtime: typeof data.runtime === 'string' ? data.runtime : undefined,
       playwright: typeof data.playwright === 'string' ? data.playwright : undefined,
       chromiumVersion: typeof data.chromiumVersion === 'string' ? data.chromiumVersion : undefined,
       chromiumExecutable: typeof data.chromiumExecutable === 'string' ? data.chromiumExecutable : undefined,
+      revision,
+      expectedRevision: EXPECTED_REVISION || undefined,
+      upToDate: EXPECTED_REVISION && revision ? revision === EXPECTED_REVISION : undefined,
       cloakbrowser: (data.cloakbrowser && typeof data.cloakbrowser === 'object')
         ? data.cloakbrowser as { available: boolean; version?: string }
         : undefined,
     };
   } catch (err) {
-    return { mode: 'remote', configured: true, available: false, url: RUNTIME_URL, error: err instanceof Error ? err.message : String(err) };
+    return { mode: 'remote', configured: Boolean(process.env.BROWSER_RUNTIME_URL), available: false, url: RUNTIME_URL, expectedRevision: EXPECTED_REVISION || undefined, error: err instanceof Error ? err.message : String(err) };
   }
 }

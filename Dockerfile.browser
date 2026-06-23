@@ -25,7 +25,15 @@ WORKDIR /app
 ARG NPM_VERSION=11.17.0
 RUN npm install -g "npm@${NPM_VERSION}" \
   && node -e "const v=require('/usr/local/lib/node_modules/npm/node_modules/tar/package.json').version; const [a,b,c]=v.split('.').map(Number); if (a < 7 || (a === 7 && (b < 5 || (b === 5 && c < 16)))) throw new Error('npm embeds vulnerable tar '+v); console.log('npm tar', v);"
-ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+ARG APP_IMAGE_SOURCE=local
+ARG APP_IMAGE_VERSION=dev
+ARG APP_IMAGE_REVISION=unknown
+ARG APP_IMAGE_REF=local
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    APP_IMAGE_SOURCE=$APP_IMAGE_SOURCE \
+    APP_IMAGE_VERSION=$APP_IMAGE_VERSION \
+    APP_IMAGE_REVISION=$APP_IMAGE_REVISION \
+    APP_IMAGE_REF=$APP_IMAGE_REF
 COPY package*.json ./
 RUN npm ci --omit=dev
 RUN npx playwright install --with-deps chromium \

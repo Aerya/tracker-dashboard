@@ -6481,7 +6481,14 @@
     } catch (e) { console.warn('Browser engine unavailable', e); }
   }
 
-  // Etat du runtime navigateur : embarque (local) ou service externe + versions.
+  const BROWSER_RUNTIME_INSTALL_COMMAND = `docker run -d \\
+  --name tracker-dashboard-browser \\
+  --restart unless-stopped \\
+  --network container:tracker-dashboard \\
+  --volumes-from tracker-dashboard \\
+  ghcr.io/tracker-dashboard/tracker-dashboard-browser:latest`;
+
+  // Etat du runtime navigateur externe + versions.
   async function loadBrowserRuntimeStatus() {
     const badge = document.getElementById('browser-runtime-badge');
     const detail = document.getElementById('browser-runtime-detail');
@@ -6492,22 +6499,21 @@
       const r = await fetch('/api/browser-runtime/status');
       const d = await r.json();
       const s = d.status || {};
-      if (s.mode === 'local') {
-        badge.textContent = 'Embarqué (Chromium local)';
-        badge.className = 'definition-badge';
-        detail.innerHTML = 'Le navigateur est inclus dans l\'image principale. Pour alléger l\'image, ajoutez le service <code>tracker-dashboard-browser</code> et définissez <code>BROWSER_RUNTIME_URL</code>.';
-        return;
-      }
       if (s.available) {
-        badge.textContent = 'Service externe — disponible';
-        badge.className = 'definition-badge';
+        const stale = s.upToDate === false;
+        badge.textContent = stale ? 'Runtime navigateur — mise à jour requise' : 'Runtime navigateur — disponible';
+        badge.className = stale ? 'definition-badge definition-badge-muted' : 'definition-badge';
+        if (stale) badge.style.color = 'var(--yellow)';
         const cloak = s.cloakbrowser?.available ? `oui${s.cloakbrowser.version ? ' (' + escapeHtml(s.cloakbrowser.version) + ')' : ''}` : 'non';
-        detail.innerHTML = `Playwright <b>${escapeHtml(s.playwright || '?')}</b> · Chromium <b>${escapeHtml(s.chromiumVersion || '?')}</b> · CloakBrowser ${cloak}<br><span style="color:var(--muted)">${escapeHtml(s.url || '')}</span>`;
+        const updateHint = stale
+          ? `<br><span style="color:var(--yellow)">Le runtime navigateur ne correspond pas à la révision de l'application. Mettez à jour <code>tracker-dashboard-browser</code>.</span>`
+          : '';
+        detail.innerHTML = `Playwright <b>${escapeHtml(s.playwright || '?')}</b> · Chromium <b>${escapeHtml(s.chromiumVersion || '?')}</b> · CloakBrowser ${cloak}<br><span style="color:var(--muted)">${escapeHtml(s.url || '')}</span>${updateHint}`;
       } else {
-        badge.textContent = 'Service externe — indisponible';
+        badge.textContent = 'Runtime navigateur — absent';
         badge.className = 'definition-badge definition-badge-muted';
         badge.style.color = 'var(--red)';
-        detail.innerHTML = `Runtime configuré (<code>${escapeHtml(s.url || '')}</code>) mais injoignable${s.error ? ' : ' + escapeHtml(s.error) : ''}. Les trackers en mode navigateur échoueront tant que le service <code>tracker-dashboard-browser</code> n'est pas démarré.`;
+        detail.innerHTML = `Le runtime navigateur est absent ou injoignable${s.error ? ' : ' + escapeHtml(s.error) : ''}. Lancez-le en parallèle, sans modifier le compose existant :<pre style="white-space:pre-wrap;margin-top:8px"><code>${escapeHtml(BROWSER_RUNTIME_INSTALL_COMMAND)}</code></pre>`;
       }
     } catch (e) {
       badge.textContent = 'Inconnu';

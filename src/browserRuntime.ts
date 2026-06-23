@@ -79,6 +79,9 @@ app.get('/version', async (_req, res) => {
   res.json({
     ok: true,
     runtime: 'tracker-dashboard-browser',
+    revision: process.env.APP_IMAGE_REVISION || 'unknown',
+    version: process.env.APP_IMAGE_VERSION || 'dev',
+    ref: process.env.APP_IMAGE_REF || 'local',
     playwright: playwrightVersion(),
     chromiumExecutable: executable || undefined,
     chromiumVersion: await chromiumVersion(executable),
