@@ -16,7 +16,7 @@ import {
 import { getProxyConfig, ensureProxyReady } from './proxy.js';
 import { closeAllSshTunnels } from './sshTunnel.js';
 import { curlImpersonateGet, CurlSession, fastFetchEnabled } from './curlImpersonate.js';
-import { buildCookieHeader } from './browserFetcher.js';
+import { buildCookieHeader } from './cookies.js';
 import { getTrackerTotpSecret, loadTrackerConfigsFromDb, saveTrackerConfig } from './db.js';
 import { generateTotp } from './totp.js';
 import { selectUserAgent } from './userAgent.js';
