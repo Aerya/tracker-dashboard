@@ -150,9 +150,24 @@ Avec le type **SSH**, le dashboard ouvre un tunnel SSH (SOCKS5 local adossé au 
 
 ## Runtime navigateur
 
-Le navigateur (Playwright/Chromium/CloakBrowser) est externalisé dans l'image `ghcr.io/tracker-dashboard/tracker-dashboard-browser:latest`. L'image principale reste allégée, sans modifier le `docker-compose.yml` existant.
+Le navigateur (Playwright/Chromium/CloakBrowser) est externalisé dans l'image `ghcr.io/tracker-dashboard/tracker-dashboard-browser:latest`. L'image principale reste allégée.
 
-Lancez le runtime navigateur en parallèle du conteneur principal :
+Si vous gérez Tracker Dashboard avec Compose, ajoutez une petite stack parallèle pour le runtime navigateur :
+
+```yaml
+services:
+  tracker-dashboard-browser:
+    image: ghcr.io/tracker-dashboard/tracker-dashboard-browser:latest
+    container_name: tracker-dashboard-browser
+    restart: unless-stopped
+    network_mode: "container:tracker-dashboard"
+    volumes_from:
+      - tracker-dashboard
+```
+
+La clé est bien `volumes_from` au pluriel. `volume_from` est invalide.
+
+Équivalent en commande Docker :
 
 ```bash
 docker run -d \
