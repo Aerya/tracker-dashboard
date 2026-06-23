@@ -284,6 +284,15 @@
     .nav-sub-item .nav-sub-dot.bad { background: var(--red); }
     .nav-sub-item .nav-sub-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .nav-sub-empty { padding: 6px 16px 6px 38px; font-size: 11px; color: var(--muted); }
+    /* Regroupement par site quand un tracker a plusieurs comptes (duplicatas) */
+    .nav-sub-group { display: flex; flex-direction: column; }
+    .nav-sub-group > summary { list-style: none; }
+    .nav-sub-group > summary::-webkit-details-marker { display: none; }
+    .nav-sub-group-summary .nav-sub-caret { margin-left: auto; transition: transform .15s; font-size: 10px; color: var(--muted); }
+    .nav-sub-group[open] > summary .nav-sub-caret { transform: rotate(90deg); }
+    .nav-sub-group-count { font-size: 10px; color: var(--muted); }
+    .nav-sub-group-body > .nav-sub-item { padding-left: 50px; }
+    .nav-sub-item .tracker-logo, .nav-sub-group-summary .tracker-logo { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; object-fit: contain; }
     .definition-row-highlight { box-shadow: 0 0 0 2px var(--accent); border-radius: 8px; transition: box-shadow .3s; }
     .nav-item.proxy-on::after {
       content: '';
@@ -3081,7 +3090,10 @@
     const statuses = new Map((betaOverview?.trackerStatuses || []).map(item => [item.id, item]));
     const trackers = activeTrackerStats();
     if (!betaSelectedTrackerId && trackers[0]) betaSelectedTrackerId = trackers[0].id;
-    subFiche.innerHTML = trackers.map(stat => {
+    const baseById = new Map(trackerConfig.map(t => [t.id, t.baseId]));
+    const nameById = new Map(trackerConfig.map(t => [t.id, t.name]));
+    const itemHtml = item => {
+      const stat = item.stat;
       const status = statuses.get(stat.id);
       const mode = trackerModeLabel(status);
       // Pastille binaire OK / NOK uniquement (vert = fonctionne, rouge = en
@@ -3094,7 +3106,39 @@
           <i class="nav-sub-dot ${dot}"></i>
           <span class="nav-sub-name">${escapeHtml(stat.name)}</span>
         </button>`;
-    }).join('') || '<p class="nav-sub-empty">Aucun tracker activé.</p>';
+    };
+    const items = trackers.map(stat => ({ id: stat.id, name: stat.name, baseId: baseById.get(stat.id), stat }));
+    subFiche.innerHTML = groupTrackersByBase(items, nameById).map(group => navGroupHtml(group, itemHtml)).join('')
+      || '<p class="nav-sub-empty">Aucun tracker activé.</p>';
+  }
+
+  // Regroupe des entrées { id, baseId, name } par site (baseId || id) pour afficher
+  // les comptes multiples (duplicatas) sous un nœud parent. Renvoie une liste triée
+  // de groupes { key, label, members } ; label = nom du tracker source.
+  function groupTrackersByBase(items, nameById) {
+    const groups = new Map();
+    for (const item of items) {
+      const key = item.baseId || item.id;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(item);
+    }
+    return [...groups.entries()]
+      .map(([key, members]) => ({
+        key,
+        label: nameById.get(key) || members[0].name,
+        members: members.slice().sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' })),
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' }));
+  }
+
+  // Rend un groupe : entrée à plat s'il n'y a qu'un compte, sinon nœud dépliable
+  // (logo + nom du site + compteur) contenant les comptes.
+  function navGroupHtml(group, itemHtml) {
+    if (group.members.length === 1) return itemHtml(group.members[0]);
+    return `<details class="nav-sub-group" open>
+        <summary class="nav-sub-item nav-sub-group-summary">${trackerLogo(group.key)}<span class="nav-sub-name">${escapeHtml(group.label)}</span><span class="nav-sub-group-count">${group.members.length}</span><span class="nav-sub-caret">▸</span></summary>
+        <div class="nav-sub-group-body">${group.members.map(itemHtml).join('')}</div>
+      </details>`;
   }
 
   // Accordéons « Ajouter un tracker » (non activés) et « Configurer les actifs »
@@ -3103,17 +3147,19 @@
     const subAdd = document.getElementById('nav-sub-add');
     const subConfigure = document.getElementById('nav-sub-configure');
     if (!subAdd && !subConfigure) return;
-    const defs = [...cachedTrackerDefinitions].sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
+    const nameById = new Map(cachedTrackerDefinitions.map(def => [def.id, def.name]));
     const itemHtml = def => `
       <button class="nav-sub-item ${currentView === 'trackers' && def.id === configSelectedTrackerId ? 'active' : ''}" onclick="openTrackerConfig('${escapeHtml(def.id)}')" type="button">
         <span class="nav-sub-name">${escapeHtml(def.name)}</span>
       </button>`;
     if (subAdd) {
-      subAdd.innerHTML = defs.filter(def => !def.enabled).map(itemHtml).join('')
+      const groups = groupTrackersByBase(cachedTrackerDefinitions.filter(def => !def.enabled), nameById);
+      subAdd.innerHTML = groups.map(group => navGroupHtml(group, itemHtml)).join('')
         || '<p class="nav-sub-empty">Tous les trackers sont activés.</p>';
     }
     if (subConfigure) {
-      subConfigure.innerHTML = defs.filter(def => def.enabled).map(itemHtml).join('')
+      const groups = groupTrackersByBase(cachedTrackerDefinitions.filter(def => def.enabled), nameById);
+      subConfigure.innerHTML = groups.map(group => navGroupHtml(group, itemHtml)).join('')
         || '<p class="nav-sub-empty">Aucun tracker activé.</p>';
     }
   }
@@ -5905,7 +5951,7 @@
     return `
               <div class="definition-row" id="tracker-def-${safeId}">
                 <div class="definition-info">
-                  <strong>${trackerLogo(definition.id)}${escapeHtml(definition.name)}${cookieOnly ? ' <span class="definition-badge definition-badge-cookie" title="Login automatique désactivé : ce tracker nécessite un cookie de session (CAPTCHA/anti-bot). Renseigne-le dans Options avancées.">Cookie uniquement</span>' : ''}</strong>
+                  <strong>${trackerLogo(definition.id)}${escapeHtml(definition.name)}${definition.baseId ? ' <span class="definition-badge" title="Compte dupliqué : même site et même login que le tracker source, identifiants et stats indépendants.">Copie</span>' : ''}${cookieOnly ? ' <span class="definition-badge definition-badge-cookie" title="Login automatique désactivé : ce tracker nécessite un cookie de session (CAPTCHA/anti-bot). Renseigne-le dans Options avancées.">Cookie uniquement</span>' : ''}</strong>
                   <small>${escapeHtml(definition.file)} · <a href="${escapeHtml(definition.baseUrl)}" target="_blank" rel="noreferrer noopener">${escapeHtml(definition.baseUrl)}</a></small>
                 </div>
                 ${isNew ? '<span class="definition-badge">Nouveau</span>' : '<span class="definition-new-slot"></span>'}
@@ -5928,8 +5974,14 @@
                 <div class="definition-actions">
                   <button class="btn-test" style="padding:6px 10px" onclick="setTrackerEnabled('${safeId}', ${isEnabled ? 'false' : 'true'})">${isEnabled ? 'Retirer' : 'Ajouter'}</button>
                 </div>
-                ${definition.isCustom ? `<div class="definition-actions">
+                <div class="definition-actions">
+                  <button class="btn-test" style="padding:6px 10px" title="Créer un autre compte sur ce site (même login, identifiants et stats indépendants)" onclick="duplicateTracker('${safeId}')">Dupliquer</button>
+                </div>
+                ${definition.isCustom && !definition.baseId ? `<div class="definition-actions">
                   <button class="btn-test" style="padding:6px 10px" title="Modifier la définition technique de ce tracker perso" onclick="ntEditCustomTracker('${safeId}')">Éditer la définition</button>
+                </div>` : ''}
+                ${definition.baseId ? `<div class="definition-actions">
+                  <button class="btn-test" style="padding:6px 10px; color:var(--red); border-color:var(--red)" title="Supprimer ce compte dupliqué et ses données (identifiants, historique)" onclick="deleteDuplicateTracker('${safeId}')">Supprimer</button>
                 </div>` : ''}
                 <details class="definition-advanced" style="grid-column:1/-1">
                   <summary>Options avancées${credential.hasCookie ? ' · <b style="color:var(--green)">cookie défini</b>' : ''}${credential.hasTotp ? ' · <b style="color:var(--green)">2FA défini</b>' : ''}</summary>
@@ -6059,6 +6111,39 @@
     await loadTrackerDefinitionsPanel();
     await loadConfig();
     await loadStats();
+  }
+
+  // Duplique un tracker pour gerer un compte supplementaire sur le meme site.
+  async function duplicateTracker(trackerId) {
+    try {
+      const r = await fetch(`/api/trackers/${encodeURIComponent(trackerId)}/duplicate`, { method: 'POST' });
+      const data = await r.json();
+      if (!data.ok) throw new Error(data.error || 'Erreur');
+      await loadTrackerDefinitionsPanel();
+      await loadConfig();
+      await loadStats();
+      // Ouvre la fiche du nouveau compte, pret a recevoir ses identifiants.
+      if (data.tracker?.id) openTrackerConfig(data.tracker.id);
+    } catch (e) {
+      alert('Duplication impossible : ' + e.message);
+    }
+  }
+
+  // Supprime un compte duplique (et ses donnees). Reserve aux duplicatas : le
+  // bouton n'apparait que pour eux.
+  async function deleteDuplicateTracker(trackerId) {
+    if (!confirm(`Supprimer définitivement le compte « ${trackerId} » et ses données (identifiants, historique) ?`)) return;
+    try {
+      const r = await fetch(`/api/trackers/${encodeURIComponent(trackerId)}`, { method: 'DELETE' });
+      const data = await r.json();
+      if (!data.ok) throw new Error(data.error || 'Erreur');
+      if (configSelectedTrackerId === trackerId) configSelectedTrackerId = null;
+      await loadTrackerDefinitionsPanel();
+      await loadConfig();
+      await loadStats();
+    } catch (e) {
+      alert('Suppression impossible : ' + e.message);
+    }
   }
 
   async function saveTrackerCredential(trackerId) {

@@ -156,6 +156,15 @@ export interface TrackerConfig {
   baseUrl: string;
   enabled?: boolean;
   /**
+   * Duplicata : id du tracker source dont cette entree reprend la definition
+   * technique (login/fetch/engine). Permet d'avoir plusieurs comptes sur un meme
+   * site. Les champs techniques sont rafraichis depuis la definition de `baseId`
+   * (voir normalizeTrackerConfigs), donc un duplicata d'un tracker integre herite
+   * des corrections de login amont. Identifiants, cookie, 2FA, stats, planning et
+   * notifications restent propres a l'`id` de ce duplicata.
+   */
+  baseId?: string;
+  /**
    * Famille de moteur. Si présent, les blocs login/fetch/dashboard héritent du
    * preset moteur (ENGINE_TEMPLATES) ; les champs déclarés dans ce JSON
    * surchargent le preset (le JSON gagne toujours, champ par champ ;

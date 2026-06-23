@@ -24,6 +24,7 @@ Au premier accès, l'application demande de créer le compte administrateur de l
 
 ## Changements récents
 
+- **Plusieurs comptes par tracker** : duplication d'un tracker pour suivre plusieurs comptes d'un même site, regroupés sous le site dans la barre latérale.
 - Refonte de la navigation : barre latérale unique, thème clair/sombre/système, nouveau logo.
 - Fiches de trackers enrichies : statut clair, courbes d'évolution UP/DL/ratio (buffer en option), erreurs en cours / récentes / historique.
 - Menu **Calendrier** des refreshs (OK/KO par jour, accès à la config en cas de KO).
@@ -80,6 +81,16 @@ Pour les trackers en 2FA basée sur le temps (TOTP), le dashboard génère lui-m
 - **Flux en une étape** : `login.otpField` ou placeholder `{{otp}}` dans le corps de login.
 
 Laissez le champ vide pour les trackers sans 2FA.
+
+## Plusieurs comptes par tracker
+
+Pour suivre **plusieurs comptes sur un même site**, dupliquez un tracker : dans **Configuration → Configurer les actifs → (le tracker)**, cliquez sur **Dupliquer**. Un nouveau compte « (compte 2) » est créé, prêt à recevoir ses identifiants.
+
+- Le duplicata reprend la **même mécanique de login** que le tracker d'origine et **hérite automatiquement** des corrections de login publiées par la suite.
+- **Identifiants, cookie, 2FA, profil navigateur, statistiques, planning et notifications sont indépendants** entre comptes.
+- Dans la barre latérale (« Configurer les actifs » et « Trackers activés »), les comptes d'un même site sont **regroupés sous le nom du site**, dépliable.
+- Un compte dupliqué est **supprimable** (bouton **Supprimer** sur sa fiche) ; le tracker intégré d'origine, lui, ne peut être que désactivé.
+- Limite : la liaison des torrents qBittorrent se fait par hôte d'annonce ; deux comptes du même site partageant le même hôte, un torrent ne se rattache qu'à l'un des deux. Les statistiques du site restent justes.
 
 ## Captures d'écran
 

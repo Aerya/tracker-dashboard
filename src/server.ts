@@ -291,7 +291,9 @@ function normalizeTrackerConfigs(): TrackerConfig[] {
     // n'est pas touche : loadDefaultTrackerDefinition renvoie null.
     // Sans ce mecanisme, une install deployee garde eternellement les vieilles
     // definitions en base, meme apres une mise a jour d'image qui les corrige.
-    const definition = loadDefaultTrackerDefinition(tracker.id);
+    // Un duplicata (baseId defini) herite de la definition de son tracker source,
+    // donc des memes corrections de login que l'original.
+    const definition = loadDefaultTrackerDefinition(tracker.baseId ?? tracker.id);
     if (definition) {
       if (JSON.stringify(tracker.login) !== JSON.stringify(definition.login)) {
         tracker.login = definition.login;
@@ -517,7 +519,7 @@ function sanitizeTrackerConfigInput(
  * Sans ce merge, un tracker perso enregistre via /api/trackers serait invisible
  * dans « Configurer les actifs » et n'aurait jamais d'identifiants.
  */
-function listAllTrackerSummaries(): Array<{ id: string; name: string; baseUrl: string; file: string; enabled: boolean }> {
+function listAllTrackerSummaries(): Array<{ id: string; name: string; baseUrl: string; file: string; enabled: boolean; baseId?: string }> {
   const fromFiles = listTrackerDefinitionFiles();
   const seen = new Set(fromFiles.map(d => d.id));
   const dbOnly = loadTrackerConfigsFromDb()
@@ -526,8 +528,9 @@ function listAllTrackerSummaries(): Array<{ id: string; name: string; baseUrl: s
       id: cfg.id,
       name: cfg.name,
       baseUrl: cfg.baseUrl,
-      file: `${cfg.id} (perso)`,
+      file: cfg.baseId ? `${cfg.id} (copie de ${cfg.baseId})` : `${cfg.id} (perso)`,
       enabled: cfg.enabled !== false,
+      baseId: cfg.baseId,
     }));
   return [...fromFiles, ...dbOnly];
 }
@@ -2511,13 +2514,14 @@ export async function start(): Promise<void> {
 
   app.get('/api/config', (_req, res) => {
     trackers = normalizeTrackerConfigs();
-    const safe = trackers.map(({ id, name, baseUrl, enabled, dashboard, ratioless }) => ({
+    const safe = trackers.map(({ id, name, baseUrl, enabled, dashboard, ratioless, baseId }) => ({
       id,
       name,
       baseUrl,
       enabled: enabled !== false,
       byteUnit: dashboard?.byteUnit ?? 'binary',
       ratioless: Boolean(ratioless),
+      baseId,
     }));
     res.json({ trackers: safe });
   });
@@ -2675,6 +2679,7 @@ export async function start(): Promise<void> {
           configured: Boolean(configuredTracker),
           isDefault: isDefaultTracker(definition.id),
           isCustom: !isDefaultTracker(definition.id),
+          baseId: configuredTracker?.baseId ?? definition.baseId,
         };
       })
       .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
@@ -2715,6 +2720,47 @@ export async function start(): Promise<void> {
     saveTrackerConfig(tracker);
     trackers = normalizeTrackerConfigs();
     res.json({ ok: true, tracker });
+  });
+
+  // Duplique un tracker pour gerer plusieurs comptes sur un meme site. Le duplicata
+  // reprend la definition technique de la source (via baseId, donc il herite des
+  // corrections de login amont) mais possede son propre id : identifiants, cookie,
+  // 2FA, profil navigateur, stats, planning et notifications sont independants.
+  app.post('/api/trackers/:trackerId/duplicate', (req, res) => {
+    importLegacyTrackersIfNeeded();
+    const sourceId = req.params.trackerId;
+    const source = loadTrackerConfigsFromDb().find(t => t.id === sourceId)
+      ?? loadTrackerDefinitionFile(sourceId);
+    if (!source) return res.status(404).json({ ok: false, error: 'Tracker introuvable' });
+
+    const baseId = source.baseId ?? source.id;
+    const summaries = listAllTrackerSummaries();
+    const existingIds = new Set(summaries.map(summary => summary.id));
+    const baseName = summaries.find(summary => summary.id === baseId)?.name ?? source.name;
+
+    let n = 2;
+    while (existingIds.has(`${baseId}-${n}`)) n += 1;
+    const newId = `${baseId}-${n}`;
+
+    const duplicate: TrackerConfig = {
+      ...source,
+      id: newId,
+      name: `${baseName} (compte ${n})`,
+      baseId,
+      enabled: true,
+    };
+    saveTrackerConfig(duplicate);
+
+    // Inserer dans l'ordre d'affichage juste apres la source.
+    const order = getJsonSetting(TRACKER_ORDER_KEY, { ids: [] as string[] });
+    const ids = (Array.isArray(order.ids) ? order.ids : []).filter(id => id !== newId);
+    const at = ids.indexOf(sourceId);
+    if (at >= 0) ids.splice(at + 1, 0, newId);
+    else ids.push(newId);
+    setJsonSetting(TRACKER_ORDER_KEY, { ids });
+
+    trackers = normalizeTrackerConfigs();
+    res.json({ ok: true, tracker: duplicate });
   });
 
   app.post('/api/trackers', (req, res) => {
@@ -3205,7 +3251,13 @@ export async function start(): Promise<void> {
 
   // ── Logos trackers (favicon en cache + logos manuels) ─────────────────────
   app.get('/api/tracker-logo/:id', (req, res) => {
-    const file = resolveLogoPath(req.params.id);
+    // Un duplicata (id ex. c411-2) n'a pas de logo propre : on retombe sur celui
+    // de son tracker source (baseId).
+    let file = resolveLogoPath(req.params.id);
+    if (!file) {
+      const baseId = loadTrackerConfigsFromDb().find(t => t.id === req.params.id)?.baseId;
+      if (baseId) file = resolveLogoPath(baseId);
+    }
     if (!file) {
       res.status(404).end();
       return;
