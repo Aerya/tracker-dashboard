@@ -1955,6 +1955,14 @@
     <p style="font-size:12px; color:var(--muted); margin:8px 0 0; max-width:760px">
       Par défaut, les lectures en mode navigateur utilisent <b>Chromium</b> (Playwright). <a href="https://github.com/CloakHQ/CloakBrowser" target="_blank" rel="noreferrer noopener" style="color:var(--blue); text-decoration:none">CloakBrowser</a> est un Chromium modifié au niveau source pour ressembler à un vrai navigateur côté empreinte (TLS, fingerprint), ce qui lui permet de franchir davantage de protections anti-bot — notamment certains challenges Cloudflare Turnstile qui se valident automatiquement — donc moins de sites nécessitant un cookie collé à la main. Mêmes performances qu'un Chromium classique (c'est un navigateur complet). Si le moteur est indisponible, l'app repart automatiquement sur Chromium.
     </p>
+    <div class="proxy-info" style="margin-top:14px; max-width:760px">
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
+        <b>Runtime navigateur</b>
+        <span id="browser-runtime-badge" class="definition-badge definition-badge-muted">…</span>
+        <button class="btn-test" style="padding:4px 10px" onclick="loadBrowserRuntimeStatus()" type="button">Vérifier</button>
+      </div>
+      <div id="browser-runtime-detail" class="beta-note" style="margin-top:8px"></div>
+    </div>
     <div class="proxy-form" style="align-items:flex-start; margin-top:14px">
       <label class="toggle-switch" style="grid-column:span 5" title="Lecture rapide via curl-impersonate">
         <input type="checkbox" id="fast-fetch-enabled" onchange="saveFastFetch()">
@@ -6473,6 +6481,40 @@
     } catch (e) { console.warn('Browser engine unavailable', e); }
   }
 
+  // Etat du runtime navigateur : embarque (local) ou service externe + versions.
+  async function loadBrowserRuntimeStatus() {
+    const badge = document.getElementById('browser-runtime-badge');
+    const detail = document.getElementById('browser-runtime-detail');
+    if (!badge || !detail) return;
+    badge.textContent = 'Vérification…';
+    badge.className = 'definition-badge definition-badge-muted';
+    try {
+      const r = await fetch('/api/browser-runtime/status');
+      const d = await r.json();
+      const s = d.status || {};
+      if (s.mode === 'local') {
+        badge.textContent = 'Embarqué (Chromium local)';
+        badge.className = 'definition-badge';
+        detail.innerHTML = 'Le navigateur est inclus dans l\'image principale. Pour alléger l\'image, ajoutez le service <code>tracker-dashboard-browser</code> et définissez <code>BROWSER_RUNTIME_URL</code>.';
+        return;
+      }
+      if (s.available) {
+        badge.textContent = 'Service externe — disponible';
+        badge.className = 'definition-badge';
+        const cloak = s.cloakbrowser?.available ? `oui${s.cloakbrowser.version ? ' (' + escapeHtml(s.cloakbrowser.version) + ')' : ''}` : 'non';
+        detail.innerHTML = `Playwright <b>${escapeHtml(s.playwright || '?')}</b> · Chromium <b>${escapeHtml(s.chromiumVersion || '?')}</b> · CloakBrowser ${cloak}<br><span style="color:var(--muted)">${escapeHtml(s.url || '')}</span>`;
+      } else {
+        badge.textContent = 'Service externe — indisponible';
+        badge.className = 'definition-badge definition-badge-muted';
+        badge.style.color = 'var(--red)';
+        detail.innerHTML = `Runtime configuré (<code>${escapeHtml(s.url || '')}</code>) mais injoignable${s.error ? ' : ' + escapeHtml(s.error) : ''}. Les trackers en mode navigateur échoueront tant que le service <code>tracker-dashboard-browser</code> n'est pas démarré.`;
+      }
+    } catch (e) {
+      badge.textContent = 'Inconnu';
+      detail.textContent = 'Statut indisponible : ' + e.message;
+    }
+  }
+
   async function saveBrowserEngine() {
     const engine = document.getElementById('browser-engine-cloak').checked ? 'cloak' : 'chromium';
     try {
@@ -6760,6 +6802,7 @@
     await loadPresentationMode();
     await loadProxySettings();
     await loadBrowserEngine();
+    loadBrowserRuntimeStatus();
     await loadFastFetch();
     await loadTrackerDefinitionsPanel();
     getActiveGrid().innerHTML = renderSkeleton(trackerCount);

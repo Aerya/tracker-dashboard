@@ -33,8 +33,19 @@ async function loadCloak(): Promise<CloakModule | null> {
   }
   return cloakModulePromise;
 }
-function cloakEnabled(): boolean {
-  return getJsonSetting('browser_engine', 'chromium' as string) === 'cloak';
+// Overrides optionnels fournis par le runtime navigateur externe : ils remplacent
+// les lectures DB (cookie, TOTP, moteur, proxy). Quand `overrides` est absent (chemin
+// local historique), tout retombe sur la DB et le comportement est strictement identique.
+export interface BrowserFetchOverrides {
+  cookie?: string;
+  totpSecret?: string;
+  engine?: string;
+  proxy?: { server: string; username?: string; password?: string } | null;
+}
+
+function cloakEnabled(overrides?: BrowserFetchOverrides): boolean {
+  const engine = overrides?.engine ?? getJsonSetting('browser_engine', 'chromium' as string);
+  return engine === 'cloak';
 }
 
 // Cookie minimal : on garde juste name+value (+ flags), et on injecte via `url`
@@ -259,8 +270,8 @@ export function buildCookieHeader(trackerId: string): string {
     .join('; ');
 }
 
-async function injectStoredCookies(tracker: TrackerConfig, context: BrowserContext): Promise<void> {
-  const raw = getTrackerCookie(tracker.id);
+async function injectStoredCookies(tracker: TrackerConfig, context: BrowserContext, overrides?: BrowserFetchOverrides): Promise<void> {
+  const raw = overrides ? (overrides.cookie ?? '') : getTrackerCookie(tracker.id);
   if (!raw) return;
   const parsed = parseCookies(raw);
   if (parsed.length === 0) {
@@ -323,7 +334,10 @@ function isAnubisChallenge(html: string): boolean {
     html.includes("Verification que vous n&#39;etes pas un robot");
 }
 
-function playwrightProxy(trackerId: string): { server: string; username?: string; password?: string } | undefined {
+function playwrightProxy(trackerId: string, overrides?: BrowserFetchOverrides): { server: string; username?: string; password?: string } | undefined {
+  // Runtime externe : le proxy est deja resolu cote app principale (y compris le
+  // socks du tunnel SSH), on l'utilise tel quel sans relire la DB ni le tunnel local.
+  if (overrides) return overrides.proxy ?? undefined;
   const proxy = resolveProxyForTracker(trackerId);
   if (!proxy.enabled || !proxy.host || !proxy.port) return undefined;
   // Proxy SSH : on pointe vers le SOCKS5 local du tunnel (etabli par ensureProxyReady
@@ -342,7 +356,7 @@ function playwrightProxy(trackerId: string): { server: string; username?: string
   };
 }
 
-async function getContext(tracker: TrackerConfig): Promise<BrowserContext> {
+async function getContext(tracker: TrackerConfig, overrides?: BrowserFetchOverrides): Promise<BrowserContext> {
   const existing = contexts.get(tracker.id);
   if (existing) return existing;
 
@@ -351,13 +365,13 @@ async function getContext(tracker: TrackerConfig): Promise<BrowserContext> {
   const launchOptions = {
     headless: true,
     userAgent: selectUserAgent(),
-    proxy: playwrightProxy(tracker.id),
+    proxy: playwrightProxy(tracker.id, overrides),
     viewport: { width: 1365, height: 900 },
     locale: 'fr-FR',
   };
 
   let context: BrowserContext | null = null;
-  if (cloakEnabled()) {
+  if (cloakEnabled(overrides)) {
     const cloak = await loadCloak();
     if (cloak) {
       try {
@@ -372,7 +386,7 @@ async function getContext(tracker: TrackerConfig): Promise<BrowserContext> {
   if (!context) {
     context = await chromium.launchPersistentContext(userDataDir, launchOptions);
   }
-  await injectStoredCookies(tracker, context);
+  await injectStoredCookies(tracker, context, overrides);
   contexts.set(tracker.id, context);
   return context;
 }
@@ -569,6 +583,7 @@ async function ensureLoggedIn(
   tracker: TrackerConfig,
   credentials: { username: string; password: string },
   page: Page,
+  overrides?: BrowserFetchOverrides,
 ): Promise<void> {
   const html = await safeContent(page);
   if (!hasFailurePattern(html, tracker.login.failurePatterns)) return;
@@ -643,7 +658,7 @@ async function ensureLoggedIn(
   }
 
   // 2FA : si un secret TOTP est enregistre, on remplit le champ du code avant submit.
-  const totpSecret = getTrackerTotpSecret(tracker.id);
+  const totpSecret = overrides ? (overrides.totpSecret ?? '') : getTrackerTotpSecret(tracker.id);
   if (totpSecret) {
     const code = generateTotp(totpSecret);
     if (code) {
@@ -767,8 +782,9 @@ async function ensureLoggedIn(
 export async function fetchWithBrowser(
   tracker: TrackerConfig,
   credentials: { username: string; password: string },
+  overrides?: BrowserFetchOverrides,
 ): Promise<{ html: string; url: string; authConfirmed: boolean; extraHtml?: string }> {
-  const context = await getContext(tracker);
+  const context = await getContext(tracker, overrides);
   const page = await context.newPage();
   const url = resolveUrl(tracker.baseUrl, interpolate(tracker.fetch.url, {
     username: credentials.username,
@@ -780,7 +796,7 @@ export async function fetchWithBrowser(
     await page.waitForLoadState('domcontentloaded', { timeout: 30_000 }).catch(() => {});
     await waitForAnubis(page);
     await waitForLiveView(page);
-    await ensureLoggedIn(tracker, credentials, page);
+    await ensureLoggedIn(tracker, credentials, page, overrides);
     await page.goto(url, { waitUntil: 'commit', timeout: 45_000 });
     await page.waitForLoadState('domcontentloaded', { timeout: 30_000 }).catch(() => {});
     await waitForAnubis(page);
@@ -845,7 +861,7 @@ export async function fetchWithBrowser(
  * HTTP echoue (Cloudflare/JS). Aucun login, aucune session : usage strictement
  * lecture-seule d'une page publique (ex: page de login). Best-effort : renvoie '' en cas d'echec.
  */
-export async function fetchRawHtmlWithBrowser(url: string, trackerId = '__detect__'): Promise<string> {
+export async function fetchRawHtmlWithBrowser(url: string, trackerId = '__detect__', overrides?: BrowserFetchOverrides): Promise<string> {
   const contextOptions = {
     userAgent: selectUserAgent(),
     viewport: { width: 1365, height: 900 },
@@ -853,7 +869,7 @@ export async function fetchRawHtmlWithBrowser(url: string, trackerId = '__detect
   };
   let browser: Awaited<ReturnType<typeof chromium.launch>> | null = null;
   try {
-    browser = await chromium.launch({ headless: true, proxy: playwrightProxy(trackerId) });
+    browser = await chromium.launch({ headless: true, proxy: playwrightProxy(trackerId, overrides) });
     const context = await browser.newContext(contextOptions);
     const page = await context.newPage();
     await page.goto(url, { waitUntil: 'commit', timeout: 45_000 });

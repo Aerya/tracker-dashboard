@@ -12,5 +12,27 @@ services:
       # Pour un test ponctuel sans token : METRICS_PUBLIC=true
       # Ne pas laisser actif si l'instance est exposee hors reseau local.
       # METRICS_PUBLIC: "true"
+      #
+      # ── Mode complet (trackers en mode navigateur) ─────────────────────────
+      # Decommentez la ligne suivante ET le service tracker-dashboard-browser
+      # ci-dessous pour activer les trackers necessitant un navigateur.
+      # BROWSER_RUNTIME_URL: "http://tracker-dashboard-browser:3001"
+      # Optionnel : token partage si le runtime risque d'etre expose.
+      # BROWSER_RUNTIME_TOKEN: "changez-moi"
     volumes:
       - ./config:/app/config
+
+  # ── Service navigateur OPTIONNEL (mode complet) ──────────────────────────────
+  # Necessaire uniquement pour les trackers en mode navigateur (Chromium/CloakBrowser).
+  # Installation simple : laissez ce bloc commente (un seul container).
+  # Installation complete : decommentez ce bloc + BROWSER_RUNTIME_URL ci-dessus.
+  # tracker-dashboard-browser:
+  #   image: ghcr.io/tracker-dashboard/tracker-dashboard-browser:latest
+  #   container_name: tracker-dashboard-browser
+  #   restart: unless-stopped
+  #   # Aucun port publie : joignable seulement par tracker-dashboard via le reseau Docker.
+  #   environment:
+  #     # Doit correspondre a BROWSER_RUNTIME_TOKEN ci-dessus si vous l'activez.
+  #     BROWSER_RUNTIME_TOKEN: "changez-moi"
+  #   volumes:
+  #     - ./config:/app/config

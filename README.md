@@ -24,6 +24,7 @@ Au premier accès, l'application demande de créer le compte administrateur de l
 
 ## Changements récents
 
+- **Runtime navigateur externalisable** : service optionnel `tracker-dashboard-browser` (Playwright/Chromium/CloakBrowser) pour alléger l'image principale, avec statut/versions dans la WebUI. L'app reste utilisable sans lui (trackers HTTP).
 - **Plusieurs comptes par tracker** : duplication d'un tracker, noms d'affichage personnalisables, regroupement sous le site, et attribution des torrents par passkey entre comptes.
 - Refonte de la navigation : barre latérale unique, thème clair/sombre/système, nouveau logo.
 - Fiches de trackers enrichies : statut clair, courbes d'évolution UP/DL/ratio (buffer en option), erreurs en cours / récentes / historique.
@@ -147,7 +148,18 @@ Avec le type **SSH**, le dashboard ouvre un tunnel SSH (SOCKS5 local adossé au 
 - Les secrets sont stockés côté serveur, jamais renvoyés en clair (masqués).
 - Le bouton **Tester** établit le tunnel et vérifie l'IP de sortie.
 
-## Moteur navigateur (CloakBrowser)
+## Runtime navigateur (mode simple / mode complet)
+
+Le navigateur (Playwright/Chromium/CloakBrowser) peut être **externalisé** dans un service séparé pour alléger l'image principale. Deux modes :
+
+- **Mode simple (par défaut)** : un seul container `tracker-dashboard`. Les trackers HTTP et le fast-path `curl-impersonate` fonctionnent. Selon la version d'image, le navigateur peut être embarqué.
+- **Mode complet** : ajoutez le service optionnel `tracker-dashboard-browser` et définissez `BROWSER_RUNTIME_URL` (voir `docker-compose.yml`, bloc commenté). Nécessaire pour les trackers en `mode: browser`.
+
+Les deux services partagent le volume `./config` (mêmes SQLite, trackers, cookies, TOTP, proxies, paramètres et `config/browser-profile`). Le service navigateur **ne touche pas la base** : l'app principale reste la source de vérité et lui transmet ce qu'il faut par appel interne. Si le runtime navigateur est absent, l'app reste utilisable : seuls les trackers `mode: browser` échouent avec un message clair. L'état (disponible/indisponible, versions Playwright/Chromium/CloakBrowser) est visible dans **Proxies → Moteur navigateur → Runtime navigateur** (bouton *Vérifier*).
+
+Sécurité : ne publiez pas le port du runtime ; laissez-le joignable uniquement via le réseau Docker interne. Un token partagé optionnel (`BROWSER_RUNTIME_TOKEN` des deux côtés) protège l'API s'il est exposé par erreur.
+
+### Moteur navigateur (CloakBrowser)
 
 Les lectures en mode navigateur utilisent **Chromium** (Playwright) par défaut. Une option (panneau Proxies → Moteur navigateur) bascule sur **[CloakBrowser](https://github.com/CloakHQ/CloakBrowser)**, un Chromium modifié pour présenter une empreinte de vrai navigateur (TLS, fingerprint) et franchir davantage de protections anti-bot. S'il est indisponible, l'app repart automatiquement sur Chromium.
 
