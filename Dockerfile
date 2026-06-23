@@ -23,13 +23,14 @@ ARG APP_IMAGE_REF=local
 ENV APP_IMAGE_SOURCE=$APP_IMAGE_SOURCE \
     APP_IMAGE_VERSION=$APP_IMAGE_VERSION \
     APP_IMAGE_REVISION=$APP_IMAGE_REVISION \
-    APP_IMAGE_REF=$APP_IMAGE_REF \
-    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+    APP_IMAGE_REF=$APP_IMAGE_REF
 COPY package*.json ./
-RUN npm ci --omit=dev
-RUN npx playwright install --with-deps chromium \
-  && chmod -R a+rX /ms-playwright \
-  && node -e "const fs=require('fs'); const { chromium } = require('playwright'); const p=chromium.executablePath(); if (!fs.existsSync(p)) throw new Error('Chromium Playwright introuvable: '+p); console.log('chromium playwright', p);"
+# Image principale allegee : aucun navigateur embarque. Playwright/Chromium et
+# CloakBrowser vivent dans l'image tracker-dashboard-browser (service optionnel).
+# On retire meme le paquet npm playwright : les trackers mode:browser affichent
+# alors un message clair tant qu'aucun runtime navigateur n'est configure.
+RUN npm ci --omit=dev \
+  && rm -rf node_modules/playwright node_modules/playwright-core
 RUN apt-get update \
   && apt-get install --only-upgrade -y --no-install-recommends libgnutls30 \
   && apt-get install -y --no-install-recommends curl ca-certificates \
@@ -60,16 +61,6 @@ RUN set -u; \
       && echo "curl-impersonate installe ($CI_ARCH)" ) \
     || echo "::warning:: curl-impersonate non installe — fast-path desactive, navigateur utilise."; \
   fi
-
-# ── CloakBrowser (moteur navigateur furtif, opt-in dans la WebUI) ───────────
-# Installe + pre-telecharge le binaire. Etape NON bloquante : si l'install ou le
-# telechargement echoue, l'image se construit quand meme et l'app retombe
-# automatiquement sur Chromium au runtime.
-ENV CLOAKBROWSER_CACHE_DIR=/app/.cloakbrowser \
-    CLOAKBROWSER_AUTO_UPDATE=false
-RUN npm install --omit=dev --no-save cloakbrowser playwright-core \
-  && node -e "import('cloakbrowser').then(m => m.ensureBinary && m.ensureBinary()).catch(e => { console.error('CloakBrowser binary skip:', e.message); })" \
-  || echo "::warning:: CloakBrowser indisponible a la construction — l'app utilisera Chromium par defaut."
 
 # npm/npx ne sont necessaires qu'a la construction. Les retirer du runtime evite
 # d'embarquer les dependances internes de npm dans l'image finale.
