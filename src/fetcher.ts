@@ -20,7 +20,7 @@ import { buildCookieHeader } from './browserFetcher.js';
 import { getTrackerTotpSecret, loadTrackerConfigsFromDb, saveTrackerConfig } from './db.js';
 import { generateTotp } from './totp.js';
 import { selectUserAgent } from './userAgent.js';
-import { closeBrowserSession, closeBrowserSessions, fetchWithBrowser } from './browserFetcher.js';
+import { closeBrowserSession, closeBrowserSessions, fetchWithBrowser } from './browserBackend.js';
 
 // ─── Transforms ──────────────────────────────────────────────────────────────
 

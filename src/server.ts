@@ -4,7 +4,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import axios from 'axios';
 import { fetchTracker, invalidateAllSessions, invalidateSession } from './fetcher.js';
-import { resetBrowserProfile, closeBrowserSession, fetchRawHtmlWithBrowser } from './browserFetcher.js';
+import { resetBrowserProfile, closeBrowserSession, fetchRawHtmlWithBrowser, getBrowserRuntimeStatus } from './browserBackend.js';
 import { type FieldExtractor, type TrackerConfig, type TrackerStats } from './types.js';
 import {
   listEngines,
@@ -3189,6 +3189,11 @@ export async function start(): Promise<void> {
   // ── Moteur navigateur : chromium (defaut) ou cloak (CloakBrowser furtif) ──
   app.get('/api/settings/browser-engine', (_req, res) => {
     res.json({ engine: getJsonSetting('browser_engine', 'chromium') });
+  });
+
+  // Etat du runtime navigateur (local embarque ou service externe) + versions.
+  app.get('/api/browser-runtime/status', async (_req, res) => {
+    res.json({ ok: true, status: await getBrowserRuntimeStatus() });
   });
 
   app.post('/api/settings/browser-engine', (req, res) => {

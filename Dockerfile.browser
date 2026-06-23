@@ -1,0 +1,49 @@
+# Runtime navigateur externe : tracker-dashboard-browser
+#
+# Service optionnel qui execute les actions navigateur (Playwright/Chromium et
+# CloakBrowser) pour le compte de l'app principale. Il NE touche pas la base : il
+# recoit tout dans le payload HTTP. Les profils persistants sont partages via le
+# volume ./config (config/browser-profile).
+#
+# Demarrage : node --experimental-sqlite dist/browserRuntime.js (port 3001).
+
+FROM node:22-bookworm-slim AS builder
+
+WORKDIR /app
+ARG NPM_VERSION=11.17.0
+RUN npm install -g "npm@${NPM_VERSION}" \
+  && node -e "const v=require('/usr/local/lib/node_modules/npm/node_modules/tar/package.json').version; const [a,b,c]=v.split('.').map(Number); if (a < 7 || (a === 7 && (b < 5 || (b === 5 && c < 16)))) throw new Error('npm embeds vulnerable tar '+v); console.log('npm tar', v);"
+COPY package*.json tsconfig.json ./
+RUN npm ci
+COPY src/ ./src/
+RUN npm run build
+
+# ── Image finale (Playwright + Chromium + CloakBrowser, sans sources TS) ──────
+FROM node:22-bookworm-slim
+
+WORKDIR /app
+ARG NPM_VERSION=11.17.0
+RUN npm install -g "npm@${NPM_VERSION}" \
+  && node -e "const v=require('/usr/local/lib/node_modules/npm/node_modules/tar/package.json').version; const [a,b,c]=v.split('.').map(Number); if (a < 7 || (a === 7 && (b < 5 || (b === 5 && c < 16)))) throw new Error('npm embeds vulnerable tar '+v); console.log('npm tar', v);"
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+COPY package*.json ./
+RUN npm ci --omit=dev
+RUN npx playwright install --with-deps chromium \
+  && chmod -R a+rX /ms-playwright \
+  && node -e "const fs=require('fs'); const { chromium } = require('playwright'); const p=chromium.executablePath(); if (!fs.existsSync(p)) throw new Error('Chromium Playwright introuvable: '+p); console.log('chromium playwright', p);"
+
+# ── CloakBrowser (moteur navigateur furtif, opt-in) ─────────────────────────
+ENV CLOAKBROWSER_CACHE_DIR=/app/.cloakbrowser \
+    CLOAKBROWSER_AUTO_UPDATE=false
+RUN npm install --omit=dev --no-save cloakbrowser playwright-core \
+  && node -e "import('cloakbrowser').then(m => m.ensureBinary && m.ensureBinary()).catch(e => { console.error('CloakBrowser binary skip:', e.message); })" \
+  || echo "::warning:: CloakBrowser indisponible a la construction — Chromium par defaut."
+
+# npm/npx ne sont necessaires qu'a la construction.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx \
+  && node -e "const fs=require('fs'); for (const p of ['/usr/local/lib/node_modules/npm','/usr/local/bin/npm','/usr/local/bin/npx']) if (fs.existsSync(p)) throw new Error('Artefact npm encore present: '+p); console.log('npm retire de l image runtime');"
+
+COPY --from=builder /app/dist ./dist
+
+EXPOSE 3001
+CMD ["node", "--experimental-sqlite", "dist/browserRuntime.js"]
