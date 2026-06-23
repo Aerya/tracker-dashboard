@@ -112,5 +112,10 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            APP_IMAGE_SOURCE=${{ env.REGISTRY }}/tracker-dashboard/tracker-dashboard-browser
+            APP_IMAGE_VERSION=${{ steps.meta.outputs.version }}
+            APP_IMAGE_REVISION=${{ github.sha }}
+            APP_IMAGE_REF=${{ github.ref_name }}
           cache-from: type=gha,scope=browser
           cache-to: type=gha,mode=max,scope=browser
