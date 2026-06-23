@@ -60,6 +60,23 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # Les CVE de l'image de base peuvent casser toutes les PR Dependabot sans
+      # rapport avec le changement teste. Sur PR on garde donc le scan visible
+      # dans les logs, mais non bloquant. Le scan planifie publie le rapport
+      # SARIF dans l'onglet Security pour le suivi securite.
+      - name: Scan image for high and critical CVEs
+        uses: aquasecurity/trivy-action@v0.36.0
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          image-ref: tracker-dashboard:pr
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: table
+          exit-code: "0"
+
   docker-browser:
     name: Docker build runtime navigateur
     runs-on: ubuntu-latest
@@ -84,20 +101,3 @@ jobs:
           tags: tracker-dashboard-browser:pr
           cache-from: type=gha,scope=browser
           cache-to: type=gha,mode=max,scope=browser
-
-      # Les CVE de l'image de base peuvent casser toutes les PR Dependabot sans
-      # rapport avec le changement teste. Sur PR on garde donc le scan visible
-      # dans les logs, mais non bloquant. Le scan planifie publie le rapport
-      # SARIF dans l'onglet Security pour le suivi securite.
-      - name: Scan image for high and critical CVEs
-        uses: aquasecurity/trivy-action@v0.36.0
-        env:
-          TRIVY_USERNAME: ${{ github.actor }}
-          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          image-ref: tracker-dashboard:pr
-          vuln-type: os,library
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          format: table
-          exit-code: "0"
