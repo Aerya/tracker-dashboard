@@ -75,7 +75,7 @@ if (!html.includes('<h2>🔀 Proxy</h2>')) {
 }
 
 const synchronizesAllBundledTrackers = (
-  server.includes('const definition = loadDefaultTrackerDefinition(tracker.id);')
+  server.includes('const definition = loadDefaultTrackerDefinition(tracker.baseId ?? tracker.id);')
   && !server.includes('CANONICAL_CONNECTION_TRACKERS')
 );
 if (redacted.fetch?.fields?.requiredRatio && !synchronizesAllBundledTrackers) {
