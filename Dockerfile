@@ -5,7 +5,7 @@ ARG NPM_VERSION=11.17.0
 RUN npm install -g "npm@${NPM_VERSION}" \
   && node -e "const v=require('/usr/local/lib/node_modules/npm/node_modules/tar/package.json').version; const [a,b,c]=v.split('.').map(Number); if (a < 7 || (a === 7 && (b < 5 || (b === 5 && c < 16)))) throw new Error('npm embeds vulnerable tar '+v); console.log('npm tar', v);"
 COPY package*.json tsconfig.json ./
-RUN npm install && npm install --no-save playwright@1.60.0 top-user-agents@2.1.111
+RUN npm ci
 COPY src/ ./src/
 RUN npm run build
 
@@ -23,10 +23,13 @@ ARG APP_IMAGE_REF=local
 ENV APP_IMAGE_SOURCE=$APP_IMAGE_SOURCE \
     APP_IMAGE_VERSION=$APP_IMAGE_VERSION \
     APP_IMAGE_REVISION=$APP_IMAGE_REVISION \
-    APP_IMAGE_REF=$APP_IMAGE_REF
+    APP_IMAGE_REF=$APP_IMAGE_REF \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 COPY package*.json ./
-RUN npm install --omit=dev && npm install --omit=dev --no-save playwright@1.60.0 top-user-agents@2.1.111
-RUN npx playwright install --with-deps chromium
+RUN npm ci --omit=dev
+RUN npx playwright install --with-deps chromium \
+  && chmod -R a+rX /ms-playwright \
+  && node -e "const fs=require('fs'); const { chromium } = require('playwright'); const p=chromium.executablePath(); if (!fs.existsSync(p)) throw new Error('Chromium Playwright introuvable: '+p); console.log('chromium playwright', p);"
 RUN apt-get update \
   && apt-get install --only-upgrade -y --no-install-recommends libgnutls30 \
   && apt-get install -y --no-install-recommends curl ca-certificates \
