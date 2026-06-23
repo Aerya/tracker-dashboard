@@ -24,7 +24,7 @@ Au premier accès, l'application demande de créer le compte administrateur de l
 
 ## Changements récents
 
-- **Plusieurs comptes par tracker** : duplication d'un tracker pour suivre plusieurs comptes d'un même site, regroupés sous le site dans la barre latérale.
+- **Plusieurs comptes par tracker** : duplication d'un tracker, noms d'affichage personnalisables, regroupement sous le site, et attribution des torrents par passkey entre comptes.
 - Refonte de la navigation : barre latérale unique, thème clair/sombre/système, nouveau logo.
 - Fiches de trackers enrichies : statut clair, courbes d'évolution UP/DL/ratio (buffer en option), erreurs en cours / récentes / historique.
 - Menu **Calendrier** des refreshs (OK/KO par jour, accès à la config en cas de KO).
@@ -84,13 +84,17 @@ Laissez le champ vide pour les trackers sans 2FA.
 
 ## Plusieurs comptes par tracker
 
-Pour suivre **plusieurs comptes sur un même site**, dupliquez un tracker : dans **Configuration → Configurer les actifs → (le tracker)**, cliquez sur **Dupliquer**. Un nouveau compte « (compte 2) » est créé, prêt à recevoir ses identifiants.
+Pour suivre **plusieurs comptes sur un même site**, dupliquez un tracker : dans **Configuration → Configurer les actifs → (le tracker)**, cliquez sur **Dupliquer**. Un nouveau compte « (2) » est créé, prêt à recevoir ses identifiants.
 
 - Le duplicata reprend la **même mécanique de login** que le tracker d'origine et **hérite automatiquement** des corrections de login publiées par la suite.
 - **Identifiants, cookie, 2FA, profil navigateur, statistiques, planning et notifications sont indépendants** entre comptes.
+- **Nom d'affichage modifiable** : sur la fiche de configuration de chaque compte, champ **Nom d'affichage** + **Renommer** (ex. « C411 », « C411 Alex », « C411 Ishem »).
 - Dans la barre latérale (« Configurer les actifs » et « Trackers activés »), les comptes d'un même site sont **regroupés sous le nom du site**, dépliable.
 - Un compte dupliqué est **supprimable** (bouton **Supprimer** sur sa fiche) ; le tracker intégré d'origine, lui, ne peut être que désactivé.
-- Limite : la liaison des torrents qBittorrent se fait par hôte d'annonce ; deux comptes du même site partageant le même hôte, un torrent ne se rattache qu'à l'un des deux. Les statistiques du site restent justes.
+
+### Attribution des torrents par passkey
+
+Quand un site a plusieurs comptes, les torrents de vos clients BitTorrent sont ventilés par **passkey** (celle présente dans l'URL d'annonce). Sur la **fiche** d'un compte, la section **Attribution des annonces** liste les passkeys détectées (affichées masquées) ; attribuez chacune au bon compte. Les torrents correspondants — et leurs statistiques — suivent alors le compte choisi. Avec un seul compte, rien ne change : l'attribution automatique par hôte reste utilisée.
 
 ## Captures d'écran
 
