@@ -221,9 +221,17 @@ interface BetaAnnounceMapping {
   trackerId: string;
 }
 
+// Attribution d'une annonce precise (identifiee par sa passkey, via un hash stable)
+// a un compte, pour ventiler les torrents entre plusieurs comptes d'un meme site.
+interface BetaAccountAnnounceMapping {
+  key: string;
+  trackerId: string;
+}
+
 interface BetaSettings {
   qbitClients: BetaQbitClient[];
   announceMappings: BetaAnnounceMapping[];
+  accountAnnounceMappings: BetaAccountAnnounceMapping[];
   notificationTargets: BetaNotificationTarget[];
   features: {
     graphsEnabled: boolean;
@@ -248,6 +256,8 @@ interface QbitTrackerAggregate {
   clientLabel: string;
   clientBaseUrl: string;
   trackerHost: string;
+  announceKey?: string;
+  announceLabel?: string;
   torrentCount: number;
   seedingCount: number;
   leechingCount: number;
@@ -1544,6 +1554,7 @@ function defaultBetaSettings(): BetaSettings {
   return {
     qbitClients: [],
     announceMappings: [],
+    accountAnnounceMappings: [],
     notificationTargets: [],
     features: {
       graphsEnabled: true,
@@ -1601,6 +1612,7 @@ function loadBetaSettings(): BetaSettings {
     features: { ...defaultBetaSettings().features, ...(settings.features ?? {}) },
     qbitClients: Array.isArray(settings.qbitClients) ? settings.qbitClients : [],
     announceMappings: Array.isArray(settings.announceMappings) ? settings.announceMappings : [],
+    accountAnnounceMappings: Array.isArray(settings.accountAnnounceMappings) ? settings.accountAnnounceMappings : [],
     notificationTargets: Array.isArray(settings.notificationTargets) ? settings.notificationTargets : [],
     scheduleOverrides: Array.isArray(settings.scheduleOverrides) ? settings.scheduleOverrides : [],
     schedule: { ...defaultBetaSettings().schedule, ...(settings.schedule ?? {}) },
@@ -1693,6 +1705,14 @@ function saveBetaSettingsPayload(raw: unknown): BetaSettings {
       trackerId: String(mapping.trackerId || '').trim(),
     };
   }).filter(mapping => mapping.announceHost && mapping.announceHost !== 'unknown' && mapping.trackerId) : current.announceMappings;
+
+  const accountAnnounceMappings: BetaAccountAnnounceMapping[] = Array.isArray(body.accountAnnounceMappings) ? body.accountAnnounceMappings.map(rawMapping => {
+    const mapping = rawMapping as Partial<BetaAccountAnnounceMapping>;
+    return {
+      key: String(mapping.key || '').trim(),
+      trackerId: String(mapping.trackerId || '').trim(),
+    };
+  }).filter(mapping => mapping.key && mapping.trackerId) : current.accountAnnounceMappings;
 
   const rawTrackerAlerts = (body.trackerAlerts && typeof body.trackerAlerts === 'object') ? body.trackerAlerts as Record<string, Partial<BetaTrackerAlert>> : current.trackerAlerts;
   const trackerAlerts: Record<string, BetaTrackerAlert> = {};
@@ -1818,7 +1838,7 @@ function saveBetaSettingsPayload(raw: unknown): BetaSettings {
     sessionDays: Number.isFinite(Number(rawGlobal.sessionDays)) ? Number(rawGlobal.sessionDays) : 30,
   };
 
-  const next = { qbitClients, announceMappings, notificationTargets, features, schedule, scheduleOverrides, notificationPreferences, trackerAlerts, globalAlerts, defaults };
+  const next = { qbitClients, announceMappings, accountAnnounceMappings, notificationTargets, features, schedule, scheduleOverrides, notificationPreferences, trackerAlerts, globalAlerts, defaults };
   setJsonSetting(BETA_SETTINGS_KEY, next);
   return next;
 }
@@ -1881,6 +1901,54 @@ function betaTrackerIdForAnnounceHost(announceHost: string, trackerHosts: Map<st
   return best && best.score >= 45 ? best.tracker.id : null;
 }
 
+// Identifiant stable (hash) + libelle masque derives d'une URL d'annonce. Sert a
+// distinguer plusieurs comptes d'un meme site par leur passkey, sans exposer la
+// passkey en clair cote client (seul le hash et un libelle tronque transitent).
+function announceAccountKey(announce: string): { key: string; label: string } {
+  const raw = String(announce || '').trim();
+  if (!raw) return { key: '', label: '' };
+  let token = '';
+  let host = trackerHost(raw);
+  try {
+    const url = new URL(raw);
+    if (host === 'unknown') host = url.host;
+    for (const name of ['passkey', 'authkey', 'torrent_pass', 'auth', 'apikey', 'secret', 'pid', 'rss_key', 'key']) {
+      const value = url.searchParams.get(name);
+      if (value && value.length >= 8) { token = value; break; }
+    }
+    if (!token) {
+      token = url.pathname.split('/').filter(Boolean)
+        .filter(segment => /^[A-Za-z0-9]{16,}$/.test(segment))
+        .sort((a, b) => b.length - a.length)[0] || '';
+    }
+  } catch {
+    return { key: '', label: '' };
+  }
+  const basis = token || raw;
+  const key = crypto.createHash('sha1').update(basis).digest('hex').slice(0, 16);
+  // Libelle masque : on revele juste assez de la passkey pour l'identifier. Sans
+  // passkey reconnue, on suffixe un fragment du hash pour rester distinct entre comptes.
+  const masked = token
+    ? (token.length <= 8 ? token : `${token.slice(0, 4)}…${token.slice(-4)}`)
+    : `#${key.slice(0, 6)}`;
+  return { key, label: `${host} · ${masked}` };
+}
+
+// Resout le compte (trackerId) d'un agregat de torrents : d'abord par attribution
+// manuelle de la passkey a un compte, sinon par l'heuristique host -> tracker.
+function resolveTorrentTrackerId(
+  item: QbitTrackerAggregate,
+  trackerHosts: Map<string, string>,
+  accountByKey: Map<string, string>,
+  trackers: TrackerConfig[],
+): string | null {
+  if (item.announceKey) {
+    const mapped = accountByKey.get(item.announceKey);
+    if (mapped && trackers.some(tracker => tracker.id === mapped)) return mapped;
+  }
+  return betaTrackerIdForAnnounceHost(item.trackerHost, trackerHosts, trackers);
+}
+
 function betaClientLogName(client: BetaQbitClient): string {
   return `${client.label || client.id || 'Client BitTorrent'} (${client.type === 'rutorrent' ? 'ruTorrent/rTorrent' : 'qBittorrent'})`;
 }
@@ -1906,8 +1974,9 @@ function qbitSeedingByTrackerId(trackers: TrackerConfig[]): Map<string, { count:
     trackerHosts.set(host, mapping.trackerId);
     trackerHosts.set(hostDomainKey(host), mapping.trackerId);
   }
+  const accountByKey = new Map(settings.accountAnnounceMappings.map(mapping => [mapping.key, mapping.trackerId]));
   for (const item of betaQbitStats) {
-    const trackerId = betaTrackerIdForAnnounceHost(item.trackerHost, trackerHosts, trackers);
+    const trackerId = resolveTorrentTrackerId(item, trackerHosts, accountByKey, trackers);
     if (!trackerId) continue;
     const entry = result.get(trackerId) ?? { count: 0, types: new Set<string>() };
     entry.count += item.seedingCount;
@@ -2093,11 +2162,17 @@ async function fetchQbitClient(client: BetaQbitClient): Promise<QbitTrackerAggre
       unknownSkipped += 1;
       continue;
     }
-    const existing = groups.get(host) ?? {
+    // Groupe par hote + passkey : deux comptes d'un meme site (memes hote mais
+    // passkeys differentes) forment deux agregats distincts, ventilables par compte.
+    const account = announceAccountKey(announce);
+    const groupKey = account.key ? `${host}|${account.key}` : host;
+    const existing = groups.get(groupKey) ?? {
       clientId: client.id,
       clientLabel: client.label,
       clientBaseUrl: baseUrl,
       trackerHost: host,
+      announceKey: account.key || undefined,
+      announceLabel: account.label || undefined,
       torrentCount: 0,
       seedingCount: 0,
       leechingCount: 0,
@@ -2126,7 +2201,7 @@ async function fetchQbitClient(client: BetaQbitClient): Promise<QbitTrackerAggre
       downloadedBytes: Number.isFinite(down) ? down : 0,
       ratio: Number.isFinite(Number(torrent.ratio)) ? Number(torrent.ratio) : null,
     });
-    groups.set(host, existing);
+    groups.set(groupKey, existing);
   }
   if (missingAnnounce || trackerDetailCalls || unknownSkipped) {
     betaLog(`${betaClientLogName(client)}: annonces absentes dans torrents/info ${missingAnnounce}, appels detail trackers ${trackerDetailCalls}, torrents sans hote ${unknownSkipped}`);
@@ -2211,14 +2286,18 @@ async function fetchRutorrentClient(client: BetaQbitClient): Promise<QbitTracker
     }
     const host = trackerHost(announce);
     if (host === 'unknown') unknownSkipped += 1;
+    const account = announceAccountKey(announce);
+    const groupKey = account.key ? `${host}|${account.key}` : host;
     const up = Number(upRaw) || 0;
     const down = Number(downRaw) || 0;
     const complete = completeRaw === '1';
-    const existing = groups.get(host) ?? {
+    const existing = groups.get(groupKey) ?? {
       clientId: client.id,
       clientLabel: client.label,
       clientBaseUrl: baseUrl,
       trackerHost: host,
+      announceKey: account.key || undefined,
+      announceLabel: account.label || undefined,
       torrentCount: 0,
       seedingCount: 0,
       leechingCount: 0,
@@ -2244,7 +2323,7 @@ async function fetchRutorrentClient(client: BetaQbitClient): Promise<QbitTracker
       downloadedBytes: down,
       ratio: Number.isFinite(Number(ratioRaw)) ? Number(ratioRaw) / 1000 : null,
     });
-    groups.set(host, existing);
+    groups.set(groupKey, existing);
   }
   if (trackerDetailCalls || unknownSkipped) {
     betaLog(`${betaClientLogName(client)}: appels detail trackers ${trackerDetailCalls}, torrents sans hote ${unknownSkipped}`);
@@ -2540,9 +2619,10 @@ export async function start(): Promise<void> {
       trackerHosts.set(host, mapping.trackerId);
       trackerHosts.set(hostDomainKey(host), mapping.trackerId);
     }
+    const accountByKey = new Map(settings.accountAnnounceMappings.map(mapping => [mapping.key, mapping.trackerId]));
     const qbitByTracker = betaQbitStats.map(item => ({
       ...item,
-      trackerId: betaTrackerIdForAnnounceHost(item.trackerHost, trackerHosts, trackers),
+      trackerId: resolveTorrentTrackerId(item, trackerHosts, accountByKey, trackers),
     }));
     const cookieSummaries = listTrackerDefinitionFiles().map(definition => {
       const configured = trackers.find(tracker => tracker.id === definition.id);
@@ -2722,6 +2802,23 @@ export async function start(): Promise<void> {
     res.json({ ok: true, tracker });
   });
 
+  // Renomme le libelle d'affichage d'un tracker (utile pour distinguer plusieurs
+  // comptes : « C411 », « C411 Alex »…). Le nom n'est pas synchronise depuis l'image
+  // (normalizeTrackerConfigs ne touche que login/fetch), donc il persiste.
+  app.post('/api/trackers/:trackerId/name', (req, res) => {
+    importLegacyTrackersIfNeeded();
+    const trackerId = req.params.trackerId;
+    const name = String(req.body?.name ?? '').trim();
+    if (!name) return res.status(400).json({ ok: false, error: 'Nom requis.' });
+    if (name.length > 80) return res.status(400).json({ ok: false, error: 'Nom trop long (80 caracteres max).' });
+    const tracker = loadTrackerConfigsFromDb().find(t => t.id === trackerId)
+      ?? loadTrackerDefinitionFile(trackerId);
+    if (!tracker) return res.status(404).json({ ok: false, error: 'Tracker introuvable' });
+    saveTrackerConfig({ ...tracker, name });
+    trackers = normalizeTrackerConfigs();
+    res.json({ ok: true, tracker: { ...tracker, name } });
+  });
+
   // Duplique un tracker pour gerer plusieurs comptes sur un meme site. Le duplicata
   // reprend la definition technique de la source (via baseId, donc il herite des
   // corrections de login amont) mais possede son propre id : identifiants, cookie,
@@ -2745,7 +2842,7 @@ export async function start(): Promise<void> {
     const duplicate: TrackerConfig = {
       ...source,
       id: newId,
-      name: `${baseName} (compte ${n})`,
+      name: `${baseName} (${n})`,
       baseId,
       enabled: true,
     };

@@ -1556,6 +1556,12 @@
       justify-content: stretch;
     }
     .definition-actions button { width: 100%; }
+    .definition-extra-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+    .definition-extra-actions button { white-space: nowrap; }
+    .definition-rename { display: flex; align-items: center; gap: 6px; }
+    .definition-rename label { font-size: 11px; color: var(--muted); }
+    .definition-rename input { width: 180px; }
+    .definition-delete { color: var(--red); border-color: var(--red); }
     .definition-badge {
       color: var(--green);
       background: color-mix(in srgb, var(--green) 16%, transparent);
@@ -3968,7 +3974,25 @@
     const configured = trackerConfig.find(t => t.id === stat.id);
     const trackerUrl = stat.trackerUrl || configured?.baseUrl || '';
     const host = trackerHostFromUrl(trackerUrl);
-    const qbits = (betaOverview?.qbitStats || []).filter(item => item.trackerId === stat.id || item.trackerHost === host);
+    // Comptes multiples : tous les trackers partageant la meme base (baseId || id).
+    const baseKey = configured?.baseId || stat.id;
+    const siblings = trackerConfig.filter(t => (t.baseId || t.id) === baseKey);
+    const multiAccount = siblings.length >= 2;
+    // Passkeys distinctes detectees pour ce site (a attribuer a un compte).
+    const siteAnnounceGroups = [];
+    if (multiAccount) {
+      const seenKeys = new Set();
+      for (const item of (betaOverview?.qbitStats || [])) {
+        if (item.trackerHost !== host || !item.announceKey || seenKeys.has(item.announceKey)) continue;
+        seenKeys.add(item.announceKey);
+        const mapping = (betaSettings.accountAnnounceMappings || []).find(m => m.key === item.announceKey);
+        siteAnnounceGroups.push({ key: item.announceKey, label: item.announceLabel || item.announceKey, assigned: mapping?.trackerId || item.trackerId || '' });
+      }
+    }
+    // En multi-comptes, on n'affiche que les torrents resolus vers ce compte (sinon
+    // tous les comptes du site partageraient le meme hote). En compte unique, on garde
+    // le repli par hote pour les annonces non encore reliees.
+    const qbits = (betaOverview?.qbitStats || []).filter(item => item.trackerId === stat.id || (!multiAccount && item.trackerHost === host));
     const suggestedQbits = (betaOverview?.qbitStats || []).filter(item => !item.trackerId && betaTrackerMatchForHost(item.trackerHost)?.tracker.id === stat.id);
     const torrents = qbits.flatMap(item => (item.torrents || []).map(torrent => ({ ...torrent, clientLabel: item.clientLabel, clientBaseUrl: item.clientBaseUrl })));
     const suggestedTorrents = suggestedQbits.flatMap(item => (item.torrents || []).map(torrent => ({ ...torrent, trackerHost: item.trackerHost, clientLabel: item.clientLabel })));
@@ -4077,6 +4101,22 @@
           })()}
         </div>
       </div>
+      ${multiAccount && siteAnnounceGroups.length ? `
+      <div style="margin-top:12px">
+        <h3>Attribution des annonces (comptes multiples)</h3>
+        <p class="beta-note">Ce site a plusieurs comptes. Attribuez chaque passkey détectée dans vos clients BitTorrent au bon compte ; les torrents correspondants suivront le compte choisi.</p>
+        <table class="beta-mini-table">
+          <thead><tr><th>Annonce (passkey)</th><th>Compte attribué</th></tr></thead>
+          <tbody>${siteAnnounceGroups.map(g => `
+            <tr>
+              <td><code>${escapeHtml(g.label)}</code></td>
+              <td><select onchange="assignAnnounceToAccount('${escapeHtml(g.key)}', this.value)">
+                <option value="">— Automatique —</option>
+                ${siblings.map(s => `<option value="${escapeHtml(s.id)}" ${g.assigned === s.id ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('')}
+              </select></td>
+            </tr>`).join('')}</tbody>
+        </table>
+      </div>` : ''}
       <div style="margin-top:12px">
         <h3>Torrents liés dans les clients BitTorrent</h3>
         <table class="beta-mini-table">
@@ -5974,15 +6014,16 @@
                 <div class="definition-actions">
                   <button class="btn-test" style="padding:6px 10px" onclick="setTrackerEnabled('${safeId}', ${isEnabled ? 'false' : 'true'})">${isEnabled ? 'Retirer' : 'Ajouter'}</button>
                 </div>
-                <div class="definition-actions">
+                <div class="definition-extra-actions" style="grid-column:1/-1">
+                  <div class="definition-rename">
+                    <label for="rename-${safeId}">Nom d'affichage</label>
+                    <input class="tracker-input" id="rename-${safeId}" value="${escapeHtml(definition.name)}" autocomplete="off" maxlength="80">
+                    <button class="btn-save" style="padding:6px 10px" onclick="renameTracker('${safeId}', this)">Renommer</button>
+                  </div>
                   <button class="btn-test" style="padding:6px 10px" title="Créer un autre compte sur ce site (même login, identifiants et stats indépendants)" onclick="duplicateTracker('${safeId}')">Dupliquer</button>
+                  ${definition.isCustom && !definition.baseId ? `<button class="btn-test" style="padding:6px 10px" title="Modifier la définition technique de ce tracker perso" onclick="ntEditCustomTracker('${safeId}')">Éditer la définition</button>` : ''}
+                  ${definition.baseId ? `<button class="btn-test definition-delete" style="padding:6px 10px" title="Supprimer ce compte dupliqué et ses données (identifiants, historique)" onclick="deleteDuplicateTracker('${safeId}')">Supprimer</button>` : ''}
                 </div>
-                ${definition.isCustom && !definition.baseId ? `<div class="definition-actions">
-                  <button class="btn-test" style="padding:6px 10px" title="Modifier la définition technique de ce tracker perso" onclick="ntEditCustomTracker('${safeId}')">Éditer la définition</button>
-                </div>` : ''}
-                ${definition.baseId ? `<div class="definition-actions">
-                  <button class="btn-test" style="padding:6px 10px; color:var(--red); border-color:var(--red)" title="Supprimer ce compte dupliqué et ses données (identifiants, historique)" onclick="deleteDuplicateTracker('${safeId}')">Supprimer</button>
-                </div>` : ''}
                 <details class="definition-advanced" style="grid-column:1/-1">
                   <summary>Options avancées${credential.hasCookie ? ' · <b style="color:var(--green)">cookie défini</b>' : ''}${credential.hasTotp ? ' · <b style="color:var(--green)">2FA défini</b>' : ''}</summary>
                   <div class="definition-advanced-body">
@@ -6143,6 +6184,55 @@
       await loadStats();
     } catch (e) {
       alert('Suppression impossible : ' + e.message);
+    }
+  }
+
+  // Renomme le libellé d'affichage d'un compte/tracker.
+  async function renameTracker(trackerId, btn) {
+    const input = document.getElementById(`rename-${trackerId}`);
+    const name = input ? input.value.trim() : '';
+    if (!name) { if (input) input.focus(); return; }
+    const previous = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '...';
+    try {
+      const r = await fetch(`/api/trackers/${encodeURIComponent(trackerId)}/name`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      const data = await r.json();
+      if (!data.ok) throw new Error(data.error || 'Erreur');
+      await loadTrackerDefinitionsPanel();
+      await loadConfig();
+      await loadStats();
+    } catch (e) {
+      alert('Renommage impossible : ' + e.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = previous;
+    }
+  }
+
+  // Attribue (ou délie) une annonce/passkey à un compte, puis recharge l'overview
+  // pour que les torrents soient ré-attribués.
+  async function assignAnnounceToAccount(key, trackerId) {
+    const mappings = (betaSettings.accountAnnounceMappings || []).filter(m => m.key !== key);
+    if (trackerId) mappings.push({ key, trackerId });
+    const settings = { ...betaSettings, accountAnnounceMappings: mappings };
+    try {
+      const r = await fetch('/api/beta/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      });
+      const data = await r.json();
+      if (!data.ok) throw new Error(data.error || 'Erreur');
+      betaSettings = data.settings;
+      await loadBetaData();
+      renderBetaTrackerPage();
+    } catch (e) {
+      alert('Attribution impossible : ' + e.message);
     }
   }
 
