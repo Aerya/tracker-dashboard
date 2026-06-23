@@ -997,6 +997,11 @@
     }
     .rows-table .row-refresh:hover { border-color: var(--blue); color: var(--blue); }
     .rows-table .row-refresh:disabled { opacity: .5; cursor: default; }
+    .rows-table .row-fiche-btn {
+      margin-left: 8px; background: none; border: none; color: var(--blue);
+      font-size: 11px; font-weight: 600; cursor: pointer; padding: 0; text-decoration: none;
+    }
+    .rows-table .row-fiche-btn:hover { text-decoration: underline; text-underline-offset: 2px; }
     .rows-table .row-sched { display: flex; align-items: center; gap: 6px; }
     .rows-table .row-sched select { font-size: 11px; padding: 2px 4px; }
     .rows-table .cell-status { cursor: pointer; }
@@ -4035,6 +4040,7 @@
       </div>
       <div class="beta-link-row">
         ${trackerUrl ? `<a class="beta-icon-btn" href="${escapeHtml(trackerUrl)}" target="_blank" rel="noreferrer noopener">Ouvrir le tracker</a>` : ''}
+        <button class="beta-icon-btn" onclick="openTrackerConfig('${escapeHtml(stat.id)}')" type="button">Configurer ce tracker</button>
         ${qbits.map(item => `<a class="beta-icon-btn" href="${escapeHtml(item.clientBaseUrl)}" target="_blank" rel="noreferrer noopener">Ouvrir ${escapeHtml(item.clientLabel)}</a>`).join('')}
         <button class="beta-icon-btn" onclick="testTrackerProxy('${escapeHtml(stat.id)}')" type="button">Tester si le site est en ligne</button>
         <span id="beta-proxy-check-${escapeHtml(stat.id)}" class="beta-note"></span>
@@ -5839,7 +5845,7 @@
     const mainRow = `
       <tr class="row-main ${isOpen ? 'is-open' : ''}">
         <td><button class="row-refresh" data-tracker="${id}" onclick="refreshTracker(this.dataset.tracker, this)" title="Rafraichir ce tracker">MàJ</button></td>
-        <td class="cell-name">${trackerName(stat)}</td>
+        <td class="cell-name">${trackerName(stat)}<button type="button" class="row-fiche-btn" onclick="openTrackerFiche('${id}')" title="Ouvrir la fiche du tracker" aria-label="Ouvrir la fiche">Fiche</button></td>
         <td class="cell-muted">${formatDateTime(stat.lastLoginAt || stat.lastUpdated)}</td>
         <td>${rowScheduleCell(stat)}</td>
         <td class="num">${dl}</td>
@@ -6488,6 +6494,15 @@
   --volumes-from tracker-dashboard \\
   ghcr.io/tracker-dashboard/tracker-dashboard-browser:latest`;
 
+  const BROWSER_RUNTIME_COMPOSE_SNIPPET = `services:
+  tracker-dashboard-browser:
+    image: ghcr.io/tracker-dashboard/tracker-dashboard-browser:latest
+    container_name: tracker-dashboard-browser
+    restart: unless-stopped
+    network_mode: "container:tracker-dashboard"
+    volumes_from:
+      - tracker-dashboard`;
+
   // Etat du runtime navigateur externe + versions.
   async function loadBrowserRuntimeStatus() {
     const badge = document.getElementById('browser-runtime-badge');
@@ -6513,7 +6528,16 @@
         badge.textContent = 'Runtime navigateur — absent';
         badge.className = 'definition-badge definition-badge-muted';
         badge.style.color = 'var(--red)';
-        detail.innerHTML = `Le runtime navigateur est absent ou injoignable${s.error ? ' : ' + escapeHtml(s.error) : ''}. Lancez-le en parallèle, sans modifier le compose existant :<pre style="white-space:pre-wrap;margin-top:8px"><code>${escapeHtml(BROWSER_RUNTIME_INSTALL_COMMAND)}</code></pre>`;
+        detail.innerHTML = `Le runtime navigateur est absent ou injoignable${s.error ? ' : ' + escapeHtml(s.error) : ''}. Lancez-le en parallèle du conteneur principal.
+          <div style="margin-top:10px"><b>Stack Compose / Dockge / Portainer</b></div>
+          <pre style="white-space:pre-wrap;margin-top:8px"><code>${escapeHtml(BROWSER_RUNTIME_COMPOSE_SNIPPET)}</code></pre>
+          <button class="btn-test" style="padding:4px 10px;margin-top:6px" onclick="copyBrowserRuntimeInstall(this, 'compose')" type="button">Copier le compose</button>
+          <div class="beta-note" style="margin-top:8px">La clé Compose est <code>volumes_from</code> au pluriel. <code>volume_from</code> est invalide.</div>
+          <details style="margin-top:10px">
+            <summary style="cursor:pointer">Commande Docker équivalente</summary>
+            <pre style="white-space:pre-wrap;margin-top:8px"><code>${escapeHtml(BROWSER_RUNTIME_INSTALL_COMMAND)}</code></pre>
+            <button class="btn-test" style="padding:4px 10px;margin-top:6px" onclick="copyBrowserRuntimeInstall(this, 'run')" type="button">Copier la commande</button>
+          </details>`;
       }
     } catch (e) {
       badge.textContent = 'Inconnu';
@@ -6530,6 +6554,18 @@
         body: JSON.stringify({ engine }),
       });
     } catch (e) { console.warn('saveBrowserEngine:', e.message); }
+  }
+
+  async function copyBrowserRuntimeInstall(button, mode) {
+    try {
+      await navigator.clipboard.writeText(mode === 'compose' ? BROWSER_RUNTIME_COMPOSE_SNIPPET : BROWSER_RUNTIME_INSTALL_COMMAND);
+      const previous = button.textContent;
+      button.textContent = 'Copié';
+      setTimeout(() => { button.textContent = previous; }, 1600);
+    } catch (e) {
+      button.textContent = 'Copie impossible';
+      console.warn('copyBrowserRuntimeInstall:', e.message);
+    }
   }
 
   async function loadFastFetch() {
