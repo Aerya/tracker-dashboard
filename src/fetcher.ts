@@ -501,6 +501,20 @@ function requestUrl(config: InternalAxiosRequestConfig): string | null {
   }
 }
 
+// Injecte le cookie de session colle (mode cookie-only) dans le jar axios. Sans
+// ca, le login etant saute et le jar cree vide, le GET des stats en mode http part
+// SANS cookie -> page deconnectee. Le mode browser, lui, envoie deja ce cookie via
+// le fast-path curl-impersonate.
+async function injectStoredCookieIntoJar(tracker: TrackerConfig, jar: CookieJar): Promise<void> {
+  const header = buildCookieHeader(tracker.id);
+  if (!header) return;
+  for (const pair of header.split(';')) {
+    const trimmed = pair.trim();
+    if (!trimmed.includes('=')) continue;
+    await jar.setCookie(`${trimmed}; Path=/`, tracker.baseUrl).catch(() => {});
+  }
+}
+
 async function storeResponseCookies(
   jar: CookieJar,
   response: AxiosResponse,
@@ -1263,6 +1277,12 @@ export async function fetchTracker(
 
     if (sessionExpired) {
       await doLogin(tracker, creds, session);
+    }
+
+    // Cookie-only : le login est saute, la session vient uniquement du cookie colle.
+    // On l'injecte dans le jar avant le GET (sinon requete non authentifiee).
+    if (tracker.login.cookieOnly) {
+      await injectStoredCookieIntoJar(tracker, session.jar);
     }
 
     // Fetch des stats
