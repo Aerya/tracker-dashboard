@@ -907,6 +907,15 @@ function hydrateFromSnapshots(trackers: TrackerConfig[]): TrackerConfig[] {
   return stale;
 }
 
+// Un tracker en cookie-only n'a pas forcement de mot de passe enregistre : sa
+// "credential" est le cookie de session. Sans ce cas, un tracker purement cookie
+// (cookie present, aucun mot de passe) serait rejete a tort en "Credentials manquants".
+function cookieOnlyReady(tracker: TrackerConfig): boolean {
+  return Boolean(tracker.login?.cookieOnly) && hasTrackerCookie(tracker.id);
+}
+
+const EMPTY_CREDENTIALS = { username: '', password: '' };
+
 async function refresh(trackers: TrackerConfig[]): Promise<TrackerStats[]> {
   if (isRefreshing) return [];
   isRefreshing = true;
@@ -930,7 +939,7 @@ async function refresh(trackers: TrackerConfig[]): Promise<TrackerStats[]> {
     const enabledTrackers = trackers.filter(t => t.enabled !== false);
     const results = await mapWithConcurrency(enabledTrackers, REFRESH_CONCURRENCY, async tracker => {
       const creds = credentials[tracker.id];
-      if (!creds) {
+      if (!creds && !cookieOnlyReady(tracker)) {
         const stat: TrackerStats = {
           id:          tracker.id,
           name:        tracker.name,
@@ -946,7 +955,7 @@ async function refresh(trackers: TrackerConfig[]): Promise<TrackerStats[]> {
         return stat;
       }
 
-      const fetched = await fetchTrackerBounded(tracker, creds);
+      const fetched = await fetchTrackerBounded(tracker, creds ?? EMPTY_CREDENTIALS);
       processIncidentStreak(fetched); // une fois par tracker par cycle
       const stat = preserveLastKnownOnTimeout(tracker, fetched);
       updateRetryState(tracker, fetched, stat);
@@ -993,7 +1002,7 @@ async function refreshOneTracker(
   }
 
   const creds = loadCredentialsFromDb()[tracker.id];
-  if (!creds) {
+  if (!creds && !cookieOnlyReady(tracker)) {
     const stat: TrackerStats = {
       id:          tracker.id,
       name:        tracker.name,
@@ -1009,7 +1018,7 @@ async function refreshOneTracker(
     return stat;
   }
 
-  const fetched = await fetchTrackerBounded(tracker, creds);
+  const fetched = await fetchTrackerBounded(tracker, creds ?? EMPTY_CREDENTIALS);
   processIncidentStreak(fetched); // une fois par tracker par cycle
   const stat = preserveLastKnownOnTimeout(tracker, fetched);
   updateRetryState(tracker, fetched, stat);
