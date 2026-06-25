@@ -3378,12 +3378,12 @@ export async function start(): Promise<void> {
   });
 
   app.get('/api/tracker-logos', (_req, res) => {
-    res.json({ ok: true, missing: listTrackersWithoutLogo(listTrackerDefinitionFiles()) });
+    res.json({ ok: true, missing: listTrackersWithoutLogo(listAllTrackerSummaries()) });
   });
 
   app.post('/api/tracker-logos/refresh', async (_req, res) => {
     try {
-      const results = await refreshAllLogos(listTrackerDefinitionFiles(), true);
+      const results = await refreshAllLogos(listAllTrackerSummaries(), true);
       res.json({ ok: true, results, missing: results.filter(r => !r.ok) });
     } catch (err: unknown) {
       res.status(500).json({ ok: false, error: err instanceof Error ? err.message : String(err) });
@@ -3476,7 +3476,7 @@ export async function start(): Promise<void> {
   // "Rafraichir les logos" permet un refetch force a la demande. On laisse un petit
   // delai pour ne pas concurrencer le refresh des stats au tout debut.
   setTimeout(() => {
-    refreshAllLogos(listTrackerDefinitionFiles(), false)
+    refreshAllLogos(listAllTrackerSummaries(), false)
       .then(results => {
         const missing = results.filter(r => !r.ok).map(r => r.id);
         if (missing.length > 0) {
