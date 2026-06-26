@@ -615,11 +615,14 @@
       width: 100%;
       min-height: 240px;
       display: block;
-      background: color-mix(in srgb, var(--bg) 72%, transparent);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 10px;
+      background:
+        radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--blue) 12%, transparent), transparent 34%),
+        linear-gradient(180deg, color-mix(in srgb, var(--panel) 96%, #fff 4%), color-mix(in srgb, var(--bg) 88%, transparent));
+      border: 1px solid color-mix(in srgb, var(--border) 78%, #fff 8%);
+      border-radius: 12px;
+      padding: 14px;
       overflow: visible;
+      box-shadow: 0 18px 50px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.035);
     }
     .beta-chart-header {
       display: flex;
@@ -628,15 +631,20 @@
       align-items: flex-start;
       margin-bottom: 6px;
     }
-    .beta-chart-title { font-size: 13px; font-weight: 700; }
-    .beta-chart-legend { display: flex; gap: 8px; flex-wrap: wrap; color: var(--muted); font-size: 11px; }
+    .beta-chart-title { font-size: 13px; font-weight: 800; letter-spacing: .01em; }
+    .beta-chart-legend { display: flex; gap: 10px; flex-wrap: wrap; color: var(--muted); font-size: 11px; }
     .beta-chart-legend span { display: inline-flex; align-items: center; gap: 4px; }
-    .beta-chart-legend i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
-    .beta-chart svg { width: 100%; height: 170px; display: block; }
+    .beta-chart-legend i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 12%, transparent); }
+    .beta-chart svg { width: 100%; height: 190px; display: block; overflow: visible; }
     .beta-chart-axis-label {
       fill: var(--muted);
       font-size: 10px;
       text-anchor: end;
+    }
+    .beta-chart-x-label {
+      fill: var(--muted);
+      font-size: 10px;
+      text-anchor: middle;
     }
     .beta-chart-kpis {
       display: grid;
@@ -3066,7 +3074,7 @@
     try {
       const [overviewResponse, historyResponse] = await Promise.all([
         fetch('/api/beta/overview'),
-        fetch('/api/beta/history?limit=800'),
+        fetch('/api/beta/history?limit=20000'),
       ]);
       const overview = await overviewResponse.json();
       const history = await historyResponse.json();
@@ -4257,9 +4265,13 @@
     return Number(row.fields?.[metric] || 0);
   }
 
+  function chartHistoryRows(sourceRows = betaHistory) {
+    return sourceRows.filter(row => row.status === 'ok' && row.fields && row.capturedAt);
+  }
+
   function latestRowsByTrackerAndPeriod(period, sourceRows = betaHistory) {
     const latest = new Map();
-    sourceRows.forEach(row => {
+    chartHistoryRows(sourceRows).forEach(row => {
       const key = betaPeriodKey(row.capturedAt, period);
       if (!key) return;
       const mapKey = `${key}::${row.trackerId}`;
@@ -4271,6 +4283,16 @@
 
   function periodRowsForTracker(trackerId, period = 'day', sourceRows = betaHistory) {
     return latestRowsByTrackerAndPeriod(period, sourceRows.filter(row => row.trackerId === trackerId));
+  }
+
+  function previousPeriodRow(row, period) {
+    return latestRowsByTrackerAndPeriod(
+      period,
+      betaHistory.filter(candidate =>
+        candidate.trackerId === row.trackerId &&
+        String(candidate.capturedAt || '') < String(row.capturedAt || '')
+      )
+    ).pop() || null;
   }
 
   // Filtre l'historique sur une plage de dates lue depuis deux champs date.
@@ -4298,8 +4320,9 @@
       const source = metric => {
         const current = rowMetricValue(row, metric);
         if (mode !== 'delta' || metric === 'ratio') return current;
-        if (!previous) return 0;
-        return Math.max(0, current - rowMetricValue(previous, metric));
+        const baseline = previous || previousPeriodRow(row, period);
+        if (!baseline) return 0;
+        return Math.max(0, current - rowMetricValue(baseline, metric));
       };
       item.uploadedBytes += source('uploadedBytes');
       item.downloadedBytes += source('downloadedBytes');
@@ -4317,8 +4340,9 @@
       const value = metric => {
         const current = rowMetricValue(row, metric);
         if (mode !== 'delta' || metric === 'ratio') return current;
-        if (!previous) return 0;
-        return Math.max(0, current - rowMetricValue(previous, metric));
+        const baseline = previous || previousPeriodRow(row, period);
+        if (!baseline) return 0;
+        return Math.max(0, current - rowMetricValue(baseline, metric));
       };
       return {
         label: betaPeriodKey(row.capturedAt, period),
@@ -4342,25 +4366,57 @@
     // de .beta-chart) afin que le SVG se rende ~1:1. Sinon, avec un viewBox fixe +
     // preserveAspectRatio="none", l'axe X est étiré sur écran large (ultra-wide),
     // ce qui déforme horizontalement le texte des valeurs et écarte les libellés.
-    const h = 170, pad = 22, rightPad = 82;
+    const h = 190, pad = 28, bottomPad = 28, rightPad = 86;
     const w = Math.max(600, Math.round((container.clientWidth || 1020) - 20));
-    const grid = [0, 1, 2, 3].map(i => {
-      const y = pad + ((h - pad * 2) / 3) * i;
-      const value = max - (max / 3) * i;
+    const plotBottom = h - bottomPad;
+    const plotHeight = plotBottom - pad;
+    const plotWidth = w - pad - rightPad;
+    const chartId = `${canvasId}-${rows.length}-${seriesDefs.length}`.replace(/[^a-zA-Z0-9_-]/g, '');
+    const yGrid = [0, 1, 2, 3, 4].map(i => {
+      const y = pad + (plotHeight / 4) * i;
+      const value = max - (max / 4) * i;
       const axis = (options.axisFormat || seriesDefs[0]?.axis || seriesDefs[0]?.format || (v => v.toFixed(0)))(value);
-      return `<line x1="${pad}" y1="${y}" x2="${w - rightPad}" y2="${y}" stroke="rgba(107,114,128,.25)" stroke-width="1"/><text class="beta-chart-axis-label" x="${w - 8}" y="${y + 3}">${escapeHtml(axis)}</text>`;
+      return `<line x1="${pad}" y1="${y}" x2="${w - rightPad}" y2="${y}" stroke="rgba(148,163,184,.16)" stroke-width="1"/><text class="beta-chart-axis-label" x="${w - 8}" y="${y + 3}">${escapeHtml(axis)}</text>`;
     }).join('');
-    const paths = seriesDefs.map(def => {
+    const xLabelIndexes = [...new Set([0, Math.floor((rows.length - 1) / 2), rows.length - 1])].filter(idx => idx >= 0);
+    const xGrid = xLabelIndexes.map(idx => {
+      const x = pad + (plotWidth * idx / (rows.length - 1));
+      return `<line x1="${x}" y1="${pad}" x2="${x}" y2="${plotBottom}" stroke="rgba(148,163,184,.10)" stroke-width="1"/><text class="beta-chart-x-label" x="${x}" y="${h - 8}">${escapeHtml(rows[idx].label || '')}</text>`;
+    }).join('');
+    const smoothPath = points => {
+      if (points.length < 2) return '';
+      let d = `M${points[0][0].toFixed(1)},${points[0][1].toFixed(1)}`;
+      for (let i = 1; i < points.length; i++) {
+        const prev = points[i - 1];
+        const curr = points[i];
+        const midX = (prev[0] + curr[0]) / 2;
+        d += ` Q${prev[0].toFixed(1)},${prev[1].toFixed(1)} ${midX.toFixed(1)},${((prev[1] + curr[1]) / 2).toFixed(1)}`;
+        d += ` T${curr[0].toFixed(1)},${curr[1].toFixed(1)}`;
+      }
+      return d;
+    };
+    const paths = seriesDefs.map((def, seriesIdx) => {
       const points = rows.map((row, idx) => {
-        const x = pad + ((w - pad - rightPad) * idx / (rows.length - 1));
+        const x = pad + (plotWidth * idx / (rows.length - 1));
         const raw = Number(def.value(row));
-        const y = h - pad - ((Number.isFinite(raw) ? raw : 0) / max) * (h - pad * 2);
+        const y = plotBottom - ((Number.isFinite(raw) ? raw : 0) / max) * plotHeight;
         return [x, y];
       });
-      const d = points.map((p, idx) => `${idx === 0 ? 'M' : 'L'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
+      const d = smoothPath(points);
       const last = points[points.length - 1];
-      const fill = def.area ? `<path d="${d} L${last[0].toFixed(1)},${h - pad} L${points[0][0].toFixed(1)},${h - pad} Z" fill="${def.color}" opacity=".12"/>` : '';
-      return `${fill}<path d="${d}" fill="none" stroke="${def.color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="${last[0]}" cy="${last[1]}" r="4" fill="${def.color}"/>`;
+      const gradientId = `${chartId}-g-${seriesIdx}`;
+      const fill = def.area ? `<path d="${d} L${last[0].toFixed(1)},${plotBottom} L${points[0][0].toFixed(1)},${plotBottom} Z" fill="url(#${gradientId})"/>` : '';
+      const markers = points.length <= 18 ? points.map(p => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2.2" fill="${def.color}" opacity=".9"/>`).join('') : '';
+      return `
+        <linearGradient id="${gradientId}" x1="0" y1="${pad}" x2="0" y2="${plotBottom}" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stop-color="${def.color}" stop-opacity=".28"/>
+          <stop offset="1" stop-color="${def.color}" stop-opacity=".03"/>
+        </linearGradient>
+        ${fill}
+        <path d="${d}" fill="none" stroke="rgba(0,0,0,.22)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" opacity=".35"/>
+        <path d="${d}" fill="none" stroke="${def.color}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+        ${markers}
+        <circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="4" fill="${def.color}" stroke="var(--panel)" stroke-width="2"/>`;
     }).join('');
     const legend = seriesDefs.map(def => `<span><i style="background:${def.color}"></i>${escapeHtml(def.label)}</span>`).join('');
     const latest = rows[rows.length - 1];
@@ -4374,7 +4430,7 @@
         <div><div class="beta-chart-title">${escapeHtml(title)}</div><div class="beta-note">${escapeHtml(rows[0].label || '')} -> ${escapeHtml(rows[rows.length - 1].label || '')}</div></div>
         <div class="beta-chart-legend">${legend}</div>
       </div>
-      <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">${grid}${paths}</svg>
+      <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><defs>${paths.match(/<linearGradient[\s\S]*?<\/linearGradient>/g)?.join('') || ''}</defs>${yGrid}${xGrid}${paths.replace(/<linearGradient[\s\S]*?<\/linearGradient>/g, '')}</svg>
       <div class="beta-chart-kpis">${kpis}</div>`;
   }
 
