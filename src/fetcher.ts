@@ -1271,11 +1271,14 @@ export async function fetchTracker(
       if (viaCurl) return viaCurl;
     }
 
-    // Login si nécessaire
+    // Login si nécessaire. Les trackers cookie-only n'ont pas de login par
+    // formulaire (leur "session" est le cookie collé) : on saute doLogin, sinon
+    // un POST vers la page de login renvoie souvent une erreur (ex. nginx 405
+    // sur TR4KER), faisant échouer le tracker alors que le cookie est valide.
     const sessionExpired =
       !session.loggedInAt || Date.now() - session.loggedInAt > SESSION_TTL_MS;
 
-    if (sessionExpired) {
+    if (sessionExpired && !tracker.login.cookieOnly) {
       await doLogin(tracker, creds, session);
     }
 
