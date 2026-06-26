@@ -40,6 +40,12 @@
         "regex": "Seed time[\\s\\S]{0,120}?<dd[^>]*>\\s*(?<value>\\d[\\d\\s.,]*)\\s*days",
         "transform": "number"
       }
+    },
+    "extraFetch": {
+      "url": "profile/menu-stats",
+      "field": "seeding",
+      "regex": "title=\"Currently seeding torrents\"[\\s\\S]*?</i>\\s*(?<value>\\d+)",
+      "transform": "integer"
     }
   },
   "dashboard": {
