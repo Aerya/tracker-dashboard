@@ -29,7 +29,14 @@
       "seedBonus":       { "path": "jeton_balance",          "transform": "integer" },
       "memberClass":     { "path": "role",                   "transform": "string" }
     },
-    "unreadFetch": { "url": "https://api.torr9.net/api/v1/chat/unread-counts", "responseType": "json", "path": "total_dms", "transform": "integer" }
+    "unreadFetch": { "url": "https://api.torr9.net/api/v1/chat/unread-counts", "responseType": "json", "path": "total_dms", "transform": "integer" },
+    "extraFetch": {
+      "url": "https://api.torr9.net/api/v1/users/{{id}}/stats?page=1&limit=20",
+      "idExtract": { "regex": "\"id\"\\s*:\\s*(?<value>\\d+)" },
+      "field": "seeding",
+      "path": "statistics.torrents_seeding",
+      "transform": "integer"
+    }
   },
   "dashboard": { "byteUnit": "decimal" }
 }

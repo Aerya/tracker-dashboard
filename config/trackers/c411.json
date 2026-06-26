@@ -42,7 +42,8 @@
       "ratio":           { "path": "user.ratio",       "transform": "number" },
       "memberClass":     { "path": "user.badge.label", "transform": "string" }
     },
-    "unreadFetch": { "url": "api/messages/unread-count", "responseType": "json", "path": "total", "transform": "integer" }
+    "unreadFetch": { "url": "api/messages/unread-count", "responseType": "json", "path": "total", "transform": "integer" },
+    "extraFetch": { "url": "api/profile/active-seeds", "field": "seeding", "path": "meta.total", "transform": "integer" }
   },
   "dashboard": {
     "byteUnit": "decimal"
