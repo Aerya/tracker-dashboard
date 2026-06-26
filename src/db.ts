@@ -623,7 +623,7 @@ export function getLatestOkStatSnapshot(tracker: TrackerConfig): TrackerStats | 
 }
 
 export function listStatSnapshots(trackerId: string | null, limit = 500): StatSnapshotSummary[] {
-  const max = Math.max(1, Math.min(Math.floor(limit), 5000));
+  const max = Math.max(1, Math.min(Math.floor(limit), 20000));
   const rows = trackerId
     ? getDb()
         .prepare(`
