@@ -105,6 +105,10 @@ export const ENGINE_TEMPLATES: Record<EngineId, EngineTemplate> = {
           uploadedBytes:   { regex: 'id="stats_seeding"[^>]*title="Uploaded: (?<value>[^"]+)"', transform: 'bytes' },
           downloadedBytes: { regex: 'id="stats_leeching"[^>]*title="Downloaded: (?<value>[^"]+)"', transform: 'bytes' },
           ratio:           { regex: 'id="stats_ratio"[^>]*title="Ratio: (?<value>[^"]+)"', transform: 'number' },
+          // Nombre de torrents en seed annonce par le site : compteur "seed: N" du header
+          // utilisateur, rendu dans <span id="nav_seeding_r">N</span> sur les skins Gazelle
+          // recents (HappyFappy, KuFirc...). Best-effort, surchargeable par site.
+          seeding:         { regex: 'id="nav_seeding_r"[^>]*>\\s*(?<value>\\d+)', transform: 'integer' },
           // Classe de membre courante, affichee dans le header utilisateur sur la plupart
           // des skins Gazelle (Redacted, Orpheus, Phoenix Project...). Surchargee par site
           // quand le skin diverge (ex: HD-Forever, classe entre parentheses).

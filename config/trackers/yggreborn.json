@@ -37,6 +37,12 @@
         "regex": ">R[oô]le</span>[\\s\\S]*?uppercase\"[\\s\\S]*?>(?<value>[^<]+)</span>",
         "transform": "string"
       }
+    },
+    "extraFetch": {
+      "url": "account/active-torrents",
+      "field": "seeding",
+      "regex": ">\\s*(?<value>\\d+)\\s+en partage<",
+      "transform": "integer"
     }
   },
   "dashboard": {
