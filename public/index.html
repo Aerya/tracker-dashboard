@@ -2626,43 +2626,42 @@
     return parts.length ? parts.join(' ') : 'qBit';
   }
 
-  // Seeding unifie : priorite a la valeur du site (sans badge). A defaut, on utilise le
-  // comptage remonte par les clients BitTorrent (qBittorrent/rTorrent), signale par un badge
-  // de source (qBit / Rto / qBit Rto). Une seule info, un seul endroit, source indiquee.
-  function seedingInfo(stat) {
+  // Seeding : on affiche les DEUX sources quand elles sont dispo — la valeur annoncee
+  // par le site (badge « site ») ET le nombre de torrents en seed dans les clients
+  // BitTorrent lies (badge qBit / Rto / qBit Rto). Source distinguee par un badge.
+  // Renvoie le HTML interne (sans le label), ou null si aucune donnee.
+  function renderSeeding(stat) {
     const f = stat.fields || {};
-    if (hasStatValue(f.seeding)) return { value: formatCount(f.seeding), badge: '' };
-    if (hasStatValue(stat.qbitSeeding)) {
-      return { value: formatCount(stat.qbitSeeding), badge: qbitSourceLabel(stat.qbitSeedingTypes) };
+    const parts = [];
+    if (hasStatValue(f.seeding)) {
+      parts.push(`<span title="Seed annoncé par le site">${formatCount(f.seeding)} <span class="stat-source">site</span></span>`);
     }
-    return null;
-  }
-
-  function seedingBadgeHtml(badge) {
-    return badge
-      ? ` <span class="stat-source" title="Torrents en seed remontés depuis vos clients BitTorrent">${badge}</span>`
-      : '';
+    if (hasStatValue(stat.qbitSeeding)) {
+      const badge = qbitSourceLabel(stat.qbitSeedingTypes) || 'client';
+      parts.push(`<span title="Torrents en seed dans vos clients BitTorrent liés">${formatCount(stat.qbitSeeding)} <span class="stat-source">${escapeHtml(badge)}</span></span>`);
+    }
+    return parts.length ? parts.join(' <span class="cell-muted">·</span> ') : null;
   }
 
   // Cellule "Seeding" pour la grille des cartes (inline, 1 colonne).
   function seedingStatCell(stat) {
-    const info = seedingInfo(stat);
+    const inner = renderSeeding(stat);
     return `
       <div class="stat">
-        <span class="stat-label">Seeding${info ? seedingBadgeHtml(info.badge) : ''}</span>
-        <span class="stat-value">${info ? info.value : '-'}</span>
+        <span class="stat-label">Seeding</span>
+        <span class="stat-value">${inner || '-'}</span>
       </div>`;
   }
 
   // Cellule "Seeding" pleine largeur, pour les cartes dont le slot inline affiche deja autre
   // chose (ratioless, ou trackers a "Seed time"). Rien si aucune valeur de seeding disponible.
   function seedingStatCellFull(stat) {
-    const info = seedingInfo(stat);
-    if (!info) return '';
+    const inner = renderSeeding(stat);
+    if (!inner) return '';
     return `
       <div class="stat stat--qbit">
-        <span class="stat-label">Seeding${seedingBadgeHtml(info.badge)}</span>
-        <span class="stat-value">${info.value}</span>
+        <span class="stat-label">Seeding</span>
+        <span class="stat-value">${inner}</span>
       </div>`;
   }
 
@@ -5824,10 +5823,7 @@
       : `<span class="${ratioClass(ratio)}">${hasRatio ? formatRatio(ratio) : '-'}</span>`;
     const buf = isError ? '<span class="cell-muted">—</span>'
       : `<span class="${bufferClass(formatBuffer(f, byteUnit))}">${bufferText(f, byteUnit)}</span>`;
-    const seedingInf = seedingInfo(stat);
-    const seeding = seedingInf
-      ? `${seedingInf.value}${seedingBadgeHtml(seedingInf.badge)}`
-      : '<span class="cell-muted">—</span>';
+    const seeding = renderSeeding(stat) || '<span class="cell-muted">—</span>';
     // Bonus : seedBonus pour les trackers a ratio, ou Points pour les ratioless.
     // Si le tracker expose un ratio requis (ex: Redacted), on l'affiche a la place, avec un
     // badge "req." pour lever l'ambiguite sous l'en-tete generique.
