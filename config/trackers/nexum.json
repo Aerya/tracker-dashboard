@@ -39,7 +39,8 @@
       "dlQuota":       { "regex": "user-stat-dlday[\\s\\S]{0,160}?</i>\\s*(?<value>[^<]+?)\\s*</span>", "transform": "string" },
       "level":         { "regex": "Niveau\\s*(?<value>\\d+)", "transform": "integer" },
       "xp":            { "regex": "Niveau\\s*\\d+\\s*·\\s*(?<value>[\\d\\s]+?)\\s*XP", "transform": "string" },
-      "unreadMessages": { "regex": "id=['\"]pm-badge['\"][^>]*>(?<value>\\d+)", "transform": "integer" }
+      "unreadMessages": { "regex": "id=['\"]pm-badge['\"][^>]*>(?<value>\\d+)", "transform": "integer" },
+      "seeding": { "regex": "Actuellement en partage[\\s\\S]{0,200}?sur\\s*<strong[^>]*>\\s*(?<value>\\d+)\\s*</strong>\\s*torrents", "transform": "integer" }
     },
     "extraFetch": {
       "url": "user/{{username}}",
