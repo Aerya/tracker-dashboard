@@ -13,30 +13,26 @@
       "password": "{{password}}"
     },
     "failurePatterns": [
-      "type=\"password\"",
-      "name=\"password\"",
-      "href=\"/login\"",
-      "aria-label=\"Connexion\"",
-      "Inscription"
+      "Page introuvable"
     ],
     "cookieOnly": true
   },
   "fetch": {
-    "url": "/",
-    "mode": "browser",
-    "responseType": "html",
+    "url": "api/me/stats",
+    "mode": "http",
+    "responseType": "json",
     "fields": {
-      "ratio": {
-        "regex": "RATIO\\s*:?\\s*(?<value>[\\d\\s.,]+)",
-        "transform": "number"
-      },
       "uploadedBytes": {
-        "regex": ">UPLOAD<[\\s\\S]{0,180}?_statValue[^>]*>\\s*(?<value>\\d[\\d\\s.,]*\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))\\s*<",
+        "path": "summary.uploaded",
         "transform": "bytes"
       },
       "downloadedBytes": {
-        "regex": ">DOWNLOAD<[\\s\\S]{0,180}?_statValue[^>]*>\\s*(?<value>\\d[\\d\\s.,]*\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))\\s*<",
+        "path": "summary.downloaded",
         "transform": "bytes"
+      },
+      "seeding": {
+        "path": "statistics.torrents_seeding",
+        "transform": "integer"
       }
     },
     "extraFetch": {
