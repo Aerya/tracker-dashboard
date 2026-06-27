@@ -76,6 +76,14 @@ if (!html.includes('<h2>🔀 Proxy</h2>')) {
   errors.push('Proxy panel heading is missing or corrupted');
 }
 
+const seedingSourcesAreStacked = (
+  html.includes('.seeding-sources { display: flex; flex-direction: column; gap: 2px; }')
+  && html.includes('return `<span class="seeding-sources">${parts.join(\'\')}</span>`;')
+);
+if (!seedingSourcesAreStacked) {
+  errors.push('Site and BitTorrent seeding sources must remain vertically stacked');
+}
+
 const synchronizesAllBundledTrackers = (
   server.includes('const definition = loadDefaultTrackerDefinition(tracker.baseId ?? tracker.id);')
   && !server.includes('CANONICAL_CONNECTION_TRACKERS')

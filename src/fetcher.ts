@@ -146,6 +146,29 @@ function extractHtml(
   return { values: out, byteUnit };
 }
 
+type ExtraFetchConfig = NonNullable<TrackerConfig['fetch']['extraFetch']>;
+
+/** Extrait la valeur d'une réponse extraFetch, quel que soit son transport. */
+export function extractExtraFieldResponse(
+  ef: ExtraFetchConfig,
+  body: string,
+): { field: string; value: string | number } | null {
+  const single: Record<string, FieldExtractor> = {
+    [ef.field]: { path: ef.path, regex: ef.regex, transform: ef.transform },
+  };
+  const responseType = ef.responseType ?? (ef.path ? 'json' : 'html');
+  let out: { values: Record<string, string | number>; byteUnit: 'decimal' | 'binary' | null };
+  if (responseType === 'json') {
+    let json: unknown;
+    try { json = JSON.parse(body); } catch { return null; }
+    out = extractJson(json, single);
+  } else {
+    out = extractHtml(body, single);
+  }
+  const value = out.values[ef.field];
+  return value !== undefined && value !== '' ? { field: ef.field, value } : null;
+}
+
 function hasExtractedValues(fields: Record<string, string | number>): boolean {
   return Object.values(fields).some(value => (
     value !== '' && value !== undefined && value !== null
@@ -273,20 +296,7 @@ export async function fetchExtraField(
     const url = resolveUrl(tracker.baseUrl, interpolate(ef.url, vars));
     const res = await request(url, headers);
     if (!res || res.status >= 400) return null;
-    const single: Record<string, FieldExtractor> = {
-      [ef.field]: { path: ef.path, regex: ef.regex, transform: ef.transform },
-    };
-    const rt = ef.responseType ?? (ef.path ? 'json' : 'html');
-    let out: { values: Record<string, string | number>; byteUnit: 'decimal' | 'binary' | null };
-    if (rt === 'json') {
-      let json: unknown;
-      try { json = JSON.parse(res.body); } catch { return null; }
-      out = extractJson(json, single);
-    } else {
-      out = extractHtml(res.body, single);
-    }
-    const value = out.values[ef.field];
-    return value !== undefined && value !== '' ? { field: ef.field, value } : null;
+    return extractExtraFieldResponse(ef, res.body);
   } catch {
     return null;
   }
@@ -990,9 +1000,8 @@ export async function fetchTracker(
     // de membre TR4KER, profil hydraté en JS sur une autre route). Best-effort.
     const ef = tracker.fetch.extraFetch;
     if (ef && extraHtml) {
-      const extra = extractHtml(extraHtml, { [ef.field]: { path: ef.path, regex: ef.regex, transform: ef.transform } });
-      const value = extra.values[ef.field];
-      if (value !== undefined && value !== '') fields[ef.field] = value;
+      const extra = extractExtraFieldResponse(ef, extraHtml);
+      if (extra) fields[extra.field] = extra.value;
     }
 
     // L'unité d'affichage suit ce que le site écrit réellement (« GB » -> décimal,
