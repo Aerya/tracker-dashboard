@@ -18,28 +18,33 @@
     "cookieOnly": true
   },
   "fetch": {
-    "url": "api/me/stats",
+    "url": "api/me",
     "mode": "http",
     "responseType": "json",
     "fields": {
       "uploadedBytes": {
-        "path": "summary.uploaded",
+        "path": "bonus_upload",
         "transform": "bytes"
       },
       "downloadedBytes": {
-        "path": "summary.downloaded",
+        "path": "bonus_download",
         "transform": "bytes"
       },
-      "seeding": {
-        "path": "statistics.torrents_seeding",
-        "transform": "integer"
+      "ratio": {
+        "path": "ratio",
+        "transform": "number"
+      },
+      "memberClass": {
+        "path": "role",
+        "transform": "string"
       }
     },
     "extraFetch": {
-      "url": "api/me",
-      "field": "memberClass",
-      "regex": "\"role\":\"(?<value>[^\"]+)\"",
-      "transform": "string"
+      "url": "api/me/stats",
+      "responseType": "json",
+      "field": "seeding",
+      "path": "statistics.torrents_seeding",
+      "transform": "integer"
     }
   },
   "dashboard": {

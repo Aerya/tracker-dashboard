@@ -5,9 +5,11 @@ const root = process.cwd();
 const htmlPath = path.join(root, 'public', 'index.html');
 const serverPath = path.join(root, 'src', 'server.ts');
 const redactedPath = path.join(root, 'config', 'trackers', 'redacted.json');
+const tr4kerPath = path.join(root, 'config', 'trackers', 'tr4ker.json');
 const html = fs.readFileSync(htmlPath, 'utf8');
 const server = fs.readFileSync(serverPath, 'utf8');
 const redacted = JSON.parse(fs.readFileSync(redactedPath, 'utf8'));
+const tr4ker = JSON.parse(fs.readFileSync(tr4kerPath, 'utf8'));
 const errors = [];
 
 function normalizeRoute(route) {
@@ -80,6 +82,17 @@ const synchronizesAllBundledTrackers = (
 );
 if (redacted.fetch?.fields?.requiredRatio && !synchronizesAllBundledTrackers) {
   errors.push('Redacted bundled fields are not synchronized to existing installations');
+}
+
+const tr4kerUsesDisplayedTotals = (
+  tr4ker.fetch?.url === 'api/me'
+  && tr4ker.fetch?.fields?.uploadedBytes?.path === 'bonus_upload'
+  && tr4ker.fetch?.fields?.downloadedBytes?.path === 'bonus_download'
+  && tr4ker.fetch?.extraFetch?.url === 'api/me/stats'
+  && tr4ker.fetch?.extraFetch?.path === 'statistics.torrents_seeding'
+);
+if (!tr4kerUsesDisplayedTotals) {
+  errors.push('TR4KER must use the totals displayed by the site and keep seeding from api/me/stats');
 }
 
 if (errors.length > 0) {
