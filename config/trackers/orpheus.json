@@ -32,6 +32,15 @@
         "regex": "data-noty-type=['\"]Inbox['\"][^>]*>[^<]*?(?<value>\\d+|\\ba) new message",
         "transform": "string"
       }
+    },
+    "extraFetch": {
+      "url": "torrents.php?type=seeding&userid={{id}}",
+      "field": "seeding",
+      "idExtract": {
+        "regex": "href=\"user\\.php\\?id=(?<value>\\d+)\" class=\"username\""
+      },
+      "regex": "(?<value>\\d+)\\s+torrents? found",
+      "transform": "integer"
     }
   }
 }

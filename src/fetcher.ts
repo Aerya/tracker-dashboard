@@ -146,6 +146,29 @@ function extractHtml(
   return { values: out, byteUnit };
 }
 
+type ExtraFetchConfig = NonNullable<TrackerConfig['fetch']['extraFetch']>;
+
+/** Extrait la valeur d'une réponse extraFetch, quel que soit son transport. */
+export function extractExtraFieldResponse(
+  ef: ExtraFetchConfig,
+  body: string,
+): { field: string; value: string | number } | null {
+  const single: Record<string, FieldExtractor> = {
+    [ef.field]: { path: ef.path, regex: ef.regex, transform: ef.transform },
+  };
+  const responseType = ef.responseType ?? (ef.path ? 'json' : 'html');
+  let out: { values: Record<string, string | number>; byteUnit: 'decimal' | 'binary' | null };
+  if (responseType === 'json') {
+    let json: unknown;
+    try { json = JSON.parse(body); } catch { return null; }
+    out = extractJson(json, single);
+  } else {
+    out = extractHtml(body, single);
+  }
+  const value = out.values[ef.field];
+  return value !== undefined && value !== '' ? { field: ef.field, value } : null;
+}
+
 function hasExtractedValues(fields: Record<string, string | number>): boolean {
   return Object.values(fields).some(value => (
     value !== '' && value !== undefined && value !== null
@@ -273,20 +296,7 @@ export async function fetchExtraField(
     const url = resolveUrl(tracker.baseUrl, interpolate(ef.url, vars));
     const res = await request(url, headers);
     if (!res || res.status >= 400) return null;
-    const single: Record<string, FieldExtractor> = {
-      [ef.field]: { path: ef.path, regex: ef.regex, transform: ef.transform },
-    };
-    const rt = ef.responseType ?? (ef.path ? 'json' : 'html');
-    let out: { values: Record<string, string | number>; byteUnit: 'decimal' | 'binary' | null };
-    if (rt === 'json') {
-      let json: unknown;
-      try { json = JSON.parse(res.body); } catch { return null; }
-      out = extractJson(json, single);
-    } else {
-      out = extractHtml(res.body, single);
-    }
-    const value = out.values[ef.field];
-    return value !== undefined && value !== '' ? { field: ef.field, value } : null;
+    return extractExtraFieldResponse(ef, res.body);
   } catch {
     return null;
   }
@@ -315,6 +325,22 @@ async function fetchExtraFieldViaCurl(
   return fetchExtraField(tracker, primaryBody, async (url, requestHeaders) => {
     return session.request(url, { headers: requestHeaders, timeoutMs: 30_000 });
   }, headers, creds);
+}
+
+// Variante du fetch secondaire pour le fast-path curl LÉGER (tryCurlFastPath), qui
+// n'a pas de CurlSession mais un simple cookie de session impersoné. La requête
+// secondaire rejoue curlImpersonateGet avec ce même cookie -> même auth + même
+// empreinte TLS que le fetch principal. Best-effort : toute erreur renvoie null.
+async function fetchExtraFieldViaCurlCookie(
+  tracker: TrackerConfig,
+  primaryBody: string,
+  cookie: string,
+  creds: { username: string; password: string },
+): Promise<{ field: string; value: string | number } | null> {
+  return fetchExtraField(tracker, primaryBody, async (url) => {
+    const r = await curlImpersonateGet(tracker.id, url, { cookie, timeoutMs: 30_000 }).catch(() => null);
+    return r ? { status: r.status, body: r.body } : null;
+  }, {}, creds);
 }
 
 function writeDebugDump(
@@ -974,9 +1000,8 @@ export async function fetchTracker(
     // de membre TR4KER, profil hydraté en JS sur une autre route). Best-effort.
     const ef = tracker.fetch.extraFetch;
     if (ef && extraHtml) {
-      const extra = extractHtml(extraHtml, { [ef.field]: { path: ef.path, regex: ef.regex, transform: ef.transform } });
-      const value = extra.values[ef.field];
-      if (value !== undefined && value !== '') fields[ef.field] = value;
+      const extra = extractExtraFieldResponse(ef, extraHtml);
+      if (extra) fields[extra.field] = extra.value;
     }
 
     // L'unité d'affichage suit ce que le site écrit réellement (« GB » -> décimal,
@@ -1017,6 +1042,15 @@ export async function fetchTracker(
     if (isAnubisChallenge(result.body)) return null;
     try {
       const stats = buildStatsFromHtml(url, result.body); // throw si aucune valeur extraite
+      // Requête secondaire (extraFetch) : buildStatsFromHtml ne la gère que via un
+      // extraHtml pré-fourni (navigateur). En fast-path curl léger on la récupère ici,
+      // avec le même cookie impersoné, puis on injecte (ex. seeding Gazelle via
+      // ajax.php?action=user, ou page torrents.php?type=seeding pour Orpheus).
+      const ef = tracker.fetch.extraFetch;
+      if (ef?.url) {
+        const extra = await fetchExtraFieldViaCurlCookie(tracker, result.body, cookie, creds);
+        if (extra) stats.fields[extra.field] = extra.value;
+      }
       console.log(`  [${tracker.name}] Fast-path curl-impersonate OK (navigateur evite)`);
       return stats;
     } catch {

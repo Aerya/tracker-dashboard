@@ -1221,6 +1221,8 @@
       border-radius: 4px; background: var(--border); color: var(--muted);
       vertical-align: middle; cursor: help; text-transform: none;
     }
+    .seeding-sources { display: flex; flex-direction: column; gap: 2px; }
+    .seeding-sources > span { display: flex; align-items: center; }
 
     .col-good   { color: var(--green);  }
     .col-warn   { color: var(--yellow); }
@@ -2648,7 +2650,9 @@
       const badge = qbitSourceLabel(stat.qbitSeedingTypes) || 'client';
       parts.push(`<span title="Torrents en seed dans vos clients BitTorrent liés">${formatCount(stat.qbitSeeding)} <span class="stat-source">${escapeHtml(badge)}</span></span>`);
     }
-    return parts.length ? parts.join(' <span class="cell-muted">·</span> ') : null;
+    if (!parts.length) return null;
+    // Empilage vertical (site au-dessus, qBit en dessous) plutot qu'inline avec separateur.
+    return `<span class="seeding-sources">${parts.join('')}</span>`;
   }
 
   // Cellule "Seeding" pour la grille des cartes (inline, 1 colonne).

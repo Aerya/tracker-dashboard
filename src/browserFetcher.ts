@@ -615,7 +615,13 @@ export async function fetchWithBrowser(
           await page.goto(extraUrl, { waitUntil: 'commit', timeout: 45_000 });
           await page.waitForLoadState('domcontentloaded', { timeout: 30_000 }).catch(() => {});
           await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-          extraHtml = await safeContent(page);
+          // Une navigation Playwright vers du JSON enveloppe la réponse dans une page
+          // HTML (<pre>...</pre>). Conserver le texte brut pour permettre l'extraction
+          // par chemin JSON ; garder le DOM rendu pour les extraFetch HTML/SPA.
+          const responseType = ef.responseType ?? (ef.path ? 'json' : 'html');
+          extraHtml = responseType === 'json'
+            ? await page.locator('body').innerText()
+            : await safeContent(page);
         }
       } catch {
         // Best-effort : la page secondaire (ex. classe de membre) ne doit jamais
