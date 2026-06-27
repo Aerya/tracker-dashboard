@@ -105,14 +105,24 @@ export const ENGINE_TEMPLATES: Record<EngineId, EngineTemplate> = {
           uploadedBytes:   { regex: 'id="stats_seeding"[^>]*title="Uploaded: (?<value>[^"]+)"', transform: 'bytes' },
           downloadedBytes: { regex: 'id="stats_leeching"[^>]*title="Downloaded: (?<value>[^"]+)"', transform: 'bytes' },
           ratio:           { regex: 'id="stats_ratio"[^>]*title="Ratio: (?<value>[^"]+)"', transform: 'number' },
-          // Nombre de torrents en seed annonce par le site : compteur "seed: N" du header
-          // utilisateur, rendu dans <span id="nav_seeding_r">N</span> sur les skins Gazelle
-          // recents (HappyFappy, KuFirc...). Best-effort, surchargeable par site.
-          seeding:         { regex: 'id="nav_seeding_r"[^>]*>\\s*(?<value>\\d+)', transform: 'integer' },
           // Classe de membre courante, affichee dans le header utilisateur sur la plupart
           // des skins Gazelle (Redacted, Orpheus, Phoenix Project...). Surchargee par site
           // quand le skin diverge (ex: HD-Forever, classe entre parentheses).
           memberClass:     { regex: 'class="hidden userclass">(?<value>[^<]+)<', transform: 'string' },
+        },
+        // Nombre de torrents en seed annonce par le site : recupere via l'API JSON
+        // Gazelle (ajax.php?action=user&id=N -> response.community.seeding). Fiable sur
+        // la plupart des skins (HD-Forever, Phoenix Project, Redacted...). L'id utilisateur
+        // est extrait de la page principale via le lien `<a href="user.php?id=N"
+        // class="username">` present dans le header. Best-effort, surchargeable par site
+        // (ex: Orpheus, dont l'API renvoie un compteur fantome errone -> override HTML).
+        extraFetch: {
+          url: 'ajax.php?action=user&id={{id}}',
+          field: 'seeding',
+          responseType: 'json',
+          idExtract: { regex: 'href="user\\.php\\?id=(?<value>\\d+)" class="username"' },
+          path: 'response.community.seeding',
+          transform: 'integer',
         },
       },
       dashboard: { byteUnit: 'binary' },
