@@ -317,6 +317,22 @@ async function fetchExtraFieldViaCurl(
   }, headers, creds);
 }
 
+// Variante du fetch secondaire pour le fast-path curl LÉGER (tryCurlFastPath), qui
+// n'a pas de CurlSession mais un simple cookie de session impersoné. La requête
+// secondaire rejoue curlImpersonateGet avec ce même cookie -> même auth + même
+// empreinte TLS que le fetch principal. Best-effort : toute erreur renvoie null.
+async function fetchExtraFieldViaCurlCookie(
+  tracker: TrackerConfig,
+  primaryBody: string,
+  cookie: string,
+  creds: { username: string; password: string },
+): Promise<{ field: string; value: string | number } | null> {
+  return fetchExtraField(tracker, primaryBody, async (url) => {
+    const r = await curlImpersonateGet(tracker.id, url, { cookie, timeoutMs: 30_000 }).catch(() => null);
+    return r ? { status: r.status, body: r.body } : null;
+  }, {}, creds);
+}
+
 function writeDebugDump(
   tracker: TrackerConfig,
   url: string,
@@ -1017,6 +1033,15 @@ export async function fetchTracker(
     if (isAnubisChallenge(result.body)) return null;
     try {
       const stats = buildStatsFromHtml(url, result.body); // throw si aucune valeur extraite
+      // Requête secondaire (extraFetch) : buildStatsFromHtml ne la gère que via un
+      // extraHtml pré-fourni (navigateur). En fast-path curl léger on la récupère ici,
+      // avec le même cookie impersoné, puis on injecte (ex. seeding Gazelle via
+      // ajax.php?action=user, ou page torrents.php?type=seeding pour Orpheus).
+      const ef = tracker.fetch.extraFetch;
+      if (ef?.url) {
+        const extra = await fetchExtraFieldViaCurlCookie(tracker, result.body, cookie, creds);
+        if (extra) stats.fields[extra.field] = extra.value;
+      }
       console.log(`  [${tracker.name}] Fast-path curl-impersonate OK (navigateur evite)`);
       return stats;
     } catch {
