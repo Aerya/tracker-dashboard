@@ -91,7 +91,7 @@ if (!seedingSourcesAreStacked) {
 }
 
 const cardEditOpensSelectedTracker = (
-  html.includes("function openTrackerEdit(trackerId) {\n    openTrackerConfig(trackerId);\n  }")
+  /function openTrackerEdit\(trackerId\) \{\r?\n\s+openTrackerConfig\(trackerId\);\r?\n\s+\}/.test(html)
   && !html.includes("document.getElementById('tracker-definitions-panel')")
 );
 if (!cardEditOpensSelectedTracker) {
@@ -156,6 +156,23 @@ const shipsFlareSolverrSidecar = (
 );
 if (!shipsFlareSolverrSidecar) {
   errors.push('FlareSolverr sidecar wiring must remain available in Compose, WebUI and README');
+}
+
+const shipsCrossSeedIntegration = (
+  fs.existsSync(path.join(root, 'public', 'cross-seed.svg'))
+  && html.includes('id="beta-cross-seed-instances"')
+  && html.includes("fetch('/api/beta/cross-seed/test'")
+  && html.includes("fetch('/api/beta/cross-seed/summary'")
+  && html.includes('crossSeedTrackerMarks(stat.id')
+  && html.includes('torrent.crossSeedInstanceIds')
+  && server.includes("app.post('/api/beta/cross-seed/test'")
+  && server.includes("app.get('/api/beta/cross-seed/summary'")
+  && server.includes('detectCrossSeedInstanceIds')
+  && readme.includes('### Instances cross-seed')
+  && readme.includes('Aucune clé API cross-seed')
+);
+if (!shipsCrossSeedIntegration) {
+  errors.push('cross-seed instances, badges, torrent markers, API test and README documentation must remain wired');
 }
 
 if (errors.length > 0) {

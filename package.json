@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "check:integration": "node scripts/check-integration.mjs && node scripts/check-unread-messages.mjs && node scripts/check-extra-fetch.mjs && node scripts/check-flaresolverr.mjs",
+    "check:integration": "node scripts/check-integration.mjs && node scripts/check-unread-messages.mjs && node scripts/check-extra-fetch.mjs && node scripts/check-flaresolverr.mjs && node scripts/check-cross-seed.mjs",
     "start": "node --experimental-sqlite dist/index.js",
     "start:browser": "node --experimental-sqlite dist/browserRuntime.js"
   },

@@ -1065,6 +1065,18 @@
     }
     .card-name { font-weight: 600; font-size: 15px; color: var(--text); text-decoration: none; }
     .card-name:hover { color: var(--blue); text-decoration: underline; text-underline-offset: 3px; }
+    .tracker-name-line { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+    .cross-seed-marks { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; }
+    .cross-seed-mark {
+      width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center;
+      border: 1px solid color-mix(in srgb, #39a652 60%, var(--border));
+      border-radius: 6px; overflow: hidden; background: #fff; vertical-align: middle;
+      box-shadow: 0 0 0 1px color-mix(in srgb, #39a652 12%, transparent);
+      transition: transform .12s, box-shadow .12s;
+    }
+    .cross-seed-mark img { width: 100%; height: 100%; object-fit: contain; }
+    a.cross-seed-mark:hover { transform: translateY(-1px) scale(1.08); box-shadow: 0 0 0 2px color-mix(in srgb, #39a652 30%, transparent); }
+    .nav-sub-item .cross-seed-mark { width: 15px; height: 15px; border-radius: 5px; margin-left: auto; }
     .card-name.is-stale {
       color: var(--yellow);
       text-decoration: underline;
@@ -2439,6 +2451,15 @@
             </div>
           </section>
         <section class="beta-panel">
+          <h3>Instances cross-seed</h3>
+          <p class="beta-note" style="margin-bottom:10px">Reliez chaque instance cross-seed au client BitTorrent qu'elle alimente. Les marqueurs correspondent au <code>linkCategory</code>, à une catégorie se terminant par <code>.cross-seed</code>, ou à un tag appliqué aux torrents injectés.</p>
+          <div id="beta-cross-seed-instances"></div>
+          <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap">
+            <button class="beta-icon-btn" onclick="addBetaCrossSeedInstance()" type="button">Ajouter une instance</button>
+            <button class="beta-icon-btn primary" onclick="saveBetaSettings()" type="button">Enregistrer</button>
+          </div>
+        </section>
+        <section class="beta-panel">
           <h3>Associations BitTorrent</h3>
           <p class="beta-note" style="margin-bottom:10px">Associer les torrents détectés dans les clients BitTorrent aux trackers actifs quand ils ne sont pas reconnus automatiquement.</p>
           <div id="beta-announce-mappings"></div>
@@ -2891,6 +2912,31 @@
     }
   }
 
+  function crossSeedUsageForTracker(trackerId) {
+    const tracker = (betaCrossSeedSummary.trackers || []).find(item => item.trackerId === trackerId);
+    return new Map((tracker?.instances || []).map(instance => [instance.id, instance.count]));
+  }
+
+  function crossSeedMarks(instanceIds, options = {}) {
+    const ids = [...new Set(instanceIds || [])];
+    const counts = options.counts || new Map();
+    const instances = ids.map(id => (betaSettings.crossSeedInstances || []).find(instance => instance.id === id)).filter(Boolean);
+    if (!instances.length) return '';
+    return `<span class="cross-seed-marks">${instances.map(instance => {
+      const count = counts.get(instance.id);
+      const title = `${instance.label || 'cross-seed'}${count ? ` · ${count} torrent(s)` : ''}`;
+      const inner = `<img src="/cross-seed.svg" alt="" loading="lazy">`;
+      return options.linked && instance.baseUrl
+        ? `<a class="cross-seed-mark" href="${escapeHtml(instance.baseUrl)}" target="_blank" rel="noreferrer noopener" title="${escapeHtml(title)}" aria-label="Ouvrir ${escapeHtml(instance.label || 'cross-seed')}" onclick="event.stopPropagation()">${inner}</a>`
+        : `<span class="cross-seed-mark" title="${escapeHtml(title)}">${inner}</span>`;
+    }).join('')}</span>`;
+  }
+
+  function crossSeedTrackerMarks(trackerId, linked = true) {
+    const counts = crossSeedUsageForTracker(trackerId);
+    return crossSeedMarks([...counts.keys()], { linked, counts });
+  }
+
   function trackerName(stat) {
     const href = trackerLink(stat);
     const name = escapeHtml(stat.name);
@@ -2898,8 +2944,10 @@
     const staleTitle = stat.stale ? ` title="${escapeHtml(stat.stale.error || 'Probleme pendant le dernier refresh')}"` : '';
     const cls = stat.stale ? 'card-name is-stale' : 'card-name';
     const dot = stat.stale ? '<span class="stale-dot"></span>' : '';
-    if (!href) return `<span class="${cls}"${staleTitle}>${logo}${name}${dot}</span>`;
-    return `<a class="${cls}"${staleTitle} href="${escapeHtml(href)}" target="_blank" rel="noreferrer noopener">${logo}${name}${dot}</a>`;
+    const tracker = href
+      ? `<a class="${cls}"${staleTitle} href="${escapeHtml(href)}" target="_blank" rel="noreferrer noopener">${logo}${name}${dot}</a>`
+      : `<span class="${cls}"${staleTitle}>${logo}${name}${dot}</span>`;
+    return `<span class="tracker-name-line">${tracker}${crossSeedTrackerMarks(stat.id)}</span>`;
   }
 
   function staleBadge(stat) {
@@ -2944,8 +2992,10 @@
   let betaStatusFilter = 'all'; // 'all' | 'problems' | 'healthy'
   let betaCalendarMonth = new Date();
   let betaOverview = null;
+  let betaCrossSeedSummary = { instances: [], trackers: [] };
   let betaSettings = {
     qbitClients: [],
+    crossSeedInstances: [],
     notificationTargets: [],
     notificationPreferences: {},
     features: {
@@ -3087,12 +3137,44 @@
       if (overview.ok) {
         betaOverview = overview;
         betaSettings = overview.settings || betaSettings;
+        const usage = new Map();
+        for (const group of (overview.qbitStats || [])) {
+          if (!group.trackerId) continue;
+          const trackerUsage = usage.get(group.trackerId) || new Map();
+          for (const torrent of (group.torrents || [])) {
+            for (const instanceId of (torrent.crossSeedInstanceIds || [])) {
+              trackerUsage.set(instanceId, (trackerUsage.get(instanceId) || 0) + 1);
+            }
+          }
+          usage.set(group.trackerId, trackerUsage);
+        }
+        betaCrossSeedSummary = {
+          instances: betaSettings.crossSeedInstances || [],
+          trackers: [...usage.entries()].map(([trackerId, instances]) => ({
+            trackerId,
+            instances: [...instances.entries()].map(([id, count]) => ({ id, count })),
+          })),
+        };
         applyBetaFeatureVisibility();
       }
       if (history.ok) betaHistory = history.snapshots || [];
       renderBetaLab();
     } catch (e) {
       console.warn('Beta unavailable', e);
+    }
+  }
+
+  async function loadCrossSeedSummary() {
+    try {
+      const response = await fetch('/api/beta/cross-seed/summary');
+      const data = await response.json();
+      if (!data.ok) return;
+      betaCrossSeedSummary = data;
+      betaSettings.crossSeedInstances = data.instances || [];
+      renderGrid();
+      renderBetaTrackerList();
+    } catch (e) {
+      console.warn('cross-seed summary unavailable', e);
     }
   }
 
@@ -3137,6 +3219,7 @@
         <button class="nav-sub-item ${active ? 'active' : ''}" onclick="openTrackerFiche('${escapeHtml(stat.id)}')" type="button" title="${escapeHtml(mode)}">
           <i class="nav-sub-dot ${dot}"></i>
           <span class="nav-sub-name">${escapeHtml(stat.name)}</span>
+          ${crossSeedTrackerMarks(stat.id, false)}
         </button>`;
     };
     const items = trackers.map(stat => ({ id: stat.id, name: stat.name, baseId: baseById.get(stat.id), stat }));
@@ -4022,6 +4105,8 @@
     const suggestedQbits = (betaOverview?.qbitStats || []).filter(item => !item.trackerId && betaTrackerMatchForHost(item.trackerHost)?.tracker.id === stat.id);
     const torrents = qbits.flatMap(item => (item.torrents || []).map(torrent => ({ ...torrent, clientLabel: item.clientLabel, clientBaseUrl: item.clientBaseUrl })));
     const suggestedTorrents = suggestedQbits.flatMap(item => (item.torrents || []).map(torrent => ({ ...torrent, trackerHost: item.trackerHost, clientLabel: item.clientLabel })));
+    const crossSeedCounts = crossSeedUsageForTracker(stat.id);
+    const trackerCrossSeedIds = [...crossSeedCounts.keys()];
     const ratio = computedRatio(stat.fields);
     const buffer = formatBuffer(stat.fields, statByteUnit(stat));
     const history = historyForSelectedTracker();
@@ -4039,7 +4124,7 @@
       <div class="fiche-header">
         ${trackerLogo(stat.id)}
         <div class="fiche-header-main">
-          <strong class="fiche-header-name">${escapeHtml(stat.name)}</strong>
+          <span class="tracker-name-line"><strong class="fiche-header-name">${escapeHtml(stat.name)}</strong>${crossSeedMarks(trackerCrossSeedIds, { linked: true, counts: crossSeedCounts })}</span>
           ${trackerUrl ? `<a class="fiche-header-link" href="${escapeHtml(trackerUrl)}" target="_blank" rel="noreferrer noopener">${escapeHtml(host || trackerUrl)}</a>` : ''}
         </div>
         ${trackerStatusBadge(stat)}
@@ -4055,6 +4140,7 @@
         ${trackerUrl ? `<a class="beta-icon-btn" href="${escapeHtml(trackerUrl)}" target="_blank" rel="noreferrer noopener">Ouvrir le tracker</a>` : ''}
         <button class="beta-icon-btn" onclick="openTrackerConfig('${escapeHtml(stat.id)}')" type="button">Configurer ce tracker</button>
         ${qbits.map(item => `<a class="beta-icon-btn" href="${escapeHtml(item.clientBaseUrl)}" target="_blank" rel="noreferrer noopener">Ouvrir ${escapeHtml(item.clientLabel)}</a>`).join('')}
+        ${trackerCrossSeedIds.map(id => (betaSettings.crossSeedInstances || []).find(instance => instance.id === id)).filter(Boolean).map(instance => `<a class="beta-icon-btn" href="${escapeHtml(instance.baseUrl)}" target="_blank" rel="noreferrer noopener"><img src="/cross-seed.svg" alt="" style="width:14px;height:14px;border-radius:4px;vertical-align:-3px;margin-right:5px">Ouvrir ${escapeHtml(instance.label)}</a>`).join('')}
         <button class="beta-icon-btn" onclick="testTrackerProxy('${escapeHtml(stat.id)}')" type="button">Tester si le site est en ligne</button>
         <span id="beta-proxy-check-${escapeHtml(stat.id)}" class="beta-note"></span>
       </div>
@@ -4151,7 +4237,7 @@
           <tbody>${torrents.map(torrent => `
             <tr>
               <td>${torrent.clientBaseUrl ? `<a href="${escapeHtml(torrent.clientBaseUrl)}" target="_blank" rel="noreferrer noopener" title="Ouvrir ${escapeHtml(torrent.clientLabel)} dans un nouvel onglet">${escapeHtml(torrent.clientLabel)}</a>` : escapeHtml(torrent.clientLabel)}</td>
-              <td title="${escapeHtml(torrent.hash)}">${escapeHtml(torrent.name || torrent.hash || '-')}</td>
+              <td title="${escapeHtml(torrent.hash)}">${escapeHtml(torrent.name || torrent.hash || '-')}${crossSeedMarks(torrent.crossSeedInstanceIds, { linked: true })}</td>
               <td>${escapeHtml(torrentStateLabel(torrent.state))}</td>
               <td>${bytesText(torrent.sizeBytes)}</td>
               <td>${Math.round((Number(torrent.progress) || 0) * 100)}%</td>
@@ -4798,6 +4884,26 @@
     `).join('') || '<p class="beta-note">Ajouter un ou plusieurs clients qBittorrent ou ruTorrent/rTorrent pour comparer les stats locales aux stats des sites.</p>';
   }
 
+  function renderBetaCrossSeedInstances() {
+    const container = document.getElementById('beta-cross-seed-instances');
+    if (!container) return;
+    const instances = betaSettings.crossSeedInstances || [];
+    const clients = betaSettings.qbitClients || [];
+    const clientOptions = selectedId => clients.map(client => `
+      <option value="${escapeHtml(client.id)}" ${client.id === selectedId ? 'selected' : ''}>${escapeHtml(client.label || client.id)}</option>
+    `).join('');
+    container.innerHTML = instances.map((instance, idx) => `
+      <div class="beta-form-row" data-beta-cross-seed="${idx}" style="grid-template-columns:minmax(0,1fr) minmax(0,2fr) minmax(0,1.4fr) minmax(0,1.5fr) 80px auto">
+        <div class="beta-field"><label>Nom</label><input data-field="label" value="${escapeHtml(instance.label || '')}" placeholder="cross-seed principal"></div>
+        <div class="beta-field"><label>URL WebUI</label><input data-field="baseUrl" value="${escapeHtml(instance.baseUrl || '')}" placeholder="http://cross-seed:2468"></div>
+        <div class="beta-field"><label>Client lié</label><select data-field="clientId"><option value="">— choisir —</option>${clientOptions(instance.clientId)}</select></div>
+        <div class="beta-field"><label title="Catégories ou tags séparés par des virgules">Marqueurs</label><input data-field="markers" value="${escapeHtml((instance.markers || ['cross-seed-link', 'cross-seed']).join(', '))}" placeholder="cross-seed-link, cross-seed"></div>
+        <div class="beta-field"><label>Actif</label><select data-field="enabled"><option value="true" ${instance.enabled !== false ? 'selected' : ''}>Oui</option><option value="false" ${instance.enabled === false ? 'selected' : ''}>Non</option></select></div>
+        <div style="display:flex; gap:6px; align-items:flex-end">${instance.baseUrl ? `<a class="beta-icon-btn" href="${escapeHtml(instance.baseUrl)}" target="_blank" rel="noreferrer noopener">Ouvrir</a>` : ''}<button class="beta-icon-btn" onclick="testBetaCrossSeedInstance(${idx})" type="button">Tester</button><button class="beta-icon-btn" onclick="removeBetaCrossSeedInstance(${idx})" type="button">X</button></div>
+      </div>
+    `).join('') || '<p class="beta-note">Ajoutez une instance pour signaler discrètement ses torrents dans les listes et les fiches trackers.</p>';
+  }
+
   function renderBetaAnnounceMappings() {
     const container = document.getElementById('beta-announce-mappings');
     if (!container) return;
@@ -5102,6 +5208,7 @@
     drawBetaMultiTrackerChart();
     drawBetaTotalBars();
     renderBetaQbitClients();
+    renderBetaCrossSeedInstances();
     renderBetaAnnounceMappings();
     renderBetaScheduleSettings();
     renderBetaNotificationPreferences();
@@ -5137,6 +5244,14 @@
         (Math.max(0, Math.floor(Number(row.querySelector('[data-field="refreshDays"]')?.value) || 0)) * 1440)
         + (Math.max(0, Math.floor(Number(row.querySelector('[data-field="refreshHours"]')?.value) || 0)) * 60))),
     })).filter(client => client.baseUrl);
+    const crossSeedInstances = Array.from(document.querySelectorAll('[data-beta-cross-seed]')).map((row, idx) => ({
+      id: betaSettings.crossSeedInstances?.[idx]?.id || genId(),
+      label: row.querySelector('[data-field="label"]').value.trim(),
+      baseUrl: row.querySelector('[data-field="baseUrl"]').value.trim(),
+      clientId: row.querySelector('[data-field="clientId"]').value,
+      markers: row.querySelector('[data-field="markers"]').value.split(',').map(value => value.trim()).filter(Boolean),
+      enabled: row.querySelector('[data-field="enabled"]').value === 'true',
+    })).filter(instance => instance.baseUrl && instance.clientId);
     const announceMappings = Array.from(document.querySelectorAll('[data-beta-mapping]')).map((row) => ({
       announceHost: row.querySelector('[data-field="announceHost"]').value.trim(),
       trackerId: row.querySelector('[data-field="trackerId"]').value,
@@ -5220,6 +5335,7 @@
     return {
       ...betaSettings,
       qbitClients,
+      crossSeedInstances,
       announceMappings,
       notificationTargets,
       features,
@@ -5241,6 +5357,27 @@
     betaSettings = collectBetaSettingsFromDom();
     betaSettings.qbitClients.splice(index, 1);
     renderBetaQbitClients();
+    renderBetaCrossSeedInstances();
+  }
+
+  function addBetaCrossSeedInstance() {
+    betaSettings = collectBetaSettingsFromDom();
+    betaSettings.crossSeedInstances = betaSettings.crossSeedInstances || [];
+    betaSettings.crossSeedInstances.push({
+      id: genId(),
+      label: 'cross-seed',
+      baseUrl: '',
+      clientId: betaSettings.qbitClients?.[0]?.id || '',
+      markers: ['cross-seed-link', 'cross-seed'],
+      enabled: true,
+    });
+    renderBetaCrossSeedInstances();
+  }
+
+  function removeBetaCrossSeedInstance(index) {
+    betaSettings = collectBetaSettingsFromDom();
+    betaSettings.crossSeedInstances.splice(index, 1);
+    renderBetaCrossSeedInstances();
   }
 
   // Importer / lier un hôte d'annonce à un tracker. On part de l'état serveur
@@ -5348,6 +5485,19 @@
     });
     const data = await r.json();
     alert(data.ok ? `Client OK: ${data.torrentCount} torrents sur ${data.trackerCount} tracker(s)` : `Client KO: ${data.error}`);
+  }
+
+  async function testBetaCrossSeedInstance(index) {
+    const settings = collectBetaSettingsFromDom();
+    const instance = settings.crossSeedInstances[index];
+    if (!instance) return;
+    const r = await fetch('/api/beta/cross-seed/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ baseUrl: instance.baseUrl }),
+    });
+    const data = await r.json();
+    alert(data.ok ? `${instance.label} répond correctement.` : `${instance.label} est indisponible : ${data.error}`);
   }
 
   async function refreshBetaQbit() {
@@ -6448,6 +6598,7 @@
     latestSortedStats = [...data.stats];
     renderGrid();
     renderBetaTrackerList();
+    await loadCrossSeedSummary();
     await loadBetaData();
     document.getElementById('last-updated').textContent =
       data.lastRefresh ? `Mis à jour ${relativeTime(data.lastRefresh)}` : '—';
