@@ -2920,14 +2920,7 @@
   }
 
   function openTrackerEdit(trackerId) {
-    // Ouvrir le panneau Trackers
-    const panel = document.getElementById('tracker-definitions-panel');
-    if (panel && !panel.open) panel.open = true;
-    // Scroller vers la ligne du tracker
-    setTimeout(() => {
-      const row = document.getElementById('tracker-def-' + trackerId);
-      if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 100);
+    openTrackerConfig(trackerId);
   }
 
   function cardRefreshButton(stat) {

@@ -90,6 +90,14 @@ if (!seedingSourcesAreStacked) {
   errors.push('Site and BitTorrent seeding sources must remain vertically stacked');
 }
 
+const cardEditOpensSelectedTracker = (
+  html.includes("function openTrackerEdit(trackerId) {\n    openTrackerConfig(trackerId);\n  }")
+  && !html.includes("document.getElementById('tracker-definitions-panel')")
+);
+if (!cardEditOpensSelectedTracker) {
+  errors.push('Card edit buttons must open the selected tracker configuration view');
+}
+
 const synchronizesAllBundledTrackers = (
   server.includes('const definition = loadDefaultTrackerDefinition(tracker.baseId ?? tracker.id);')
   && !server.includes('CANONICAL_CONNECTION_TRACKERS')
