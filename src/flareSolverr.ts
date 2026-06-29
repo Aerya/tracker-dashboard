@@ -47,6 +47,11 @@ export interface FlareSolverrOverrides {
   timeoutMs?: number;
 }
 
+export function isFlareSolverrCandidate(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /challenge|anti-bot|cloudflare|turnstile|cf-chl|just a moment|un instant/i.test(message);
+}
+
 function serviceUrl(override?: string): string {
   return (override || process.env.FLARESOLVERR_URL || DEFAULT_FLARESOLVERR_URL).replace(/\/+$/, '');
 }

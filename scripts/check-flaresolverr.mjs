@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { fetchWithFlareSolverr, getFlareSolverrStatus } from '../dist/flareSolverr.js';
+import { fetchWithFlareSolverr, getFlareSolverrStatus, isFlareSolverrCandidate } from '../dist/flareSolverr.js';
 
 const calls = [];
 const server = http.createServer(async (request, response) => {
@@ -100,6 +100,11 @@ try {
   const status = await getFlareSolverrStatus(baseUrl);
   if (!status.available || status.version !== 'test') {
     throw new Error('FlareSolverr status endpoint was not detected');
+  }
+  if (!isFlareSolverrCandidate(new Error('Challenge anti-bot/Cloudflare affiche'))
+    || isFlareSolverrCandidate(new Error('Identifiants invalides'))
+    || isFlareSolverrCandidate(new Error('Aucune donnee extraite'))) {
+    throw new Error('FlareSolverr fallback must remain limited to explicit anti-bot failures');
   }
   console.log('FlareSolverr checks OK: proxy, cookies, session lifecycle and extra fetch.');
 } finally {

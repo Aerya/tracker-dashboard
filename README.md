@@ -188,7 +188,7 @@ Les lectures en mode navigateur utilisent **Chromium** (Playwright) par défaut.
 
 ### Repli Cloudflare (FlareSolverr)
 
-Pour les trackers qui déclarent le repli anti-bot, Tracker Dashboard peut utiliser **[FlareSolverr](https://github.com/FlareSolverr/FlareSolverr)** après l'échec des lectures HTTP légères. Le sidecar reçoit uniquement l'URL, les cookies et le proxy du tracker concerné, résout le challenge dans une session temporaire, renvoie le HTML puis détruit cette session. Les autres trackers continuent d'utiliser leur chemin habituel.
+Tracker Dashboard peut utiliser **[FlareSolverr](https://github.com/FlareSolverr/FlareSolverr)** en dernier recours lorsqu'un tracker renvoie explicitement un challenge Cloudflare ou anti-bot. Le sidecar reçoit uniquement l'URL, les cookies et le proxy du tracker concerné, résout le challenge dans une session temporaire, renvoie le HTML puis détruit cette session. Les erreurs de credentials, de réseau ou d'extraction ne déclenchent pas ce navigateur supplémentaire. Un tracker connu pour nécessiter FlareSolverr, comme YGGReborn, peut déclarer ce repli en priorité après les lectures HTTP légères.
 
 Le fichier `docker-compose.yml` fourni inclut déjà ce sidecar. Pour une stack existante, ajoutez :
 
