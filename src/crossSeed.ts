@@ -2,7 +2,8 @@ export interface CrossSeedInstanceConfig {
   id: string;
   label: string;
   baseUrl: string;
-  clientId: string;
+  clientIds: string[];
+  clientId?: string;
   markers: string[];
   enabled: boolean;
 }
@@ -15,6 +16,13 @@ export function normalizeCrossSeedMarkers(value: unknown): string[] {
     .map(marker => String(marker).trim().toLowerCase())
     .filter(Boolean);
   return [...new Set(markers.length ? markers : DEFAULT_CROSS_SEED_MARKERS)];
+}
+
+export function normalizeCrossSeedClientIds(instance: { clientIds?: unknown; clientId?: unknown }): string[] {
+  const raw = Array.isArray(instance.clientIds)
+    ? instance.clientIds
+    : [instance.clientId];
+  return [...new Set(raw.map(clientId => String(clientId ?? '').trim()).filter(Boolean))];
 }
 
 function matchesMarker(value: string, marker: string): boolean {
@@ -33,7 +41,7 @@ export function detectCrossSeedInstanceIds(
     .filter(Boolean);
 
   return instances
-    .filter(instance => instance.enabled && instance.clientId === clientId)
+    .filter(instance => instance.enabled && normalizeCrossSeedClientIds(instance).includes(clientId))
     .filter(instance => normalizeCrossSeedMarkers(instance.markers).some(marker => (
       matchesMarker(normalizedCategory, marker)
       || normalizedTags.some(tag => matchesMarker(tag, marker))

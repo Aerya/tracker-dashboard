@@ -126,7 +126,7 @@ Dans **Configuration → Clients BitTorrent**, ajoutez un ou plusieurs clients *
 
 Dans la même page, la section **Instances cross-seed** permet d'associer une ou plusieurs instances [cross-seed](https://github.com/cross-seed/cross-seed) à leurs clients BitTorrent :
 
-- renseignez l'URL de la WebUI cross-seed (port par défaut `2468`) et choisissez le client qBittorrent ou ruTorrent/rTorrent alimenté par cette instance ;
+- renseignez l'URL de la WebUI cross-seed (port par défaut `2468`) et sélectionnez tous les clients qBittorrent ou ruTorrent/rTorrent alimentés par cette instance ;
 - conservez les marqueurs par défaut `cross-seed-link, cross-seed`, ou indiquez le `linkCategory`, la catégorie ou le tag utilisé par votre installation ;
 - lancez une synchronisation des clients BitTorrent : le logo cross-seed apparaît discrètement près des trackers et des torrents concernés ;
 - cliquez sur le logo ou sur **Ouvrir cross-seed** dans une fiche tracker pour rejoindre directement la bonne WebUI.
