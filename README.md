@@ -201,7 +201,8 @@ services:
     network_mode: "container:tracker-dashboard"
     environment:
       HOST: 127.0.0.1
-      LOG_LEVEL: info
+      # Évite de journaliser les corps de requête, qui contiennent les cookies de session.
+      LOG_LEVEL: warning
       TZ: Europe/Paris
 ```
 

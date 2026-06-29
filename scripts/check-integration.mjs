@@ -139,6 +139,7 @@ if (!yggUsesFlareSolverrFallback) {
 const shipsFlareSolverrSidecar = (
   compose.includes('tracker-dashboard-flaresolverr:')
   && compose.includes('ghcr.io/flaresolverr/flaresolverr:latest')
+  && compose.includes('LOG_LEVEL: warning')
   && compose.includes('network_mode: "service:tracker-dashboard"')
   && compose.includes('HOST: 127.0.0.1')
   && html.includes('/api/flaresolverr/status')
