@@ -165,9 +165,11 @@ const shipsCrossSeedIntegration = (
   && html.includes("fetch('/api/beta/cross-seed/summary'")
   && html.includes('crossSeedTrackerMarks(stat.id')
   && html.includes('torrent.crossSeedInstanceIds')
+  && html.includes('data-field="clientIds"')
   && server.includes("app.post('/api/beta/cross-seed/test'")
   && server.includes("app.get('/api/beta/cross-seed/summary'")
   && server.includes('detectCrossSeedInstanceIds')
+  && server.includes('normalizeCrossSeedClientIds')
   && readme.includes('### Instances cross-seed')
   && readme.includes('Aucune clé API cross-seed')
 );

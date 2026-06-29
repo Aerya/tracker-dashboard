@@ -9,6 +9,7 @@ import { getFlareSolverrStatus } from './flareSolverr.js';
 import {
   cleanCrossSeedBaseUrl,
   detectCrossSeedInstanceIds,
+  normalizeCrossSeedClientIds,
   normalizeCrossSeedMarkers,
   type CrossSeedInstanceConfig,
 } from './crossSeed.js';
@@ -1632,7 +1633,11 @@ function loadBetaSettings(): BetaSettings {
     defaults: { ...defaultBetaSettings().defaults, ...(settings.defaults ?? {}) },
     features: { ...defaultBetaSettings().features, ...(settings.features ?? {}) },
     qbitClients: Array.isArray(settings.qbitClients) ? settings.qbitClients : [],
-    crossSeedInstances: Array.isArray(settings.crossSeedInstances) ? settings.crossSeedInstances : [],
+    crossSeedInstances: Array.isArray(settings.crossSeedInstances) ? settings.crossSeedInstances.map(rawInstance => {
+      const instance = rawInstance as CrossSeedInstanceConfig;
+      const { clientId: _legacyClientId, ...current } = instance;
+      return { ...current, clientIds: normalizeCrossSeedClientIds(instance) };
+    }) : [],
     announceMappings: Array.isArray(settings.announceMappings) ? settings.announceMappings : [],
     accountAnnounceMappings: Array.isArray(settings.accountAnnounceMappings) ? settings.accountAnnounceMappings : [],
     notificationTargets: Array.isArray(settings.notificationTargets) ? settings.notificationTargets : [],
@@ -1692,15 +1697,16 @@ function saveBetaSettingsPayload(raw: unknown): BetaSettings {
   const crossSeedInstances: CrossSeedInstanceConfig[] = Array.isArray(body.crossSeedInstances)
     ? body.crossSeedInstances.map(rawInstance => {
       const instance = rawInstance as Partial<CrossSeedInstanceConfig>;
+      const clientIds = normalizeCrossSeedClientIds(instance).filter(clientId => validClientIds.has(clientId));
       return {
         id: typeof instance.id === 'string' && instance.id ? instance.id : crypto.randomUUID(),
         label: String(instance.label || 'cross-seed').trim().slice(0, 80),
         baseUrl: cleanCrossSeedBaseUrl(instance.baseUrl),
-        clientId: String(instance.clientId || '').trim(),
+        clientIds,
         markers: normalizeCrossSeedMarkers(instance.markers),
         enabled: instance.enabled !== false,
       };
-    }).filter(instance => instance.baseUrl && validClientIds.has(instance.clientId))
+    }).filter(instance => instance.baseUrl && instance.clientIds.length > 0)
     : current.crossSeedInstances;
 
   const notificationTargets: BetaNotificationTarget[] = Array.isArray(body.notificationTargets) ? body.notificationTargets.map(rawTarget => {

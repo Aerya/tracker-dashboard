@@ -907,6 +907,16 @@
       border-top: 1px solid var(--border);
     }
     .beta-form-row:first-child { border-top: 0; padding-top: 0; }
+    .cross-seed-client-list {
+      min-height: 32px; display: flex; flex-wrap: wrap; align-items: center; gap: 5px;
+      padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg);
+    }
+    .cross-seed-client-choice {
+      display: inline-flex !important; align-items: center; gap: 5px; padding: 3px 7px;
+      border: 1px solid var(--border); border-radius: 999px; color: var(--text) !important;
+      font-size: 11px; cursor: pointer;
+    }
+    .beta-field .cross-seed-client-choice input { width: 14px; height: 14px; margin: 0; }
     .beta-icon-btn {
       border: 1px solid var(--border);
       background: transparent;
@@ -2452,7 +2462,7 @@
           </section>
         <section class="beta-panel">
           <h3>Instances cross-seed</h3>
-          <p class="beta-note" style="margin-bottom:10px">Reliez chaque instance cross-seed au client BitTorrent qu'elle alimente. Les marqueurs correspondent au <code>linkCategory</code>, à une catégorie se terminant par <code>.cross-seed</code>, ou à un tag appliqué aux torrents injectés.</p>
+          <p class="beta-note" style="margin-bottom:10px">Reliez chaque instance cross-seed à tous les clients BitTorrent qu'elle alimente. Les marqueurs correspondent au <code>linkCategory</code>, à une catégorie se terminant par <code>.cross-seed</code>, ou à un tag appliqué aux torrents injectés.</p>
           <div id="beta-cross-seed-instances"></div>
           <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap">
             <button class="beta-icon-btn" onclick="addBetaCrossSeedInstance()" type="button">Ajouter une instance</button>
@@ -4889,14 +4899,14 @@
     if (!container) return;
     const instances = betaSettings.crossSeedInstances || [];
     const clients = betaSettings.qbitClients || [];
-    const clientOptions = selectedId => clients.map(client => `
-      <option value="${escapeHtml(client.id)}" ${client.id === selectedId ? 'selected' : ''}>${escapeHtml(client.label || client.id)}</option>
-    `).join('');
     container.innerHTML = instances.map((instance, idx) => `
-      <div class="beta-form-row" data-beta-cross-seed="${idx}" style="grid-template-columns:minmax(0,1fr) minmax(0,2fr) minmax(0,1.4fr) minmax(0,1.5fr) 80px auto">
+      <div class="beta-form-row" data-beta-cross-seed="${idx}" style="grid-template-columns:minmax(0,1fr) minmax(0,2fr) minmax(0,2fr) minmax(0,1.5fr) 80px auto">
         <div class="beta-field"><label>Nom</label><input data-field="label" value="${escapeHtml(instance.label || '')}" placeholder="cross-seed principal"></div>
         <div class="beta-field"><label>URL WebUI</label><input data-field="baseUrl" value="${escapeHtml(instance.baseUrl || '')}" placeholder="http://cross-seed:2468"></div>
-        <div class="beta-field"><label>Client lié</label><select data-field="clientId"><option value="">— choisir —</option>${clientOptions(instance.clientId)}</select></div>
+        <div class="beta-field"><label>Clients liés</label><div class="cross-seed-client-list">${clients.map(client => {
+          const selectedIds = instance.clientIds || (instance.clientId ? [instance.clientId] : []);
+          return `<label class="cross-seed-client-choice"><input type="checkbox" data-field="clientIds" value="${escapeHtml(client.id)}" ${selectedIds.includes(client.id) ? 'checked' : ''}>${escapeHtml(client.label || client.id)}</label>`;
+        }).join('') || '<span class="beta-note">Ajoutez d’abord un client BitTorrent.</span>'}</div></div>
         <div class="beta-field"><label title="Catégories ou tags séparés par des virgules">Marqueurs</label><input data-field="markers" value="${escapeHtml((instance.markers || ['cross-seed-link', 'cross-seed']).join(', '))}" placeholder="cross-seed-link, cross-seed"></div>
         <div class="beta-field"><label>Actif</label><select data-field="enabled"><option value="true" ${instance.enabled !== false ? 'selected' : ''}>Oui</option><option value="false" ${instance.enabled === false ? 'selected' : ''}>Non</option></select></div>
         <div style="display:flex; gap:6px; align-items:flex-end">${instance.baseUrl ? `<a class="beta-icon-btn" href="${escapeHtml(instance.baseUrl)}" target="_blank" rel="noreferrer noopener">Ouvrir</a>` : ''}<button class="beta-icon-btn" onclick="testBetaCrossSeedInstance(${idx})" type="button">Tester</button><button class="beta-icon-btn" onclick="removeBetaCrossSeedInstance(${idx})" type="button">X</button></div>
@@ -5248,10 +5258,10 @@
       id: betaSettings.crossSeedInstances?.[idx]?.id || genId(),
       label: row.querySelector('[data-field="label"]').value.trim(),
       baseUrl: row.querySelector('[data-field="baseUrl"]').value.trim(),
-      clientId: row.querySelector('[data-field="clientId"]').value,
+      clientIds: Array.from(row.querySelectorAll('[data-field="clientIds"]:checked')).map(input => input.value),
       markers: row.querySelector('[data-field="markers"]').value.split(',').map(value => value.trim()).filter(Boolean),
       enabled: row.querySelector('[data-field="enabled"]').value === 'true',
-    })).filter(instance => instance.baseUrl && instance.clientId);
+    })).filter(instance => instance.baseUrl && instance.clientIds.length > 0);
     const announceMappings = Array.from(document.querySelectorAll('[data-beta-mapping]')).map((row) => ({
       announceHost: row.querySelector('[data-field="announceHost"]').value.trim(),
       trackerId: row.querySelector('[data-field="trackerId"]').value,
@@ -5367,7 +5377,7 @@
       id: genId(),
       label: 'cross-seed',
       baseUrl: '',
-      clientId: betaSettings.qbitClients?.[0]?.id || '',
+      clientIds: betaSettings.qbitClients?.[0]?.id ? [betaSettings.qbitClients[0].id] : [],
       markers: ['cross-seed-link', 'cross-seed'],
       enabled: true,
     });
