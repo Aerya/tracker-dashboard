@@ -490,14 +490,14 @@ function extractFormAction(html: string): string {
 
 // Page anti-bot / challenge JS (Cloudflare & co) : signaux frequents quand l'IP du
 // client est filtree -> la vraie page (avec le token CSRF) n'est jamais servie.
-function isAntiBotPage(html: string): boolean {
+export function isAntiBotPage(html: string): boolean {
   const h = html.toLowerCase();
   return h.includes('cf-turnstile') ||
-    h.includes('challenge-platform') ||
+    h.includes('/cdn-cgi/challenge-platform/h/') ||
+    h.includes('/cdn-cgi/challenge-platform/orchestrate/') ||
     h.includes('just a moment') ||
     h.includes('attention required') ||
     h.includes('cf-chl-') ||
-    h.includes('/cdn-cgi/challenge-platform') ||
     h.includes('please enable javascript and cookies to continue') ||
     h.includes('ddos-guard');
 }
@@ -964,6 +964,12 @@ export async function fetchTracker(
   };
 
   const buildStatsFromHtml = (url: string, html: string, extraHtml?: string): TrackerStats => {
+    if (isAntiBotPage(html)) {
+      const dumpPath = writeDebugDump(tracker, url, html, {}, 'antibot');
+      const suffix = dumpPath ? ` - dump: ${dumpPath}` : '';
+      throw new Error(`Challenge anti-bot/Cloudflare recu depuis ${url} - renouveler les cookies depuis la meme IP de sortie${suffix}`);
+    }
+
     if (isAnubisChallenge(html)) {
       const dumpPath = writeDebugDump(tracker, url, html, {}, 'anubis');
       const suffix = dumpPath ? ` - dump: ${dumpPath}` : '';

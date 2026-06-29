@@ -319,11 +319,20 @@ async function revealMilkieStats(page: Page): Promise<void> {
 function looksAntiBot(html: string): boolean {
   const h = html.toLowerCase();
   return h.includes('cf-turnstile') ||
-    h.includes('challenge-platform') ||
+    h.includes('/cdn-cgi/challenge-platform/h/') ||
+    h.includes('/cdn-cgi/challenge-platform/orchestrate/') ||
     h.includes('just a moment') ||
-    h.includes('/cdn-cgi/challenge-platform') ||
     h.includes('attention required') ||
+    h.includes('cf-chl-') ||
+    h.includes('please enable javascript and cookies to continue') ||
     h.includes('ddos-guard');
+}
+
+async function waitForAntiBotChallenge(page: Page): Promise<void> {
+  for (let i = 0; i < 20; i += 1) {
+    if (!looksAntiBot(await safeContent(page))) return;
+    await page.waitForTimeout(1000);
+  }
 }
 
 // Dump leger d'une page navigateur pour diagnostic (meme dossier que les autres dumps).
@@ -574,11 +583,13 @@ export async function fetchWithBrowser(
     await page.goto(url, { waitUntil: 'commit', timeout: 45_000 });
     await page.waitForLoadState('domcontentloaded', { timeout: 30_000 }).catch(() => {});
     await waitForAnubis(page);
+    await waitForAntiBotChallenge(page);
     await waitForLiveView(page);
     await ensureLoggedIn(tracker, credentials, page, overrides);
     await page.goto(url, { waitUntil: 'commit', timeout: 45_000 });
     await page.waitForLoadState('domcontentloaded', { timeout: 30_000 }).catch(() => {});
     await waitForAnubis(page);
+    await waitForAntiBotChallenge(page);
     await waitForLiveView(page);
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
     if (tracker.id === 'nostradamus') {
@@ -599,6 +610,7 @@ export async function fetchWithBrowser(
     }
     const authConfirmed = await waitForTrackerContent(tracker, page);
     const html = await safeContent(page);
+    const primaryUrl = page.url();
 
     let extraHtml: string | undefined;
     const ef = tracker.fetch.extraFetch;
@@ -629,7 +641,7 @@ export async function fetchWithBrowser(
       }
     }
 
-    return { html, url: page.url(), authConfirmed, extraHtml };
+    return { html, url: primaryUrl, authConfirmed, extraHtml };
   } finally {
     await page.close().catch(() => {});
     // Fermer le contexte (= le process Chromium) apres chaque fetch. Sinon, avec

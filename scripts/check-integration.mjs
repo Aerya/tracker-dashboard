@@ -3,13 +3,17 @@ import path from 'node:path';
 
 const root = process.cwd();
 const htmlPath = path.join(root, 'public', 'index.html');
+const readmePath = path.join(root, 'README.md');
 const serverPath = path.join(root, 'src', 'server.ts');
 const redactedPath = path.join(root, 'config', 'trackers', 'redacted.json');
 const tr4kerPath = path.join(root, 'config', 'trackers', 'tr4ker.json');
+const lesRescapesPath = path.join(root, 'config', 'trackers', 'lesrescapesdeygg.json');
 const html = fs.readFileSync(htmlPath, 'utf8');
+const readme = fs.readFileSync(readmePath, 'utf8');
 const server = fs.readFileSync(serverPath, 'utf8');
 const redacted = JSON.parse(fs.readFileSync(redactedPath, 'utf8'));
 const tr4ker = JSON.parse(fs.readFileSync(tr4kerPath, 'utf8'));
+const lesRescapes = JSON.parse(fs.readFileSync(lesRescapesPath, 'utf8'));
 const errors = [];
 
 function normalizeRoute(route) {
@@ -101,6 +105,25 @@ const tr4kerUsesDisplayedTotals = (
 );
 if (!tr4kerUsesDisplayedTotals) {
   errors.push('TR4KER must use the totals displayed by the site and keep seeding from api/me/stats');
+}
+
+const lesRescapesDetectsExpiredCookies = (
+  lesRescapes.login?.cookieOnly === true
+  && lesRescapes.login?.failurePatterns?.includes('id="login-form"')
+  && lesRescapes.fetch?.url === '?action=my-tracker-activity'
+);
+if (!lesRescapesDetectsExpiredCookies) {
+  errors.push('Les Rescapes de Ygg must detect the login page returned for an expired cookie');
+}
+
+const documentsCookieIpBinding = (
+  html.includes('exporte tous les cookies avec la même IP de sortie')
+  && html.includes('<code>cf_clearance</code>')
+  && readme.includes('Les cookies doivent être créés avec la même IP de sortie')
+  && readme.includes('`cf_clearance` est présent')
+);
+if (!documentsCookieIpBinding) {
+  errors.push('Session cookie guidance must document IP binding and cf_clearance in the WebUI and README');
 }
 
 if (errors.length > 0) {

@@ -1,0 +1,47 @@
+{
+  "id": "lesrescapesdeygg",
+  "name": "Les Rescapés de Ygg",
+  "baseUrl": "https://lesrescapesdeygg.org",
+  "enabled": true,
+  "login": {
+    "url": "?action=login",
+    "method": "POST",
+    "contentType": "form",
+    "body": {
+      "id": "{{username}}",
+      "pass": "{{password}}"
+    },
+    "failurePatterns": [
+      "id=\"login-form\"",
+      "name=\"pass\"",
+      "Connexion sur Les Rescapés de Ygg"
+    ],
+    "cookieOnly": true
+  },
+  "fetch": {
+    "url": "?action=my-tracker-activity",
+    "mode": "browser",
+    "responseType": "html",
+    "fields": {
+      "uploadedBytes": {
+        "regex": "(?<value>[\\d.,]+\\s*[KMGTP]?i?[oO])[\\s\\S]{0,80}?Upload total",
+        "transform": "bytes"
+      },
+      "downloadedBytes": {
+        "regex": "my-tracker-activity[\\s\\S]*?color:#ea5656\">(?<value>[\\d.,]+\\s*[A-Za-z]{1,3})",
+        "transform": "bytes"
+      },
+      "ratio": {
+        "regex": "[Rr]atio r[ée]el\\s*:\\s*(?<value>[\\d.,]+)",
+        "transform": "number"
+      },
+      "seeding": {
+        "regex": "Sessions tracker actives[\\s\\S]{0,80}?(?<value>\\d+)",
+        "transform": "integer"
+      }
+    }
+  },
+  "dashboard": {
+    "byteUnit": "decimal"
+  }
+}
