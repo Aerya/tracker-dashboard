@@ -6,6 +6,12 @@ import axios from 'axios';
 import { fetchTracker, invalidateAllSessions, invalidateSession } from './fetcher.js';
 import { resetBrowserProfile, closeBrowserSession, fetchRawHtmlWithBrowser, getBrowserRuntimeStatus } from './browserBackend.js';
 import { getFlareSolverrStatus } from './flareSolverr.js';
+import {
+  cleanCrossSeedBaseUrl,
+  detectCrossSeedInstanceIds,
+  normalizeCrossSeedMarkers,
+  type CrossSeedInstanceConfig,
+} from './crossSeed.js';
 import { type FieldExtractor, type TrackerConfig, type TrackerStats } from './types.js';
 import {
   listEngines,
@@ -231,6 +237,7 @@ interface BetaAccountAnnounceMapping {
 
 interface BetaSettings {
   qbitClients: BetaQbitClient[];
+  crossSeedInstances: CrossSeedInstanceConfig[];
   announceMappings: BetaAnnounceMapping[];
   accountAnnounceMappings: BetaAccountAnnounceMapping[];
   notificationTargets: BetaNotificationTarget[];
@@ -275,6 +282,9 @@ interface QbitTrackerAggregate {
     uploadedBytes: number;
     downloadedBytes: number;
     ratio: number | null;
+    category: string;
+    tags: string[];
+    crossSeedInstanceIds: string[];
   }>;
 }
 
@@ -1563,6 +1573,7 @@ function renderPrometheusMetrics(stats: TrackerStats[]): string {
 function defaultBetaSettings(): BetaSettings {
   return {
     qbitClients: [],
+    crossSeedInstances: [],
     announceMappings: [],
     accountAnnounceMappings: [],
     notificationTargets: [],
@@ -1621,6 +1632,7 @@ function loadBetaSettings(): BetaSettings {
     defaults: { ...defaultBetaSettings().defaults, ...(settings.defaults ?? {}) },
     features: { ...defaultBetaSettings().features, ...(settings.features ?? {}) },
     qbitClients: Array.isArray(settings.qbitClients) ? settings.qbitClients : [],
+    crossSeedInstances: Array.isArray(settings.crossSeedInstances) ? settings.crossSeedInstances : [],
     announceMappings: Array.isArray(settings.announceMappings) ? settings.announceMappings : [],
     accountAnnounceMappings: Array.isArray(settings.accountAnnounceMappings) ? settings.accountAnnounceMappings : [],
     notificationTargets: Array.isArray(settings.notificationTargets) ? settings.notificationTargets : [],
@@ -1642,6 +1654,7 @@ function sanitizeBetaSettings(settings: BetaSettings): BetaSettings {
       ...client,
       password: client.password ? '••••••••' : '',
     })),
+    crossSeedInstances: settings.crossSeedInstances,
     announceMappings: settings.announceMappings,
     notificationTargets: settings.notificationTargets.map(target => ({
       ...target,
@@ -1674,6 +1687,21 @@ function saveBetaSettingsPayload(raw: unknown): BetaSettings {
       refreshMinutes: Math.max(0, Math.min(43200, Math.floor(Number(client.refreshMinutes) || 0))),
     };
   }).filter(client => client.baseUrl) : current.qbitClients;
+
+  const validClientIds = new Set(qbitClients.map(client => client.id));
+  const crossSeedInstances: CrossSeedInstanceConfig[] = Array.isArray(body.crossSeedInstances)
+    ? body.crossSeedInstances.map(rawInstance => {
+      const instance = rawInstance as Partial<CrossSeedInstanceConfig>;
+      return {
+        id: typeof instance.id === 'string' && instance.id ? instance.id : crypto.randomUUID(),
+        label: String(instance.label || 'cross-seed').trim().slice(0, 80),
+        baseUrl: cleanCrossSeedBaseUrl(instance.baseUrl),
+        clientId: String(instance.clientId || '').trim(),
+        markers: normalizeCrossSeedMarkers(instance.markers),
+        enabled: instance.enabled !== false,
+      };
+    }).filter(instance => instance.baseUrl && validClientIds.has(instance.clientId))
+    : current.crossSeedInstances;
 
   const notificationTargets: BetaNotificationTarget[] = Array.isArray(body.notificationTargets) ? body.notificationTargets.map(rawTarget => {
     const target = rawTarget as Partial<BetaNotificationTarget>;
@@ -1848,7 +1876,7 @@ function saveBetaSettingsPayload(raw: unknown): BetaSettings {
     sessionDays: Number.isFinite(Number(rawGlobal.sessionDays)) ? Number(rawGlobal.sessionDays) : 30,
   };
 
-  const next = { qbitClients, announceMappings, accountAnnounceMappings, notificationTargets, features, schedule, scheduleOverrides, notificationPreferences, trackerAlerts, globalAlerts, defaults };
+  const next = { qbitClients, crossSeedInstances, announceMappings, accountAnnounceMappings, notificationTargets, features, schedule, scheduleOverrides, notificationPreferences, trackerAlerts, globalAlerts, defaults };
   setJsonSetting(BETA_SETTINGS_KEY, next);
   return next;
 }
@@ -1959,6 +1987,25 @@ function resolveTorrentTrackerId(
   return betaTrackerIdForAnnounceHost(item.trackerHost, trackerHosts, trackers);
 }
 
+function qbitStatsWithTrackerIds(settings: BetaSettings, activeTrackers: TrackerConfig[]) {
+  const trackerHosts = new Map<string, string>();
+  for (const tracker of activeTrackers) {
+    const host = trackerHost(tracker.baseUrl);
+    trackerHosts.set(host, tracker.id);
+    trackerHosts.set(hostDomainKey(host), tracker.id);
+  }
+  for (const mapping of settings.announceMappings) {
+    const host = trackerHost(mapping.announceHost);
+    trackerHosts.set(host, mapping.trackerId);
+    trackerHosts.set(hostDomainKey(host), mapping.trackerId);
+  }
+  const accountByKey = new Map(settings.accountAnnounceMappings.map(mapping => [mapping.key, mapping.trackerId]));
+  return betaQbitStats.map(item => ({
+    ...item,
+    trackerId: resolveTorrentTrackerId(item, trackerHosts, accountByKey, activeTrackers),
+  }));
+}
+
 function betaClientLogName(client: BetaQbitClient): string {
   return `${client.label || client.id || 'Client BitTorrent'} (${client.type === 'rutorrent' ? 'ruTorrent/rTorrent' : 'qBittorrent'})`;
 }
@@ -2049,6 +2096,7 @@ function qbitHttpError(endpoint: string, status: number, data: unknown, authStat
 async function fetchQbitClient(client: BetaQbitClient): Promise<QbitTrackerAggregate[]> {
   const jar: string[] = [];
   const baseUrl = cleanClientBaseUrl(client.baseUrl);
+  const crossSeedInstances = loadBetaSettings().crossSeedInstances;
   const directRequest = { proxy: false as const };
   let authenticated = false;
   betaLog(`${betaClientLogName(client)}: scan qBittorrent sur ${baseUrl}`);
@@ -2193,6 +2241,8 @@ async function fetchQbitClient(client: BetaQbitClient): Promise<QbitTrackerAggre
       torrents: [],
     };
     const state = String(torrent.state || '');
+    const category = String(torrent.category || '');
+    const tags = String(torrent.tags || '').split(',').map(tag => tag.trim()).filter(Boolean);
     const up = Number(torrent.uploaded ?? torrent.uploaded_session ?? 0);
     const down = Number(torrent.downloaded ?? torrent.downloaded_session ?? 0);
     existing.torrentCount += 1;
@@ -2210,6 +2260,9 @@ async function fetchQbitClient(client: BetaQbitClient): Promise<QbitTrackerAggre
       uploadedBytes: Number.isFinite(up) ? up : 0,
       downloadedBytes: Number.isFinite(down) ? down : 0,
       ratio: Number.isFinite(Number(torrent.ratio)) ? Number(torrent.ratio) : null,
+      category,
+      tags,
+      crossSeedInstanceIds: detectCrossSeedInstanceIds(crossSeedInstances, client.id, category, tags),
     });
     groups.set(groupKey, existing);
   }
@@ -2263,6 +2316,7 @@ function parseXmlRpcScalars(xml: string): string[] {
 
 async function fetchRutorrentClient(client: BetaQbitClient): Promise<QbitTrackerAggregate[]> {
   const baseUrl = cleanClientBaseUrl(client.baseUrl);
+  const crossSeedInstances = loadBetaSettings().crossSeedInstances;
   betaLog(`${betaClientLogName(client)}: scan ruTorrent/rTorrent sur ${baseUrl}`);
   await rtorrentRpc(client, 'download_list', ['main']);
   const xml = await rtorrentRpc(client, 'd.multicall2', [
@@ -2276,14 +2330,15 @@ async function fetchRutorrentClient(client: BetaQbitClient): Promise<QbitTracker
     'd.down.total=',
     'd.ratio=',
     'd.complete=',
+    'd.custom1=',
   ]);
   const scalars = parseXmlRpcScalars(xml);
-  betaLog(`${betaClientLogName(client)}: d.multicall2 a retourne ${scalars.length} valeur(s), ${Math.floor(scalars.length / 8)} torrent(s) potentiel(s)`);
+  betaLog(`${betaClientLogName(client)}: d.multicall2 a retourne ${scalars.length} valeur(s), ${Math.floor(scalars.length / 9)} torrent(s) potentiel(s)`);
   const groups = new Map<string, QbitTrackerAggregate>();
   let trackerDetailCalls = 0;
   let unknownSkipped = 0;
-  for (let i = 0; i + 7 < scalars.length; i += 8) {
-    const [hash, name, stateRaw, sizeRaw, upRaw, downRaw, ratioRaw, completeRaw] = scalars.slice(i, i + 8);
+  for (let i = 0; i + 8 < scalars.length; i += 9) {
+    const [hash, name, stateRaw, sizeRaw, upRaw, downRaw, ratioRaw, completeRaw, labelRaw] = scalars.slice(i, i + 9);
     let announce = '';
     try {
       trackerDetailCalls += 1;
@@ -2332,6 +2387,9 @@ async function fetchRutorrentClient(client: BetaQbitClient): Promise<QbitTracker
       uploadedBytes: up,
       downloadedBytes: down,
       ratio: Number.isFinite(Number(ratioRaw)) ? Number(ratioRaw) / 1000 : null,
+      category: labelRaw || '',
+      tags: labelRaw ? [labelRaw] : [],
+      crossSeedInstanceIds: detectCrossSeedInstanceIds(crossSeedInstances, client.id, labelRaw, labelRaw ? [labelRaw] : []),
     });
     groups.set(groupKey, existing);
   }
@@ -2615,25 +2673,34 @@ export async function start(): Promise<void> {
     res.json({ trackers: safe });
   });
 
+  app.get('/api/beta/cross-seed/summary', (_req, res) => {
+    trackers = normalizeTrackerConfigs();
+    const settings = loadBetaSettings();
+    const usage = new Map<string, Map<string, number>>();
+    for (const group of qbitStatsWithTrackerIds(settings, trackers)) {
+      if (!group.trackerId) continue;
+      const trackerUsage = usage.get(group.trackerId) ?? new Map<string, number>();
+      for (const torrent of group.torrents) {
+        for (const instanceId of torrent.crossSeedInstanceIds) {
+          trackerUsage.set(instanceId, (trackerUsage.get(instanceId) ?? 0) + 1);
+        }
+      }
+      usage.set(group.trackerId, trackerUsage);
+    }
+    res.json({
+      ok: true,
+      instances: settings.crossSeedInstances,
+      trackers: [...usage.entries()].map(([trackerId, instances]) => ({
+        trackerId,
+        instances: [...instances.entries()].map(([id, count]) => ({ id, count })),
+      })),
+    });
+  });
+
   app.get('/api/beta/overview', (_req, res) => {
     trackers = normalizeTrackerConfigs();
     const settings = loadBetaSettings();
-    const trackerHosts = new Map<string, string>();
-    for (const tracker of trackers) {
-      const host = trackerHost(tracker.baseUrl);
-      trackerHosts.set(host, tracker.id);
-      trackerHosts.set(hostDomainKey(host), tracker.id);
-    }
-    for (const mapping of settings.announceMappings) {
-      const host = trackerHost(mapping.announceHost);
-      trackerHosts.set(host, mapping.trackerId);
-      trackerHosts.set(hostDomainKey(host), mapping.trackerId);
-    }
-    const accountByKey = new Map(settings.accountAnnounceMappings.map(mapping => [mapping.key, mapping.trackerId]));
-    const qbitByTracker = betaQbitStats.map(item => ({
-      ...item,
-      trackerId: resolveTorrentTrackerId(item, trackerHosts, accountByKey, trackers),
-    }));
+    const qbitByTracker = qbitStatsWithTrackerIds(settings, trackers);
     const cookieSummaries = listTrackerDefinitionFiles().map(definition => {
       const configured = trackers.find(tracker => tracker.id === definition.id);
       const hasCookie = hasTrackerCookie(definition.id);
@@ -2673,7 +2740,7 @@ export async function start(): Promise<void> {
   app.post('/api/beta/settings', (req, res) => {
     try {
       const settings = saveBetaSettingsPayload(req.body);
-      console.log(`[Beta BitTorrent] configuration sauvegardee: ${settings.qbitClients.length} client(s), ${settings.qbitClients.filter(client => client.enabled).length} actif(s), ${settings.announceMappings.length} liaison(s) annonce`);
+      console.log(`[Beta BitTorrent] configuration sauvegardee: ${settings.qbitClients.length} client(s), ${settings.qbitClients.filter(client => client.enabled).length} actif(s), ${settings.crossSeedInstances.length} instance(s) cross-seed, ${settings.announceMappings.length} liaison(s) annonce`);
       res.json({ ok: true, settings: sanitizeBetaSettings(settings) });
     } catch (err: unknown) {
       res.status(400).json({ ok: false, error: err instanceof Error ? err.message : String(err) });
@@ -2699,6 +2766,26 @@ export async function start(): Promise<void> {
     } catch (err: unknown) {
       betaWarn(`test client KO - ${err instanceof Error ? err.message : String(err)}`);
       res.json({ ok: false, error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  app.post('/api/beta/cross-seed/test', async (req, res) => {
+    const baseUrl = cleanCrossSeedBaseUrl(req.body?.baseUrl);
+    if (!baseUrl) return res.status(400).json({ ok: false, error: 'URL cross-seed invalide' });
+    try {
+      const response = await axios.get(`${baseUrl}/api/ping`, {
+        timeout: 8000,
+        proxy: false,
+        validateStatus: () => true,
+      });
+      const ok = response.status === 200 && String(response.data || '').trim().toUpperCase() === 'OK';
+      res.status(ok ? 200 : 502).json({
+        ok,
+        status: response.status,
+        error: ok ? undefined : `cross-seed /api/ping HTTP ${response.status}`,
+      });
+    } catch (err: unknown) {
+      res.status(502).json({ ok: false, error: err instanceof Error ? err.message : String(err) });
     }
   });
 

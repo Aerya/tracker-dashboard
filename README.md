@@ -29,7 +29,7 @@ Au premier accès, l'application demande de créer le compte administrateur de l
 - Refonte de la navigation : barre latérale unique, thème clair/sombre/système, nouveau logo.
 - Fiches de trackers enrichies : statut clair, courbes d'évolution UP/DL/ratio (buffer en option), erreurs en cours / récentes / historique.
 - Menu **Calendrier** des refreshs (OK/KO par jour, accès à la config en cas de KO).
-- **Clients BitTorrent** : comparaison aux torrents locaux + **rafraîchissement automatique configurable par client** (jours/heures).
+- **Clients BitTorrent et cross-seed** : comparaison aux torrents locaux, identification des injections cross-seed et **rafraîchissement automatique configurable par client** (jours/heures).
 - Notifications réorganisées (canaux, globales, par tracker) — Discord, Apprise ou e-mail ; détection des MP non lus.
 - Métriques Prometheus des clients BitTorrent (`tracker_qbit_*`).
 - Double authentification 2FA (TOTP) par tracker.
@@ -121,6 +121,17 @@ Dans **Configuration → Clients BitTorrent**, ajoutez un ou plusieurs clients *
 
 - Un lien **Ouvrir** mène à l'interface du client.
 - Chaque client a un champ **Auto (j / h)** : intervalle de rafraîchissement automatique (0 = désactivé). Les données sont aussi exposées à Prometheus (`tracker_qbit_*`).
+
+### Instances cross-seed
+
+Dans la même page, la section **Instances cross-seed** permet d'associer une ou plusieurs instances [cross-seed](https://github.com/cross-seed/cross-seed) à leurs clients BitTorrent :
+
+- renseignez l'URL de la WebUI cross-seed (port par défaut `2468`) et choisissez le client qBittorrent ou ruTorrent/rTorrent alimenté par cette instance ;
+- conservez les marqueurs par défaut `cross-seed-link, cross-seed`, ou indiquez le `linkCategory`, la catégorie ou le tag utilisé par votre installation ;
+- lancez une synchronisation des clients BitTorrent : le logo cross-seed apparaît discrètement près des trackers et des torrents concernés ;
+- cliquez sur le logo ou sur **Ouvrir cross-seed** dans une fiche tracker pour rejoindre directement la bonne WebUI.
+
+Tracker Dashboard identifie les torrents depuis les catégories et tags réellement remontés par le client BitTorrent. Aucune clé API cross-seed n'est nécessaire et aucune route tRPC interne n'est utilisée. Si plusieurs instances alimentent le même client, configurez un marqueur distinct par instance afin de conserver une attribution non ambiguë.
 
 ## Notifications
 
@@ -280,4 +291,5 @@ Le ratio peut être calculé depuis upload/download s'il n'est pas exposé ; ide
 - [Autovisit](https://github.com/Gusdezup/Autovisit) — idée de la prise en charge du 2FA (TOTP).
 - [CloakBrowser](https://github.com/CloakHQ/CloakBrowser) — moteur Chromium furtif proposé en option.
 - [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr) — résolution de challenges Cloudflare via un sidecar interne optionnel.
+- [cross-seed](https://github.com/cross-seed/cross-seed) — détection des torrents injectés et logo officiel (licence Apache-2.0).
 - Et tous les contributeurs qui partagent des définitions de trackers.
