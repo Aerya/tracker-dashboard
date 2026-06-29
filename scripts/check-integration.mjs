@@ -121,18 +121,18 @@ if (!tr4kerUsesDisplayedTotals) {
 
 const torr9HomeFixture = `
   <div class="account-stats">
-    <svg class="lucide lucide-upload"></svg><span>1.54 TB</span>
-    <svg class="lucide lucide-download"></svg><span>19.85 GB</span>
-    <span>RATIO</span><strong>79.30</strong>
+    <div title="Upload"><svg></svg><span>12.34 TB</span></div>
+    <div title="Download"><svg></svg><span>56.78 GB</span></div>
+    <div title="Ratio"><span>Ratio</span><strong>90.12</strong></div>
   </div>`;
 const torr9Value = field => new RegExp(field.regex, 's').exec(torr9HomeFixture)?.groups?.value;
 const torr9UsesDisplayedHomeStats = (
   torr9.fetch?.url === '/'
   && torr9.fetch?.mode === 'browser'
   && torr9.fetch?.responseType === 'html'
-  && torr9Value(torr9.fetch.fields?.uploadedBytes) === '1.54 TB'
-  && torr9Value(torr9.fetch.fields?.downloadedBytes) === '19.85 GB'
-  && torr9Value(torr9.fetch.fields?.ratio) === '79.30'
+  && torr9Value(torr9.fetch.fields?.uploadedBytes) === '12.34 TB'
+  && torr9Value(torr9.fetch.fields?.downloadedBytes) === '56.78 GB'
+  && torr9Value(torr9.fetch.fields?.ratio) === '90.12'
   && !JSON.stringify(torr9.fetch).includes('api.torr9.net')
 );
 if (!torr9UsesDisplayedHomeStats) {
