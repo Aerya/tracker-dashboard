@@ -24,19 +24,18 @@ Au premier accès, l'application demande de créer le compte administrateur de l
 
 ## Changements récents
 
-- **Image principale allégée** : Playwright/Chromium/CloakBrowser sont sortis dans l'image parallèle `tracker-dashboard-browser`. Le compose principal ne change pas ; la WebUI affiche l'état, les versions, la commande de lancement et les alertes de mise à jour.
-- **Plusieurs comptes par tracker** : duplication d'un tracker, noms d'affichage personnalisables, regroupement sous le site, et attribution des torrents par passkey entre comptes.
-- Refonte de la navigation : barre latérale unique, thème clair/sombre/système, nouveau logo.
-- Fiches de trackers enrichies : statut clair, courbes d'évolution UP/DL/ratio (buffer en option), erreurs en cours / récentes / historique.
-- Menu **Calendrier** des refreshs (OK/KO par jour, accès à la config en cas de KO).
-- **Clients BitTorrent et cross-seed** : comparaison aux torrents locaux, identification des injections cross-seed et **rafraîchissement automatique configurable par client** (jours/heures).
-- Notifications réorganisées (canaux, globales, par tracker) — Discord, Apprise ou e-mail ; détection des MP non lus.
-- Métriques Prometheus des clients BitTorrent (`tracker_qbit_*`).
-- Double authentification 2FA (TOTP) par tracker.
-- Proxy SSH (mot de passe ou clé privée), en plus de HTTP/HTTPS/SOCKS.
-- Option moteur navigateur furtif CloakBrowser, en alternative à Chromium.
-- Lecture rapide via curl-impersonate quand c'est possible (évite Chromium).
-- Cookies de session par tracker (sites à CAPTCHA / Cloudflare).
+- **Image principale allégée** : Playwright, Chromium et CloakBrowser sont regroupés dans le service parallèle `tracker-dashboard-browser`, avec état, versions et alertes de mise à jour dans la WebUI.
+- **Plusieurs comptes par tracker** : duplication d'un tracker, noms d'affichage personnalisables, regroupement sous le site et attribution des torrents par passkey entre comptes.
+- **Clients BitTorrent et cross-seed** : comparaison aux torrents locaux, rafraîchissement automatique par client, plusieurs instances cross-seed et plusieurs clients associés à une même instance.
+- **Seeding comparé** : compteurs annoncés par le site et détectés dans les clients BitTorrent affichés côte à côte.
+- **Protection anti-bot renforcée** : sessions navigateur plus fiables, cookies par tracker et repli automatique via FlareSolverr lorsqu'un challenge bloque la lecture normale.
+- **Ajout de trackers simplifié** : presets UNIT3D, Gazelle, TorrentLeech, MyAnonamouse et API JSON, modes guidé/expert et catalogue enrichi, notamment avec IPTorrents et DarkPeers.
+- **Interface modernisée** : navigation latérale, vues cartes/lignes, taille des cartes partagée entre appareils, thèmes clair/sombre/système et fiches trackers enrichies.
+- **Graphiques et calendrier** : activation facultative, courbes UP/DL/ratio, comparaisons multi-trackers et historique des rafraîchissements OK/KO.
+- **Notifications complètes** : canaux globaux ou par tracker via Discord, Apprise ou e-mail, avec détection des messages privés non lus.
+- **Observabilité** : métriques Prometheus des trackers et clients BitTorrent (`tracker_*`, `tracker_qbit_*`) et dashboard Grafana fourni.
+- **Authentification et réseau** : 2FA TOTP par tracker, proxies HTTP/HTTPS/SOCKS/SSH et cookies de session pour les sites à CAPTCHA ou Cloudflare.
+- **Lectures optimisées** : curl-impersonate lorsque possible, Chromium par défaut et CloakBrowser en moteur furtif optionnel.
 
 ## Interface
 
