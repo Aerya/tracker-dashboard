@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import axios from 'axios';
 import { fetchTracker, invalidateAllSessions, invalidateSession } from './fetcher.js';
 import { resetBrowserProfile, closeBrowserSession, fetchRawHtmlWithBrowser, getBrowserRuntimeStatus } from './browserBackend.js';
+import { getFlareSolverrStatus } from './flareSolverr.js';
 import { type FieldExtractor, type TrackerConfig, type TrackerStats } from './types.js';
 import {
   listEngines,
@@ -3203,6 +3204,10 @@ export async function start(): Promise<void> {
   // Etat du runtime navigateur (local embarque ou service externe) + versions.
   app.get('/api/browser-runtime/status', async (_req, res) => {
     res.json({ ok: true, status: await getBrowserRuntimeStatus() });
+  });
+
+  app.get('/api/flaresolverr/status', async (_req, res) => {
+    res.json({ ok: true, status: await getFlareSolverrStatus() });
   });
 
   app.post('/api/settings/browser-engine', (req, res) => {

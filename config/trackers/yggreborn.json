@@ -23,6 +23,7 @@
   "fetch": {
     "url": "account/",
     "mode": "browser",
+    "antiBotFallback": "flaresolverr",
     "responseType": "html",
     "fields": {
       "uploadedBytes": {

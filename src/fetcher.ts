@@ -21,6 +21,7 @@ import { getTrackerTotpSecret, loadTrackerConfigsFromDb, saveTrackerConfig } fro
 import { generateTotp } from './totp.js';
 import { selectUserAgent } from './userAgent.js';
 import { closeBrowserSession, closeBrowserSessions, fetchWithBrowser } from './browserBackend.js';
+import { fetchWithFlareSolverr } from './flareSolverr.js';
 
 // ─── Transforms ──────────────────────────────────────────────────────────────
 
@@ -1028,6 +1029,23 @@ export async function fetchTracker(
     };
   };
 
+  const attemptFlareSolverr = async (): Promise<TrackerStats | null> => {
+    try {
+      const solved = await fetchWithFlareSolverr(tracker, creds);
+      const failed = hasBrowserAuthFailure(tracker, solved.url, solved.html);
+      if (failed) {
+        console.log(`  [${tracker.name}] FlareSolverr: page non authentifiee (${failed}), repli navigateur`);
+        return null;
+      }
+      const stats = buildStatsFromHtml(solved.url, solved.html, solved.extraHtml);
+      console.log(`  [${tracker.name}] Lecture via FlareSolverr OK`);
+      return stats;
+    } catch (error) {
+      console.log(`  [${tracker.name}] FlareSolverr indisponible/echec, repli navigateur - ${error instanceof Error ? error.message : String(error)}`);
+      return null;
+    }
+  };
+
   // Fast-path curl-impersonate : pour un tracker en mode navigateur disposant d'un
   // cookie de session, on tente d'abord une requete HTTP impersonee (sans Chromium).
   // Si la page est rendue cote serveur et la session valide -> stats directes.
@@ -1280,6 +1298,10 @@ export async function fetchTracker(
         // avant de lancer le navigateur (plus léger, contourne Cloudflare passif)
         const viaCurlFull = await attemptHttpViaCurl();
         if (viaCurlFull) return viaCurlFull;
+        if (tracker.fetch.antiBotFallback === 'flaresolverr') {
+          const viaFlareSolverr = await attemptFlareSolverr();
+          if (viaFlareSolverr) return viaFlareSolverr;
+        }
       }
       const browserResult = await fetchWithBrowser(tracker, creds);
       // Si on a confirme la session via un indicateur DOM specifique (TR4KER : RATIO/UPLOAD/DOWNLOAD

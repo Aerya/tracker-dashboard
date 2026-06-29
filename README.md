@@ -186,6 +186,27 @@ Si le runtime navigateur est absent, les trackers en `mode: browser` affichent u
 
 Les lectures en mode navigateur utilisent **Chromium** (Playwright) par défaut. Une option (panneau Proxies → Moteur navigateur) bascule sur **[CloakBrowser](https://github.com/CloakHQ/CloakBrowser)**, un Chromium modifié pour présenter une empreinte de vrai navigateur (TLS, fingerprint) et franchir davantage de protections anti-bot. S'il est indisponible, l'app repart automatiquement sur Chromium.
 
+### Repli Cloudflare (FlareSolverr)
+
+Pour les trackers qui déclarent le repli anti-bot, Tracker Dashboard peut utiliser **[FlareSolverr](https://github.com/FlareSolverr/FlareSolverr)** après l'échec des lectures HTTP légères. Le sidecar reçoit uniquement l'URL, les cookies et le proxy du tracker concerné, résout le challenge dans une session temporaire, renvoie le HTML puis détruit cette session. Les autres trackers continuent d'utiliser leur chemin habituel.
+
+Le fichier `docker-compose.yml` fourni inclut déjà ce sidecar. Pour une stack existante, ajoutez :
+
+```yaml
+services:
+  tracker-dashboard-flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: tracker-dashboard-flaresolverr
+    restart: unless-stopped
+    network_mode: "container:tracker-dashboard"
+    environment:
+      HOST: 127.0.0.1
+      LOG_LEVEL: info
+      TZ: Europe/Paris
+```
+
+Le partage du réseau du conteneur principal est important : FlareSolverr est alors joignable en interne sur `http://127.0.0.1:8191` et réutilise aussi les tunnels SOCKS locaux des proxies SSH. Aucun port FlareSolverr n'est exposé sur l'hôte. Une URL différente peut être fournie avec `FLARESOLVERR_URL`.
+
 ## Lecture rapide (curl-impersonate)
 
 **[curl-impersonate](https://github.com/lexiforest/curl-impersonate)** usurpe l'empreinte TLS/HTTP2 d'un vrai Chrome et franchit le filtrage anti-bot passif sans navigateur. Le dashboard l'utilise automatiquement pour le login HTTP complet et pour les trackers navigateur disposant d'un cookie. Le repli est automatique (aucune lecture cassée). Réglage : panneau Proxies → Moteur navigateur → *Lecture rapide* (activé par défaut).
@@ -257,4 +278,5 @@ Le ratio peut être calculé depuis upload/download s'il n'est pas exposé ; ide
 
 - [Autovisit](https://github.com/Gusdezup/Autovisit) — idée de la prise en charge du 2FA (TOTP).
 - [CloakBrowser](https://github.com/CloakHQ/CloakBrowser) — moteur Chromium furtif proposé en option.
+- [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr) — résolution de challenges Cloudflare via un sidecar interne optionnel.
 - Et tous les contributeurs qui partagent des définitions de trackers.
