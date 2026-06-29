@@ -8,6 +8,7 @@ const composePath = path.join(root, 'docker-compose.yml');
 const serverPath = path.join(root, 'src', 'server.ts');
 const redactedPath = path.join(root, 'config', 'trackers', 'redacted.json');
 const tr4kerPath = path.join(root, 'config', 'trackers', 'tr4ker.json');
+const torr9Path = path.join(root, 'config', 'trackers', 'torr9.json');
 const lesRescapesPath = path.join(root, 'config', 'trackers', 'lesrescapesdeygg.json');
 const html = fs.readFileSync(htmlPath, 'utf8');
 const readme = fs.readFileSync(readmePath, 'utf8');
@@ -15,6 +16,7 @@ const compose = fs.readFileSync(composePath, 'utf8');
 const server = fs.readFileSync(serverPath, 'utf8');
 const redacted = JSON.parse(fs.readFileSync(redactedPath, 'utf8'));
 const tr4ker = JSON.parse(fs.readFileSync(tr4kerPath, 'utf8'));
+const torr9 = JSON.parse(fs.readFileSync(torr9Path, 'utf8'));
 const lesRescapes = JSON.parse(fs.readFileSync(lesRescapesPath, 'utf8'));
 const errors = [];
 
@@ -115,6 +117,26 @@ const tr4kerUsesDisplayedTotals = (
 );
 if (!tr4kerUsesDisplayedTotals) {
   errors.push('TR4KER must use the totals displayed by the site and keep seeding from api/me/stats');
+}
+
+const torr9HomeFixture = `
+  <div class="account-stats">
+    <svg class="lucide lucide-upload"></svg><span>1.54 TB</span>
+    <svg class="lucide lucide-download"></svg><span>19.85 GB</span>
+    <span>RATIO</span><strong>79.30</strong>
+  </div>`;
+const torr9Value = field => new RegExp(field.regex, 's').exec(torr9HomeFixture)?.groups?.value;
+const torr9UsesDisplayedHomeStats = (
+  torr9.fetch?.url === '/'
+  && torr9.fetch?.mode === 'browser'
+  && torr9.fetch?.responseType === 'html'
+  && torr9Value(torr9.fetch.fields?.uploadedBytes) === '1.54 TB'
+  && torr9Value(torr9.fetch.fields?.downloadedBytes) === '19.85 GB'
+  && torr9Value(torr9.fetch.fields?.ratio) === '79.30'
+  && !JSON.stringify(torr9.fetch).includes('api.torr9.net')
+);
+if (!torr9UsesDisplayedHomeStats) {
+  errors.push('Torr9 must scrape upload, download and ratio displayed on the authenticated home page');
 }
 
 const lesRescapesDetectsExpiredCookies = (

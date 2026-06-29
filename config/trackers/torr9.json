@@ -4,38 +4,27 @@
   "baseUrl": "https://torr9.net",
   "enabled": true,
   "login": {
-    "url": "https://torr9.net/login",
-    "postUrl": "https://api.torr9.net/api/v1/auth/login",
+    "url": "login",
     "method": "POST",
-    "contentType": "json",
+    "contentType": "form",
     "body": {
       "username": "{{username}}",
       "password": "{{password}}"
     },
-    "successField": "token",
-    "tokenField": "token",
     "failurePatterns": [
-      "\"message\":\"Unauthorized",
-      "\"statusCode\":401"
+      "type=\"password\"",
+      "name=\"password\"",
+      "href=\"/login\""
     ]
   },
   "fetch": {
-    "url": "https://api.torr9.net/api/v1/users/me",
-    "mode": "http",
-    "responseType": "json",
+    "url": "/",
+    "mode": "browser",
+    "responseType": "html",
     "fields": {
-      "downloadedBytes": { "path": "total_downloaded_bytes", "transform": "bytes" },
-      "uploadedBytes":   { "path": "total_uploaded_bytes",   "transform": "bytes" },
-      "seedBonus":       { "path": "jeton_balance",          "transform": "integer" },
-      "memberClass":     { "path": "role",                   "transform": "string" }
-    },
-    "unreadFetch": { "url": "https://api.torr9.net/api/v1/chat/unread-counts", "responseType": "json", "path": "total_dms", "transform": "integer" },
-    "extraFetch": {
-      "url": "https://api.torr9.net/api/v1/users/{{id}}/stats?page=1&limit=20",
-      "idExtract": { "regex": "\"id\"\\s*:\\s*(?<value>\\d+)" },
-      "field": "seeding",
-      "path": "statistics.torrents_seeding",
-      "transform": "integer"
+      "uploadedBytes":   { "regex": "(?:lucide-upload|data-lucide=\\\"upload\\\"|aria-label=\\\"Upload\\\")[\\s\\S]{0,600}?(?<value>\\d[\\d\\s.,]*\\s*[KMGTPE](?:i?B|B))",   "transform": "bytes" },
+      "downloadedBytes": { "regex": "(?:lucide-download|data-lucide=\\\"download\\\"|aria-label=\\\"Download\\\")[\\s\\S]{0,600}?(?<value>\\d[\\d\\s.,]*\\s*[KMGTPE](?:i?B|B))", "transform": "bytes" },
+      "ratio":           { "regex": ">\\s*RATIO\\s*<[\\s\\S]{0,300}?>\\s*(?<value>\\d[\\d\\s.,]*)\\s*<",                                                    "transform": "number" }
     }
   },
   "dashboard": { "byteUnit": "decimal" }
