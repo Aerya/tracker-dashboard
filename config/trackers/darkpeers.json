@@ -1,0 +1,13 @@
+{
+  "id": "darkpeers",
+  "name": "DarkPeers",
+  "baseUrl": "https://darkpeers.org",
+  "enabled": true,
+  "engine": "unit3d",
+  "login": {
+    "cookieOnly": true
+  },
+  "fetch": {
+    "mode": "browser"
+  }
+}
