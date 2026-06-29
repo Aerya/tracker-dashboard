@@ -269,6 +269,23 @@ async function waitForTrackerContent(tracker: TrackerConfig, page: Page): Promis
       return false;
     }
   }
+  if (tracker.id === 'torr9') {
+    try {
+      await page.waitForFunction(
+        () => {
+          const text = document.body?.innerText ?? '';
+          const hasRatio = /RATIO\s*[\d.,]+/i.test(text);
+          const byteValues = text.match(/\d[\d\s.,]*\s*[KMGTPE](?:i?B|B)/gi) ?? [];
+          return hasRatio && byteValues.length >= 2;
+        },
+        null,
+        { timeout: 30_000 },
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
   if (tracker.id !== 'tr4ker') return false;
   try {
     await page.waitForFunction(
@@ -585,6 +602,16 @@ export async function fetchWithBrowser(
     await waitForAnubis(page);
     await waitForAntiBotChallenge(page);
     await waitForLiveView(page);
+    if (tracker.id === 'torr9') {
+      await page.waitForFunction(
+        () => {
+          const text = document.body?.innerText ?? '';
+          return Boolean(document.querySelector('input[type="password"]')) || /RATIO\s*[\d.,]+/i.test(text);
+        },
+        null,
+        { timeout: 30_000 },
+      ).catch(() => {});
+    }
     await ensureLoggedIn(tracker, credentials, page, overrides);
     await page.goto(url, { waitUntil: 'commit', timeout: 45_000 });
     await page.waitForLoadState('domcontentloaded', { timeout: 30_000 }).catch(() => {});
