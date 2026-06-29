@@ -61,7 +61,7 @@ La navigation se fait depuis la barre latérale gauche :
 
 ## Cookies de session (sites à CAPTCHA / Cloudflare)
 
-Certains trackers protègent leur login par un CAPTCHA ou un challenge anti-bot (Cloudflare Turnstile…). Le navigateur headless ne peut pas les résoudre. Pour ces sites, fournissez directement un **cookie de session** : connectez-vous dans votre navigateur, exportez le cookie, puis collez-le dans **Configuration → Configurer les actifs → (le tracker) → Options avancées → Cookie de session**. Le dashboard l'injecte avant chaque lecture et saute la page de login.
+Certains trackers protègent leur login par un CAPTCHA ou un challenge anti-bot (Cloudflare Turnstile…). Le navigateur headless ne peut pas les résoudre. Pour ces sites, fournissez directement un **cookie de session** : connectez-vous dans votre navigateur, exportez tous les cookies du site, puis collez-les dans **Configuration → Configurer les actifs → (le tracker) → Options avancées → Cookie de session**. Le dashboard les injecte avant chaque lecture et saute la page de login. **Les cookies doivent être créés avec la même IP de sortie que celle utilisée par ce tracker dans Tracker Dashboard** : activez donc dans votre navigateur le même proxy que celui configuré pour le tracker, ou utilisez la même connexion directe si aucun proxy ne lui est affecté. Vérifiez notamment que `cf_clearance` est présent pour les sites protégés par Cloudflare ; sinon, les sessions liées à l'IP et les cookies anti-bot seront refusés.
 
 Trois formats auto-détectés :
 - fichier **Netscape `cookies.txt`** ;

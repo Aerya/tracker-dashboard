@@ -1,4 +1,4 @@
-import { extractExtraFieldResponse, fetchExtraField } from '../dist/fetcher.js';
+import { extractExtraFieldResponse, fetchExtraField, isAntiBotPage } from '../dist/fetcher.js';
 
 const gazelleTracker = {
   id: 'gazelle-test',
@@ -66,6 +66,14 @@ if (extractExtraFieldResponse({
   path: 'response.community.seeding',
 }, '<html>not JSON</html>') !== null) {
   throw new Error('extraFetch malformed JSON must remain best-effort');
+}
+
+if (!isAntiBotPage('<script src="/cdn-cgi/challenge-platform/h/b/orchestrate/chl_page/v1"></script>')) {
+  throw new Error('Cloudflare managed challenge must be detected');
+}
+
+if (isAntiBotPage('<script src="/cdn-cgi/challenge-platform/scripts/jsd/main.js"></script>')) {
+  throw new Error('Cloudflare Insights beacon must not be treated as an anti-bot challenge');
 }
 
 console.log('extraFetch response extraction OK.');

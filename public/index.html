@@ -2238,7 +2238,7 @@
             <div class="beta-field"><label for="nt-test-totp">Secret 2FA (TOTP) <span class="nt-hint">optionnel</span></label><input class="tracker-input" id="nt-test-totp" type="password" autocomplete="off"></div>
           </div>
           <div class="beta-field" style="margin-top:8px">
-            <label for="nt-test-cookie">Cookie de session <span class="nt-hint">requis si « cookie uniquement »</span></label>
+            <label for="nt-test-cookie">Cookie de session <span class="nt-hint">requis si « cookie uniquement » · à exporter avec la même IP de sortie que celle configurée pour ce tracker</span></label>
             <textarea class="tracker-input" id="nt-test-cookie" rows="2" spellcheck="false" style="font-family:monospace; font-size:11px; white-space:pre" placeholder="nom=valeur; nom2=valeur2  (ou export cookies.txt / Cookie-Editor)"></textarea>
           </div>
         </div>
@@ -2305,7 +2305,7 @@
           <details class="definition-advanced" id="gd-cookie-wrap">
             <summary>J'ai un cookie de session (sites à CAPTCHA / Cloudflare)</summary>
             <div class="definition-advanced-body">
-              <p class="beta-note">Si le login automatique échoue (Cloudflare, captcha), connecte-toi dans ton navigateur, exporte tes cookies et colle-les ici.</p>
+              <p class="beta-note">Si le login automatique échoue (Cloudflare, captcha), connecte-toi dans ton navigateur, exporte tes cookies et colle-les ici. Utilise impérativement la même IP de sortie que celle configurée pour ce tracker dans Tracker Dashboard (même proxy, ou même connexion directe).</p>
               <textarea class="tracker-input" id="gd-cookie" rows="3" spellcheck="false" style="font-family:monospace; font-size:11px; white-space:pre" placeholder="nom=valeur; nom2=valeur2  (ou export cookies.txt / Cookie-Editor)"></textarea>
             </div>
           </details>
@@ -6102,9 +6102,10 @@
                       <div class="advanced-cookie-row">
                         <textarea class="tracker-input" id="credential-cookie-${safeId}" autocomplete="off" rows="3" spellcheck="false" style="flex:1; resize:vertical; font-family:monospace; font-size:11px; white-space:pre"
                           placeholder="${credential.hasCookie ? '•••••••• (enregistré — colle pour remplacer, vide pour effacer)' : 'Colle ici un fichier cookies.txt (Netscape), un export JSON Cookie-Editor, ou nom=valeur; nom2=valeur2'}"
-                          title="Connecte-toi au site dans ton navigateur, exporte les cookies (extension cookies-txt / Cookie-Editor) ou copie-les depuis les DevTools (F12 → Application/Stockage → Cookies). Le dashboard les injecte dans le navigateur headless et saute le login + Turnstile."></textarea>
+                          title="Connecte-toi au site dans ton navigateur avec la même IP de sortie que celle configurée pour ce tracker (même proxy ou même connexion directe), puis exporte les cookies. Le dashboard les injecte dans le navigateur headless et saute le login + Turnstile."></textarea>
                         <button class="btn-save" style="padding:6px 10px" onclick="saveTrackerCookie('${safeId}', this)">Enregistrer cookie</button>
                       </div>
+                      <p class="beta-note" style="margin-top:6px"><b>Important :</b> exporte tous les cookies avec la même IP de sortie que celle utilisée par ce tracker dans Tracker Dashboard (même proxy, ou même connexion directe). Vérifie notamment que <code>cf_clearance</code> est présent pour les sites protégés par Cloudflare ; les sessions liées à l’IP et les cookies anti-bot seront sinon refusés.</p>
                     </div>
                     <div class="advanced-field advanced-cookie-field">
                       <label>Secret 2FA (TOTP) <span style="color:var(--muted)">— authentification à deux facteurs${credential.hasTotp ? ' · <b style="color:var(--green)">défini</b>' : ''}</span></label>
