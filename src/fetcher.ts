@@ -21,6 +21,7 @@ import { getTrackerTotpSecret, loadTrackerConfigsFromDb, saveTrackerConfig } fro
 import { generateTotp } from './totp.js';
 import { selectUserAgent } from './userAgent.js';
 import { closeBrowserSession, closeBrowserSessions, fetchWithBrowser } from './browserBackend.js';
+import { fetchWithFlareSolverr, isFlareSolverrCandidate } from './flareSolverr.js';
 
 // ─── Transforms ──────────────────────────────────────────────────────────────
 
@@ -1028,6 +1029,23 @@ export async function fetchTracker(
     };
   };
 
+  const attemptFlareSolverr = async (): Promise<TrackerStats | null> => {
+    try {
+      const solved = await fetchWithFlareSolverr(tracker, creds);
+      const failed = hasBrowserAuthFailure(tracker, solved.url, solved.html);
+      if (failed) {
+        console.log(`  [${tracker.name}] FlareSolverr: page non authentifiee (${failed}), repli navigateur`);
+        return null;
+      }
+      const stats = buildStatsFromHtml(solved.url, solved.html, solved.extraHtml);
+      console.log(`  [${tracker.name}] Lecture via FlareSolverr OK`);
+      return stats;
+    } catch (error) {
+      console.log(`  [${tracker.name}] FlareSolverr indisponible/echec, repli navigateur - ${error instanceof Error ? error.message : String(error)}`);
+      return null;
+    }
+  };
+
   // Fast-path curl-impersonate : pour un tracker en mode navigateur disposant d'un
   // cookie de session, on tente d'abord une requete HTTP impersonee (sans Chromium).
   // Si la page est rendue cote serveur et la session valide -> stats directes.
@@ -1280,28 +1298,42 @@ export async function fetchTracker(
         // avant de lancer le navigateur (plus léger, contourne Cloudflare passif)
         const viaCurlFull = await attemptHttpViaCurl();
         if (viaCurlFull) return viaCurlFull;
-      }
-      const browserResult = await fetchWithBrowser(tracker, creds);
-      // Si on a confirme la session via un indicateur DOM specifique (TR4KER : RATIO/UPLOAD/DOWNLOAD
-      // visibles apres hydratation SPA), on ignore les failurePatterns qui peuvent matcher
-      // la coquille initiale "non connectee".
-      const failed = browserResult.authConfirmed
-        ? null
-        : hasBrowserAuthFailure(tracker, browserResult.url, browserResult.html);
-      if (failed) {
-        if (!isRetry) {
-          console.log(`  [${tracker.name}] Session navigateur expiree, re-login...`);
-          // Reset complet du contexte navigateur (cookies en memoire) avant retry —
-          // pour les sites ou la session persistante est devenue invalide
-          await closeBrowserSession(tracker.id).catch(() => {});
-          await new Promise(resolve => setTimeout(resolve, 3000));
-          return attempt(true);
+        if (tracker.fetch.antiBotFallback === 'flaresolverr') {
+          const viaFlareSolverr = await attemptFlareSolverr();
+          if (viaFlareSolverr) return viaFlareSolverr;
         }
-        const dumpPath = writeDebugDump(tracker, browserResult.url, browserResult.html, {}, 'browser-auth');
-        const suffix = dumpPath ? ` - dump: ${dumpPath}` : '';
-        throw new Error(`Session navigateur non authentifiee - verifier les credentials ou valider le challenge dans le profil navigateur${suffix}`);
       }
-      return buildStatsFromHtml(browserResult.url, browserResult.html, browserResult.extraHtml);
+      try {
+        const browserResult = await fetchWithBrowser(tracker, creds);
+        // Si on a confirme la session via un indicateur DOM specifique (TR4KER : RATIO/UPLOAD/DOWNLOAD
+        // visibles apres hydratation SPA), on ignore les failurePatterns qui peuvent matcher
+        // la coquille initiale "non connectee".
+        const failed = browserResult.authConfirmed
+          ? null
+          : hasBrowserAuthFailure(tracker, browserResult.url, browserResult.html);
+        if (failed) {
+          if (!isRetry) {
+            console.log(`  [${tracker.name}] Session navigateur expiree, re-login...`);
+            // Reset complet du contexte navigateur (cookies en memoire) avant retry —
+            // pour les sites ou la session persistante est devenue invalide
+            await closeBrowserSession(tracker.id).catch(() => {});
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            return attempt(true);
+          }
+          const dumpPath = writeDebugDump(tracker, browserResult.url, browserResult.html, {}, 'browser-auth');
+          const suffix = dumpPath ? ` - dump: ${dumpPath}` : '';
+          throw new Error(`Session navigateur non authentifiee - verifier les credentials ou valider le challenge dans le profil navigateur${suffix}`);
+        }
+        return buildStatsFromHtml(browserResult.url, browserResult.html, browserResult.extraHtml);
+      } catch (error) {
+        // Repli generique, uniquement pour une signature anti-bot explicite. Les
+        // erreurs de credentials, reseau ou extraction ne lancent pas un second navigateur.
+        if (tracker.fetch.antiBotFallback !== 'flaresolverr' && isFlareSolverrCandidate(error)) {
+          const viaFlareSolverr = await attemptFlareSolverr();
+          if (viaFlareSolverr) return viaFlareSolverr;
+        }
+        throw error;
+      }
     }
 
     // Mode HTTP : on tente d'abord le login+fetch via curl-impersonate (empreinte

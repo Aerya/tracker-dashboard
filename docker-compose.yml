@@ -14,3 +14,13 @@ services:
       # METRICS_PUBLIC: "true"
     volumes:
       - ./config:/app/config
+
+  tracker-dashboard-flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: tracker-dashboard-flaresolverr
+    restart: unless-stopped
+    network_mode: "service:tracker-dashboard"
+    environment:
+      HOST: 127.0.0.1
+      LOG_LEVEL: info
+      TZ: Europe/Paris

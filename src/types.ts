@@ -113,6 +113,8 @@ export interface FieldExtractor {
 export interface FetchStep {
   url: string;
   mode?: 'http' | 'browser';
+  /** Repli anti-bot optionnel via le sidecar FlareSolverr avant le navigateur standard. */
+  antiBotFallback?: 'flaresolverr';
   responseType: 'json' | 'html';
   fields: Record<string, FieldExtractor>;
   /**
