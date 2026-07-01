@@ -2206,7 +2206,7 @@
               <label for="nt-prestep-csrf">Regex extraction _csrf <span class="nt-hint">groupe (?&lt;value&gt;…)</span></label>
               <input class="tracker-input" id="nt-prestep-csrf" autocomplete="off" spellcheck="false" style="font-family:monospace; font-size:11px" placeholder='name=&quot;_token&quot;\s+value=&quot;(?<value>[^&quot;]+)&quot;'>
             </div>
-            <h5 class="nt-subh">otpStep — page 2FA dédiée (ex: Nexum)</h5>
+            <h5 class="nt-subh">otpStep — page 2FA dédiée après le login</h5>
             <div class="newtracker-grid">
               <div class="beta-field">
                 <label for="nt-otpstep-url">urlContains</label>
@@ -5956,7 +5956,7 @@
           : seedingStatCell(stat)}
          ${bonusOrRequired}`;
 
-    // Grille specifique aux ratioless exposant Niveau + XP (ex: Nexum). Ordre voulu :
+    // Grille specifique aux trackers sans ratio exposant Niveau + XP. Ordre voulu :
     //   Niveau | Upload        Strictement conditionne a la presence de level/xp : les
     //   XP     | DL jour       autres ratioless (HDO, etc.) gardent leur grille standard.
     //   Seeding| Seed 24h

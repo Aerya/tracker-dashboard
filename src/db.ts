@@ -223,10 +223,12 @@ export function importLegacyTrackersIfNeeded(): void {
   const trackersDir = path.join(CONFIG_DIR, 'trackers');
   if (existing) {
     syncDefaultTrackerDefinitions();
+    removeRetiredBundledTrackers();
     return;
   }
   if (!fs.existsSync(trackersDir)) {
     syncDefaultTrackerDefinitions();
+    removeRetiredBundledTrackers();
     return;
   }
 
@@ -251,6 +253,90 @@ export function importLegacyTrackersIfNeeded(): void {
     }
   }
   syncDefaultTrackerDefinitions();
+  removeRetiredBundledTrackers();
+}
+
+// Les définitions retirées restent sinon présentes dans le volume et dans SQLite
+// après une mise à jour d'image. Les supprimer explicitement évite qu'un tracker
+// fermé continue d'apparaître ou d'être rafraîchi sur les installations existantes.
+const RETIRED_BUNDLED_TRACKER_IDS = new Set(['nexum']);
+
+function removeRetiredDefinitionFiles(trackersDir: string): void {
+  if (!fs.existsSync(trackersDir)) return;
+  for (const file of fs.readdirSync(trackersDir).filter(name => name.endsWith('.json'))) {
+    const target = path.join(trackersDir, file);
+    try {
+      const config = JSON.parse(fs.readFileSync(target, 'utf-8')) as TrackerConfig;
+      if (RETIRED_BUNDLED_TRACKER_IDS.has(config.id)) fs.unlinkSync(target);
+    } catch {
+      // Une définition locale invalide reste diagnostiquée par le chargeur habituel.
+    }
+  }
+}
+
+export function removeRetiredBundledTrackers(): void {
+  const retired = loadRawTrackerConfigsFromDb().filter(config => (
+    RETIRED_BUNDLED_TRACKER_IDS.has(config.id)
+    || Boolean(config.baseId && RETIRED_BUNDLED_TRACKER_IDS.has(config.baseId))
+  ));
+  const retiredIds = new Set([...RETIRED_BUNDLED_TRACKER_IDS, ...retired.map(config => config.id)]);
+  for (const config of retired) {
+    deleteTrackerConfig(config.id);
+    setTrackerCookie(config.id, '');
+    setTrackerTotpSecret(config.id, '');
+  }
+
+  const trackerOrder = getJsonSetting<unknown>('trackerOrder', null);
+  if (Array.isArray(trackerOrder)) {
+    setJsonSetting('trackerOrder', trackerOrder.filter(id => !retiredIds.has(String(id))));
+  } else if (trackerOrder && typeof trackerOrder === 'object') {
+    const value = trackerOrder as { ids?: unknown[] };
+    if (Array.isArray(value.ids)) {
+      setJsonSetting('trackerOrder', { ...value, ids: value.ids.filter(id => !retiredIds.has(String(id))) });
+    }
+  }
+
+  const proxyOverrides = getJsonSetting<unknown>('proxy_overrides', []);
+  if (Array.isArray(proxyOverrides)) {
+    setJsonSetting('proxy_overrides', proxyOverrides.map(raw => {
+      if (!raw || typeof raw !== 'object') return raw;
+      const override = raw as { trackers?: unknown[] };
+      return Array.isArray(override.trackers)
+        ? { ...override, trackers: override.trackers.filter(id => !retiredIds.has(String(id))) }
+        : override;
+    }));
+  }
+
+  const beta = getJsonSetting<unknown>('beta_settings', null);
+  if (beta && typeof beta === 'object' && !Array.isArray(beta)) {
+    const settings = beta as Record<string, unknown>;
+    const withoutRetired = (value: unknown, key = 'trackerId'): unknown => Array.isArray(value)
+      ? value.filter(item => !item || typeof item !== 'object'
+        || !retiredIds.has(String((item as Record<string, unknown>)[key] ?? '')))
+      : value;
+    const trackerAlerts = settings.trackerAlerts && typeof settings.trackerAlerts === 'object'
+      ? Object.fromEntries(Object.entries(settings.trackerAlerts as Record<string, unknown>)
+        .filter(([trackerId]) => !retiredIds.has(trackerId)))
+      : settings.trackerAlerts;
+    const schedule = settings.schedule && typeof settings.schedule === 'object'
+      ? {
+          ...(settings.schedule as Record<string, unknown>),
+          lastFailedTrackerIds: Array.isArray((settings.schedule as Record<string, unknown>).lastFailedTrackerIds)
+            ? ((settings.schedule as Record<string, unknown>).lastFailedTrackerIds as unknown[])
+                .filter(id => !retiredIds.has(String(id)))
+            : (settings.schedule as Record<string, unknown>).lastFailedTrackerIds,
+        }
+      : settings.schedule;
+    setJsonSetting('beta_settings', {
+      ...settings,
+      announceMappings: withoutRetired(settings.announceMappings),
+      accountAnnounceMappings: withoutRetired(settings.accountAnnounceMappings),
+      scheduleOverrides: withoutRetired(settings.scheduleOverrides),
+      trackerAlerts,
+      schedule,
+    });
+  }
+  removeRetiredDefinitionFiles(path.join(CONFIG_DIR, 'trackers'));
 }
 
 // Migration corrective unique. L'import legacy (importLegacyTrackersIfNeeded) inscrit en
@@ -290,6 +376,7 @@ export function syncDefaultTrackerDefinitions(): void {
   if (!fs.existsSync(DEFAULT_TRACKERS_DIR)) return;
   const trackersDir = path.join(CONFIG_DIR, 'trackers');
   fs.mkdirSync(trackersDir, { recursive: true });
+  removeRetiredDefinitionFiles(trackersDir);
 
   const files = fs.readdirSync(DEFAULT_TRACKERS_DIR)
     .filter(file => file.endsWith('.json') && !file.endsWith('.example.json'));

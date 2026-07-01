@@ -24,6 +24,7 @@ Au premier accès, l'application demande de créer le compte administrateur de l
 
 ## Changements récents
 
+- **Retrait de Nexum** : le tracker a fermé définitivement. Sa définition intégrée est supprimée et les anciennes installations la nettoient automatiquement au démarrage.
 - **Image principale allégée** : Playwright, Chromium et CloakBrowser sont regroupés dans le service parallèle `tracker-dashboard-browser`, avec état, versions et alertes de mise à jour dans la WebUI.
 - **Plusieurs comptes par tracker** : duplication d'un tracker, noms d'affichage personnalisables, regroupement sous le site et attribution des torrents par passkey entre comptes.
 - **Clients BitTorrent et cross-seed** : comparaison aux torrents locaux, rafraîchissement automatique par client, plusieurs instances cross-seed et plusieurs clients associés à une même instance.
