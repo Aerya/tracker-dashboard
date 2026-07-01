@@ -183,9 +183,22 @@ function friendlyError(err: unknown): string {
     message.includes('packet length too long') ||
     message.includes('EPROTO')
   ) {
-    return `${message} - erreur TLS/proxy probable : verifier le type du proxy configure (HTTP vs HTTPS vs SOCKS)`;
+    return `${message} - échec TLS sur le trajet proxy : la route est indisponible ou incompatible pour ce tracker (le type de proxy configuré n'est pas forcément en cause)`;
   }
   return message;
+}
+
+function apiErrorMessage(body: string): string {
+  const parsed = parseJsonRecord(body);
+  return typeof parsed?.message === 'string' ? parsed.message.trim() : '';
+}
+
+function loginHttpError(status: number, body: string): string {
+  const detail = apiErrorMessage(body);
+  const suffix = detail ? ` : ${detail}` : '';
+  return status === 429
+    ? `Login temporairement limité — HTTP 429${suffix}`
+    : `Login échoué — HTTP ${status}${suffix}`;
 }
 
 function missingExtractedFields(
@@ -716,6 +729,18 @@ async function doLogin(
     // succes, et jeton Bearer eventuel — flux entierement distinct du HTML.
     let resultJson = parseJsonRecord(loginRes.data);
 
+    // Un JSON d'erreur (notamment le rate-limit C411) ne contient naturellement
+    // pas successField. Rapporter d'abord le vrai statut et son message au lieu
+    // du trompeur « champ authenticated absent/false ».
+    if (loginRes.status >= 400) {
+      const dumpPath = writeLoginDebugDump(tracker, loginUrl, loginRes.data, {
+        status: loginRes.status,
+        reason: 'http-error',
+      });
+      const suffix = dumpPath ? ` - dump: ${dumpPath}` : '';
+      throw new Error(`${loginHttpError(loginRes.status, loginRes.data)}${suffix}`);
+    }
+
     if (cfg.mfaStep && resultJson?.[cfg.mfaStep.triggerField]) {
       if (!vars.otp) {
         const dumpPath = writeLoginDebugDump(tracker, loginUrl, loginRes.data, { reason: 'mfa-no-secret' });
@@ -1156,6 +1181,18 @@ export async function fetchTracker(
       if (!postRes) { console.log(`  [${tracker.name}] curl: POST login null`); return null; }
       console.log(`  [${tracker.name}] curl: POST status=${postRes.status} len=${postRes.body.length} 2fa=${isTwoFactorPage(postRes.body)} body=${postRes.body.slice(0,300)}`);
 
+      // Ne pas enchaîner immédiatement une seconde tentative Axios lorsque le
+      // tracker vient de demander de ralentir : cela prolonge le rate-limit.
+      if (postRes.status === 429) {
+        const dumpPath = writeLoginDebugDump(tracker, loginUrl, postRes.body, {
+          reason: 'curl-rate-limited',
+          status: postRes.status,
+          bodyFieldNames: Object.keys(bodyObj),
+        });
+        const suffix = dumpPath ? ` - dump: ${dumpPath}` : '';
+        throw new Error(`${loginHttpError(postRes.status, postRes.body)}${suffix}`);
+      }
+
       if (!isJson && !cfg.mfaStep && hasFailurePattern(postRes.body, cfg.failurePatterns)) {
         const dumpPath = writeLoginDebugDump(tracker, loginUrl, postRes.body, {
           reason: 'curl-login-failed',
@@ -1282,7 +1319,8 @@ export async function fetchTracker(
       } catch {
         return null;
       }
-    } catch {
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('HTTP 429')) throw error;
       return null;
     } finally {
       sess.dispose();

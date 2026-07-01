@@ -209,6 +209,23 @@ async function waitForTurnstile(page: Page): Promise<void> {
  * une coquille "non connecte" avant hydratation (cas TR4KER).
  */
 async function waitForTrackerContent(tracker: TrackerConfig, page: Page): Promise<boolean> {
+  if (tracker.id === 'lesrescapesdeygg') {
+    try {
+      await page.waitForFunction(
+        () => {
+          const text = document.body?.innerText ?? '';
+          return text.includes('Upload total')
+            && /Ratio r[ée]el/i.test(text)
+            && text.includes('Sessions tracker actives');
+        },
+        null,
+        { timeout: 20_000 },
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
   if (tracker.id === 'milkie') {
     try {
       await page.waitForFunction(

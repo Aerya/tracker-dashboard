@@ -14,7 +14,6 @@
     },
     "failurePatterns": [
       "id=\"login-form\"",
-      "name=\"pass\"",
       "Connexion sur Les Rescapés de Ygg"
     ]
   },
