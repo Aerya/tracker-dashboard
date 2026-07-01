@@ -286,7 +286,7 @@ async function fetchUnreadMessagesViaCurl(
 
 // Requête secondaire générique (fetch.extraFetch) : récupère un champ absent de la page
 // principale (ex. la classe de membre sur IPTorrents, exposée uniquement sur la page de
-// profil /u/<id>, ou sur Nexum via /user/<pseudo>). Le placeholder {{username}} est
+// profil /u/<id> ou /user/<pseudo>). Le placeholder {{username}} est
 // toujours disponible (credentials du tracker) ; {{id}} est disponible si idExtract est
 // fourni (extrait du HTML/JSON de la page principale).
 // Best-effort : toute erreur renvoie null (champ absent), sans invalider le tracker.
@@ -847,7 +847,7 @@ async function doLogin(
       verificationHtml = after2faRes.data;
     }
   } else if (cfg.otpStep && landedUrl.includes(cfg.otpStep.urlContains)) {
-    // ── 3ter. 2FA via page dediee (Nexum: /login/2fa) ─────────────────────────
+    // ── 3ter. 2FA via page dediee apres le login ──────────────────────────────
     if (!vars.otp) {
       const dumpPath = writeLoginDebugDump(tracker, landedUrl, verificationHtml, { reason: 'otpStep-no-secret' });
       const suffix = dumpPath ? ` - dump: ${dumpPath}` : '';
@@ -1114,7 +1114,7 @@ export async function fetchTracker(
   const attemptHttpViaCurl = async (): Promise<TrackerStats | null> => {
     if (!fastFetchEnabled()) { console.log(`  [${tracker.name}] curl: fast-fetch désactivé`); return null; }
     const cfg = tracker.login;
-    // 2FA via page dediee (Nexum) : non reproduit ici, on laisse la voie axios
+    // 2FA via page dediee : non reproduit ici, on laisse la voie axios
     // (doLogin) gerer ce cas.
     if (cfg.otpStep) return null;
     if (cfg.cookieOnly) return null;

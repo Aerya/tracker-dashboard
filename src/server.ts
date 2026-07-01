@@ -423,7 +423,7 @@ function sanitizeTrackerConfigInput(
       ...(login.preStep.includeHiddenInputs ? { includeHiddenInputs: true } : {}),
     };
   }
-  // otpStep (2FA page dediee, ex: Nexum).
+  // otpStep (2FA via une page dediee apres le formulaire principal).
   if (login.otpStep && typeof login.otpStep === 'object'
       && String(login.otpStep.urlContains ?? '').trim() && String(login.otpStep.field ?? '').trim()) {
     loginOut.otpStep = {
@@ -785,7 +785,7 @@ function fakeNumber(seed: number, min: number, max: number): number {
 
 function fakeStatsForPresentation(): TrackerStats[] {
   const now = new Date();
-  const ratiolessIds = new Set(['hdonly', 'nostradamus', 'nexum']);
+  const ratiolessIds = new Set(['hdonly', 'nostradamus']);
   return listTrackerDefinitionFiles()
     .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }))
     .map((tracker, index) => {

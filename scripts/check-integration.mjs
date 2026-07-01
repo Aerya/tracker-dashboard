@@ -12,17 +12,31 @@ const redactedPath = path.join(root, 'config', 'trackers', 'redacted.json');
 const tr4kerPath = path.join(root, 'config', 'trackers', 'tr4ker.json');
 const torr9Path = path.join(root, 'config', 'trackers', 'torr9.json');
 const lesRescapesPath = path.join(root, 'config', 'trackers', 'lesrescapesdeygg.json');
+const nexumPath = path.join(root, 'config', 'trackers', 'nexum.json');
+const dbPath = path.join(root, 'src', 'db.ts');
 const html = fs.readFileSync(htmlPath, 'utf8');
 const readme = fs.readFileSync(readmePath, 'utf8');
 const compose = fs.readFileSync(composePath, 'utf8');
 const server = fs.readFileSync(serverPath, 'utf8');
 const fetcher = fs.readFileSync(fetcherPath, 'utf8');
 const browserFetcher = fs.readFileSync(browserFetcherPath, 'utf8');
+const db = fs.readFileSync(dbPath, 'utf8');
 const redacted = JSON.parse(fs.readFileSync(redactedPath, 'utf8'));
 const tr4ker = JSON.parse(fs.readFileSync(tr4kerPath, 'utf8'));
 const torr9 = JSON.parse(fs.readFileSync(torr9Path, 'utf8'));
 const lesRescapes = JSON.parse(fs.readFileSync(lesRescapesPath, 'utf8'));
 const errors = [];
+
+const retiresClosedNexumTracker = (
+  !fs.existsSync(nexumPath)
+  && readme.includes('Retrait de Nexum')
+  && readme.includes('fermé définitivement')
+  && db.includes("RETIRED_BUNDLED_TRACKER_IDS = new Set(['nexum'])")
+  && db.includes('removeRetiredBundledTrackers();')
+);
+if (!retiresClosedNexumTracker) {
+  errors.push('Closed Nexum tracker must be removed from bundled definitions and migrated out of existing installations');
+}
 
 function normalizeRoute(route) {
   return route

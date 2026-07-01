@@ -60,7 +60,7 @@ export interface LoginConfig {
    */
   tokenField?: string;
   /**
-   * 2FA en 2 étapes via une page dédiée (ex: Nexum /login/2fa). Si l'URL
+   * 2FA en 2 étapes via une page dédiée après le login. Si l'URL
    * atteinte après le POST de login contient `urlContains`, on injecte le code
    * TOTP dans le champ `field` (+ token CSRF si présent) et on repost cette page.
    */
@@ -70,7 +70,7 @@ export interface LoginConfig {
     /**
      * Cible du POST OTP, relative à la page OTP (ex: HD-Forever poste sur
      * `login.php?act=otp`, pas sur l'URL d'atterrissage). Si absent, on poste
-     * sur l'URL atteinte après le login (comportement Nexum, inchangé).
+     * sur l'URL atteinte après le login.
      */
     action?: string;
     /**
@@ -132,7 +132,7 @@ export interface FetchStep {
   /**
    * Requête secondaire générique pour un champ absent de la page principale (ex:
    * la classe de membre sur IPTorrents, exposée uniquement sur la page de profil
-   * /u/<id> ; ou sur Nexum, exposée sur /user/<pseudo>). `url` supporte les
+   * /u/<id> ou /user/<pseudo>). `url` supporte les
    * placeholders {{username}} (toujours disponible, credentials du tracker) et
    * {{id}} (disponible si `idExtract` est fourni, extrait depuis le HTML/JSON de
    * la page principale avant la requête secondaire). Le champ extrait (path JSON
