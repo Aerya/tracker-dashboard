@@ -6,6 +6,8 @@ const htmlPath = path.join(root, 'public', 'index.html');
 const readmePath = path.join(root, 'README.md');
 const composePath = path.join(root, 'docker-compose.yml');
 const serverPath = path.join(root, 'src', 'server.ts');
+const fetcherPath = path.join(root, 'src', 'fetcher.ts');
+const browserFetcherPath = path.join(root, 'src', 'browserFetcher.ts');
 const redactedPath = path.join(root, 'config', 'trackers', 'redacted.json');
 const tr4kerPath = path.join(root, 'config', 'trackers', 'tr4ker.json');
 const torr9Path = path.join(root, 'config', 'trackers', 'torr9.json');
@@ -14,6 +16,8 @@ const html = fs.readFileSync(htmlPath, 'utf8');
 const readme = fs.readFileSync(readmePath, 'utf8');
 const compose = fs.readFileSync(composePath, 'utf8');
 const server = fs.readFileSync(serverPath, 'utf8');
+const fetcher = fs.readFileSync(fetcherPath, 'utf8');
+const browserFetcher = fs.readFileSync(browserFetcherPath, 'utf8');
 const redacted = JSON.parse(fs.readFileSync(redactedPath, 'utf8'));
 const tr4ker = JSON.parse(fs.readFileSync(tr4kerPath, 'utf8'));
 const torr9 = JSON.parse(fs.readFileSync(torr9Path, 'utf8'));
@@ -154,13 +158,25 @@ if (!torr9UsesDisplayedHomeStats) {
 const lesRescapesUsesBrowserLogin = (
   lesRescapes.login?.cookieOnly !== true
   && lesRescapes.login?.failurePatterns?.includes('id="login-form"')
+  && !lesRescapes.login?.failurePatterns?.includes('name="pass"')
   && lesRescapes.login?.body?.id === '{{username}}'
   && lesRescapes.login?.body?.pass === '{{password}}'
   && lesRescapes.login?.body?.remember_me === 'on'
   && lesRescapes.fetch?.url === '?action=my-tracker-activity'
+  && browserFetcher.includes("tracker.id === 'lesrescapesdeygg'")
+  && browserFetcher.includes("text.includes('Sessions tracker actives')")
 );
 if (!lesRescapesUsesBrowserLogin) {
   errors.push('Les Rescapes de Ygg must submit its browser login form when the session expires');
+}
+
+const preservesRateLimitErrors = (
+  fetcher.includes('Login temporairement limité — HTTP 429')
+  && fetcher.includes("error.message.includes('HTTP 429')")
+  && fetcher.includes("reason: 'curl-rate-limited'")
+);
+if (!preservesRateLimitErrors) {
+  errors.push('HTTP 429 login responses must stop fallback retries and keep their real error message');
 }
 
 const browserLoginTrackerIds = ['crazyspirits', 'lesrescapesdeygg', 'yggreborn'];
