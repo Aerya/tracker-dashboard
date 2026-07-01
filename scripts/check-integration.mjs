@@ -109,14 +109,26 @@ if (redacted.fetch?.fields?.requiredRatio && !synchronizesAllBundledTrackers) {
 }
 
 const tr4kerUsesDisplayedTotals = (
-  tr4ker.fetch?.url === 'api/me'
-  && tr4ker.fetch?.fields?.uploadedBytes?.path === 'bonus_upload'
-  && tr4ker.fetch?.fields?.downloadedBytes?.path === 'bonus_download'
-  && tr4ker.fetch?.extraFetch?.url === 'api/me/stats'
-  && tr4ker.fetch?.extraFetch?.path === 'statistics.torrents_seeding'
+  tr4ker.fetch?.url === '/'
+  && tr4ker.fetch?.mode === 'browser'
+  && tr4ker.fetch?.responseType === 'html'
+  && !JSON.stringify(tr4ker.fetch).includes('api/me')
 );
 if (!tr4kerUsesDisplayedTotals) {
-  errors.push('TR4KER must use the totals displayed by the site and keep seeding from api/me/stats');
+  errors.push('TR4KER must scrape the totals displayed by the authenticated site, without /api/me');
+}
+
+const tr4kerHomeFixture = `
+  <div class="user-stat"><span>RATIO</span><div class="home_statValue">45.67</div></div>
+  <div class="user-stat"><span>UPLOAD</span><div class="home_statValue">12.34 TB</div></div>
+  <div class="user-stat"><span>DOWNLOAD</span><div class="home_statValue">56.78 GB</div></div>`;
+const tr4kerValue = field => new RegExp(field.regex, 's').exec(tr4kerHomeFixture)?.groups?.value?.trim();
+if (
+  tr4kerValue(tr4ker.fetch?.fields?.uploadedBytes) !== '12.34 TB'
+  || tr4kerValue(tr4ker.fetch?.fields?.downloadedBytes) !== '56.78 GB'
+  || tr4kerValue(tr4ker.fetch?.fields?.ratio) !== '45.67'
+) {
+  errors.push('TR4KER home-page extractors must parse the rendered upload, download and ratio values');
 }
 
 const torr9HomeFixture = `
@@ -139,13 +151,24 @@ if (!torr9UsesDisplayedHomeStats) {
   errors.push('Torr9 must scrape upload, download and ratio displayed on the authenticated home page');
 }
 
-const lesRescapesDetectsExpiredCookies = (
-  lesRescapes.login?.cookieOnly === true
+const lesRescapesUsesBrowserLogin = (
+  lesRescapes.login?.cookieOnly !== true
   && lesRescapes.login?.failurePatterns?.includes('id="login-form"')
+  && lesRescapes.login?.body?.id === '{{username}}'
+  && lesRescapes.login?.body?.pass === '{{password}}'
+  && lesRescapes.login?.body?.remember_me === 'on'
   && lesRescapes.fetch?.url === '?action=my-tracker-activity'
 );
-if (!lesRescapesDetectsExpiredCookies) {
-  errors.push('Les Rescapes de Ygg must detect the login page returned for an expired cookie');
+if (!lesRescapesUsesBrowserLogin) {
+  errors.push('Les Rescapes de Ygg must submit its browser login form when the session expires');
+}
+
+const browserLoginTrackerIds = ['crazyspirits', 'lesrescapesdeygg', 'yggreborn'];
+for (const trackerId of browserLoginTrackerIds) {
+  const tracker = JSON.parse(fs.readFileSync(path.join(root, 'config', 'trackers', `${trackerId}.json`), 'utf8'));
+  if (tracker.login?.cookieOnly === true || tracker.fetch?.mode !== 'browser') {
+    errors.push(`${tracker.name} must allow automatic browser login`);
+  }
 }
 
 const documentsCookieIpBinding = (

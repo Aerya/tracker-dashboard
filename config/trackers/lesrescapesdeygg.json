@@ -9,14 +9,14 @@
     "contentType": "form",
     "body": {
       "id": "{{username}}",
-      "pass": "{{password}}"
+      "pass": "{{password}}",
+      "remember_me": "on"
     },
     "failurePatterns": [
       "id=\"login-form\"",
       "name=\"pass\"",
       "Connexion sur Les Rescapés de Ygg"
-    ],
-    "cookieOnly": true
+    ]
   },
   "fetch": {
     "url": "?action=my-tracker-activity",
