@@ -17,8 +17,7 @@
       "name=\"identifier\"",
       "cf-turnstile",
       "Connexion à ton compte"
-    ],
-    "cookieOnly": true
+    ]
   },
   "fetch": {
     "url": "account/",

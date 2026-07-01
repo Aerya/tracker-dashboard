@@ -13,38 +13,31 @@
       "password": "{{password}}"
     },
     "failurePatterns": [
-      "Page introuvable"
+      "type=\"password\"",
+      "name=\"password\"",
+      "href=\"/login\"",
+      "aria-label=\"Connexion\"",
+      "Inscription"
     ],
     "cookieOnly": true
   },
   "fetch": {
-    "url": "api/me",
-    "mode": "http",
-    "responseType": "json",
+    "url": "/",
+    "mode": "browser",
+    "responseType": "html",
     "fields": {
+      "ratio": {
+        "regex": ">RATIO<[\\s\\S]{0,180}?_statValue[^>]*>\\s*(?<value>\\d[\\d\\s.,]*)\\s*<",
+        "transform": "number"
+      },
       "uploadedBytes": {
-        "path": "bonus_upload",
+        "regex": ">UPLOAD<[\\s\\S]{0,180}?_statValue[^>]*>\\s*(?<value>\\d[\\d\\s.,]*\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))\\s*<",
         "transform": "bytes"
       },
       "downloadedBytes": {
-        "path": "bonus_download",
+        "regex": ">DOWNLOAD<[\\s\\S]{0,180}?_statValue[^>]*>\\s*(?<value>\\d[\\d\\s.,]*\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))\\s*<",
         "transform": "bytes"
-      },
-      "ratio": {
-        "path": "ratio",
-        "transform": "number"
-      },
-      "memberClass": {
-        "path": "role",
-        "transform": "string"
       }
-    },
-    "extraFetch": {
-      "url": "api/me/stats",
-      "responseType": "json",
-      "field": "seeding",
-      "path": "statistics.torrents_seeding",
-      "transform": "integer"
     }
   },
   "dashboard": {

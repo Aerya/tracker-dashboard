@@ -15,8 +15,7 @@
       "type=\"password\"",
       "name=\"password\"",
       "account-login.php"
-    ],
-    "cookieOnly": true
+    ]
   },
   "fetch": {
     "url": "/",
