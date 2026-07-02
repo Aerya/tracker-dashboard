@@ -3,11 +3,9 @@
   "name": "ExoticaZ",
   "baseUrl": "https://exoticaz.to",
   "enabled": false,
-  "engine": "unit3d",
+  "engine": "avistaznetwork",
   "login": {
     "url": "login",
-    "method": "POST",
-    "contentType": "form",
     "preStep": {
       "url": "login",
       "extract": {
@@ -17,51 +15,9 @@
     },
     "body": {
       "_token": "{{_csrf}}",
-      "username": "{{username}}",
+      "username_email": "{{username}}",
       "password": "{{password}}",
       "remember": "on"
-    },
-    "failurePatterns": [
-      "name=\"password\"",
-      "type=\"password\"",
-      "cf-turnstile",
-      "g-recaptcha",
-      "grecaptcha"
-    ],
-    "cookieOnly": true
-  },
-  "fetch": {
-    "url": "/",
-    "mode": "browser",
-    "responseType": "html",
-    "fields": {
-      "uploadedBytes": {
-        "regex": "fa-arrow-up[\\s\\S]{0,40}?</i>\\s*(?<value>[\\d.,]+\\s*[KMGTPE]?i?B)",
-        "transform": "bytes"
-      },
-      "downloadedBytes": {
-        "regex": "fa-arrow-down[\\s\\S]{0,40}?</i>\\s*(?<value>[\\d.,]+\\s*[KMGTPE]?i?B)",
-        "transform": "bytes"
-      },
-      "ratio": {
-        "regex": "fa-signal[\\s\\S]{0,40}?</i>\\s*(?<value>[\\d.,]+)",
-        "transform": "number"
-      },
-      "bufferBytes": {
-        "regex": "fa-database[\\s\\S]{0,40}?</i>\\s*(?<value>[\\d.,]+\\s*[KMGTPE]?i?B)",
-        "transform": "bytes"
-      },
-      "seeding": {
-        "regex": "Seeding:</a>\\s*(?<value>\\d+)",
-        "transform": "integer"
-      },
-      "seedBonus": {
-        "regex": "Bonus:</a>\\s*(?<value>[\\d.,]+)",
-        "transform": "string"
-      }
     }
-  },
-  "dashboard": {
-    "byteUnit": "decimal"
   }
 }

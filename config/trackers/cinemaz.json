@@ -1,0 +1,7 @@
+{
+  "id": "cinemaz",
+  "name": "CinemaZ",
+  "baseUrl": "https://cinemaz.to",
+  "enabled": false,
+  "engine": "avistaznetwork"
+}

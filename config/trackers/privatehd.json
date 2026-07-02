@@ -1,0 +1,7 @@
+{
+  "id": "privatehd",
+  "name": "PrivateHD",
+  "baseUrl": "https://privatehd.to",
+  "enabled": false,
+  "engine": "avistaznetwork"
+}

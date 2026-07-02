@@ -1,0 +1,7 @@
+{
+  "id": "avistaz",
+  "name": "AvistaZ",
+  "baseUrl": "https://avistaz.to",
+  "enabled": false,
+  "engine": "avistaznetwork"
+}
