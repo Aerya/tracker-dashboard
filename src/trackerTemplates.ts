@@ -129,6 +129,55 @@ export const ENGINE_TEMPLATES: Record<EngineId, EngineTemplate> = {
     },
   },
 
+  avistaznetwork: {
+    id: 'avistaznetwork',
+    label: 'AvistaZ Network',
+    description: 'Réseau AvistaZ (Laravel) : page /auth/login avec captcha visuel obligatoire, stats en icônes FontAwesome.',
+    examples: ['AvistaZ', 'CinemaZ', 'ExoticaZ', 'PrivateHD'],
+    hint: "Si l'URL de login contient /auth/login, qu'un token _token est présent en meta ET en champ caché, et qu'un captcha visuel (image + champ 'captcha') bloque le POST automatique, c'est le réseau AvistaZ. Login impossible à automatiser à cause du captcha : cookieOnly obligatoire (cookie récupéré manuellement une fois, puis réutilisé).",
+    preset: {
+      login: {
+        url: 'auth/login',
+        method: 'POST',
+        contentType: 'form',
+        preStep: {
+          url: 'auth/login',
+          includeHiddenInputs: true,
+          extract: {
+            _csrf: { regex: 'name="_token"[^>]*?\\svalue="(?<value>[^"]+)"' },
+          },
+        },
+        body: {
+          _token: '{{_csrf}}',
+          email_username: '{{username}}',
+          password: '{{password}}',
+          remember: '1',
+        },
+        failurePatterns: [
+          'name="password"',
+          'type="password"',
+          'name="captcha"',
+          'img-captcha',
+        ],
+        cookieOnly: true,
+      },
+      fetch: {
+        url: '/',
+        mode: 'browser',
+        responseType: 'html',
+        fields: {
+          uploadedBytes:   { regex: 'fa-arrow-up[\\s\\S]{0,40}?</i>\\s*(?<value>[\\d.,]+\\s*[KMGTPE]?i?B)', transform: 'bytes' },
+          downloadedBytes: { regex: 'fa-arrow-down[\\s\\S]{0,40}?</i>\\s*(?<value>[\\d.,]+\\s*[KMGTPE]?i?B)', transform: 'bytes' },
+          ratio:           { regex: 'fa-signal[\\s\\S]{0,40}?</i>\\s*(?<value>[\\d.,]+)', transform: 'number' },
+          bufferBytes:     { regex: 'fa-database[\\s\\S]{0,40}?</i>\\s*(?<value>[\\d.,]+\\s*[KMGTPE]?i?B)', transform: 'bytes' },
+          seeding:         { regex: 'Seeding:</a>\\s*(?<value>\\d+)', transform: 'integer' },
+          seedBonus:       { regex: 'Bonus:</a>\\s*(?<value>[\\d.,]+)', transform: 'string' },
+        },
+      },
+      dashboard: { byteUnit: 'decimal' },
+    },
+  },
+
   jsonapi: {
     id: 'jsonapi',
     label: 'API JSON (avancé)',
@@ -266,6 +315,11 @@ export function detectEngineFromHtml(html: string, baseUrl: string): EngineId | 
   // "auth-form" générique seul, trop ambigu.
   if (h.includes('ratio-bar__')) {
     return 'unit3d';
+  }
+  // AvistaZ Network : variable JS obfusquée "AVISTAZ" propre à la plateforme,
+  // combinée au champ email_username pour éviter tout faux positif isolé.
+  if (h.includes('var avistaz') && h.includes('name="email_username"')) {
+    return 'avistaznetwork';
   }
   return null;
 }
