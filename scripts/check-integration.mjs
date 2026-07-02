@@ -12,6 +12,10 @@ const redactedPath = path.join(root, 'config', 'trackers', 'redacted.json');
 const tr4kerPath = path.join(root, 'config', 'trackers', 'tr4ker.json');
 const torr9Path = path.join(root, 'config', 'trackers', 'torr9.json');
 const lesRescapesPath = path.join(root, 'config', 'trackers', 'lesrescapesdeygg.json');
+const avistazPath = path.join(root, 'config', 'trackers', 'avistaz.json');
+const cinemazPath = path.join(root, 'config', 'trackers', 'cinemaz.json');
+const exoticazPath = path.join(root, 'config', 'trackers', 'exoticaz.json');
+const privatehdPath = path.join(root, 'config', 'trackers', 'privatehd.json');
 const nexumPath = path.join(root, 'config', 'trackers', 'nexum.json');
 const dbPath = path.join(root, 'src', 'db.ts');
 const html = fs.readFileSync(htmlPath, 'utf8');
@@ -25,7 +29,30 @@ const redacted = JSON.parse(fs.readFileSync(redactedPath, 'utf8'));
 const tr4ker = JSON.parse(fs.readFileSync(tr4kerPath, 'utf8'));
 const torr9 = JSON.parse(fs.readFileSync(torr9Path, 'utf8'));
 const lesRescapes = JSON.parse(fs.readFileSync(lesRescapesPath, 'utf8'));
+const { applyEnginePreset } = await import('../dist/trackerTemplates.js');
 const errors = [];
+
+const avistazTrackers = [avistazPath, cinemazPath, privatehdPath]
+  .map(file => applyEnginePreset(JSON.parse(fs.readFileSync(file, 'utf8'))));
+const exoticaz = applyEnginePreset(JSON.parse(fs.readFileSync(exoticazPath, 'utf8')));
+const avistazPresetIsUsable = avistazTrackers.every(tracker => (
+  tracker.login?.cookieOnly === true
+  && tracker.login?.url === 'auth/login'
+  && tracker.login?.body?.email_username === '{{username}}'
+  && tracker.fetch?.mode === 'browser'
+  && tracker.dashboard?.byteUnit === 'decimal'
+)) && (
+  exoticaz.login?.cookieOnly === true
+  && exoticaz.login?.url === 'login'
+  && exoticaz.login?.body?.username_email === '{{username}}'
+  && exoticaz.login?.body?.email_username === undefined
+  && exoticaz.fetch?.fields?.uploadedBytes
+) && (
+  server.match(/loadEffectiveTrackerDefinition\(definition\.id\)\?\.login\?\.cookieOnly/g)?.length === 2
+);
+if (!avistazPresetIsUsable) {
+  errors.push('AvistaZ Network definitions must resolve their cookie-only login and site-specific overrides before configuration');
+}
 
 const retiresClosedNexumTracker = (
   !fs.existsSync(nexumPath)

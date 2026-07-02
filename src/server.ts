@@ -18,6 +18,7 @@ import {
   listEngines,
   getEngineTemplate,
   detectEngineFromHtml,
+  applyEnginePreset,
 } from './trackerTemplates.js';
 import {
   loadProxySettings, saveProxySettings, buildProxyConfig, logProxyStatus, resolveProxyForTracker, ensureProxyReady,
@@ -349,6 +350,11 @@ function normalizeTrackerConfigs(): TrackerConfig[] {
     if (changed) saveTrackerConfig(tracker);
   }
   return loadTrackerConfigsFromDb();
+}
+
+function loadEffectiveTrackerDefinition(trackerId: string): TrackerConfig | null {
+  const definition = loadTrackerDefinitionFile(trackerId);
+  return definition ? applyEnginePreset(definition) : null;
 }
 
 /**
@@ -2710,7 +2716,7 @@ export async function start(): Promise<void> {
     const cookieSummaries = listTrackerDefinitionFiles().map(definition => {
       const configured = trackers.find(tracker => tracker.id === definition.id);
       const hasCookie = hasTrackerCookie(definition.id);
-      const cookieOnly = Boolean(configured?.login?.cookieOnly ?? loadTrackerDefinitionFile(definition.id)?.login?.cookieOnly);
+      const cookieOnly = Boolean(configured?.login?.cookieOnly ?? loadEffectiveTrackerDefinition(definition.id)?.login?.cookieOnly);
       return { trackerId: definition.id, trackerName: definition.name, hasCookie, cookieOnly };
     });
     res.json({
@@ -2823,7 +2829,7 @@ export async function start(): Promise<void> {
   app.get('/api/beta/trackers/:trackerId/proxy-check', async (req, res) => {
     trackers = normalizeTrackerConfigs();
     const tracker = trackers.find(item => item.id === req.params.trackerId)
-      ?? loadTrackerDefinitionFile(req.params.trackerId);
+      ?? loadEffectiveTrackerDefinition(req.params.trackerId);
     if (!tracker) return res.status(404).json({ ok: false, error: 'Tracker introuvable' });
     try {
       await ensureProxyReady(tracker.id);
@@ -2896,7 +2902,7 @@ export async function start(): Promise<void> {
     importLegacyTrackersIfNeeded();
     trackers = normalizeTrackerConfigs();
     const tracker = trackers.find(t => t.id === req.params.trackerId)
-      ?? loadTrackerDefinitionFile(req.params.trackerId);
+      ?? loadEffectiveTrackerDefinition(req.params.trackerId);
     if (!tracker) return res.status(404).json({ ok: false, error: 'Tracker introuvable' });
 
     tracker.enabled = Boolean(req.body.enabled);
@@ -2915,7 +2921,7 @@ export async function start(): Promise<void> {
     if (!name) return res.status(400).json({ ok: false, error: 'Nom requis.' });
     if (name.length > 80) return res.status(400).json({ ok: false, error: 'Nom trop long (80 caracteres max).' });
     const tracker = loadTrackerConfigsFromDb().find(t => t.id === trackerId)
-      ?? loadTrackerDefinitionFile(trackerId);
+      ?? loadEffectiveTrackerDefinition(trackerId);
     if (!tracker) return res.status(404).json({ ok: false, error: 'Tracker introuvable' });
     saveTrackerConfig({ ...tracker, name });
     trackers = normalizeTrackerConfigs();
@@ -2930,7 +2936,7 @@ export async function start(): Promise<void> {
     importLegacyTrackersIfNeeded();
     const sourceId = req.params.trackerId;
     const source = loadTrackerConfigsFromDb().find(t => t.id === sourceId)
-      ?? loadTrackerDefinitionFile(sourceId);
+      ?? loadEffectiveTrackerDefinition(sourceId);
     if (!source) return res.status(404).json({ ok: false, error: 'Tracker introuvable' });
 
     const baseId = source.baseId ?? source.id;
@@ -3200,7 +3206,7 @@ export async function start(): Promise<void> {
             hasPassword: credentials.get(definition.id)?.hasPassword ?? false,
             hasCookie: hasTrackerCookie(definition.id),
             hasTotp: hasTrackerTotpSecret(definition.id),
-            cookieOnly: Boolean(tracker?.login?.cookieOnly ?? loadTrackerDefinitionFile(definition.id)?.login?.cookieOnly),
+            cookieOnly: Boolean(tracker?.login?.cookieOnly ?? loadEffectiveTrackerDefinition(definition.id)?.login?.cookieOnly),
             updatedAt: credentials.get(definition.id)?.updatedAt ?? null,
           };
         })
@@ -3211,7 +3217,7 @@ export async function start(): Promise<void> {
   app.post('/api/credentials/:trackerId', (req, res) => {
     trackers = loadTrackerConfigsFromDb();
     const tracker = trackers.find(t => t.id === req.params.trackerId)
-      ?? loadTrackerDefinitionFile(req.params.trackerId);
+      ?? loadEffectiveTrackerDefinition(req.params.trackerId);
     if (!tracker) return res.status(404).json({ ok: false, error: 'Tracker introuvable' });
 
     const { username, password } = req.body as { username?: string; password?: string };
@@ -3233,7 +3239,7 @@ export async function start(): Promise<void> {
   app.delete('/api/credentials/:trackerId', (req, res) => {
     trackers = normalizeTrackerConfigs();
     const tracker = trackers.find(t => t.id === req.params.trackerId)
-      ?? loadTrackerDefinitionFile(req.params.trackerId);
+      ?? loadEffectiveTrackerDefinition(req.params.trackerId);
     if (!tracker) return res.status(404).json({ ok: false, error: 'Tracker introuvable' });
     deleteTrackerCredentials(tracker.id);
     invalidateSession(tracker.id);
