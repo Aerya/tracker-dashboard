@@ -1,0 +1,45 @@
+{
+  "id": "karagarga",
+  "name": "KaraGarga",
+  "baseUrl": "https://karagarga.in",
+  "enabled": false,
+  "login": {
+    "url": "login.php",
+    "postUrl": "takelogin.php",
+    "method": "POST",
+    "contentType": "form",
+    "body": {
+      "username": "{{username}}",
+      "password": "{{password}}"
+    },
+    "failurePatterns": [
+      "type=\"password\"",
+      "name=\"password\""
+    ]
+  },
+  "fetch": {
+    "url": "/",
+    "responseType": "html",
+    "fields": {
+      "uploadedBytes": {
+        "regex": "Ratio:[\\s\\S]{0,120}?&#8593;<font[^>]*>\\s*(?<value>[\\d.,]+\\s*[KMGTPE]i?B)\\s*</font>",
+        "transform": "bytes"
+      },
+      "downloadedBytes": {
+        "regex": "Ratio:[\\s\\S]{0,160}?w/\\s*(?<value>[\\d.,]+\\s*[KMGTPE]i?B)",
+        "transform": "bytes"
+      },
+      "ratio": {
+        "regex": "Ratio:\\s*<font[^>]*>\\s*(?<value>[\\d.,]+)\\s*</font>",
+        "transform": "number"
+      },
+      "memberClass": {
+        "regex": "<font color=blue>\\s*(?<value>[^<]+?)\\s*</font>",
+        "transform": "string"
+      }
+    }
+  },
+  "dashboard": {
+    "byteUnit": "decimal"
+  }
+}
