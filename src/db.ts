@@ -59,6 +59,16 @@ export interface StatSnapshotSummary {
 
 let db: Database | null = null;
 
+// SQLite CURRENT_TIMESTAMP est en UTC mais renvoie "YYYY-MM-DD HH:MM:SS",
+// sans suffixe de fuseau. Les navigateurs l'interprètent alors comme une heure
+// locale. Normaliser ce format en ISO UTC avant de l'exposer à l'API.
+function dbTimestampToIso(value: unknown): string | null {
+  if (value === null || value === undefined || value === '') return null;
+  const raw = String(value).trim();
+  const sqliteUtc = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}(?:\.\d+)?)$/.exec(raw);
+  return sqliteUtc ? `${sqliteUtc[1]}T${sqliteUtc[2]}Z` : raw;
+}
+
 export function getDb(): Database {
   if (!db) {
     fs.mkdirSync(CONFIG_DIR, { recursive: true });
@@ -515,7 +525,7 @@ export function listTrackerCredentialSummaries(): TrackerCredentialSummary[] {
       trackerId: String(row.tracker_id),
       username: String(row.username),
       hasPassword: Boolean(row.password),
-      updatedAt: row.updated_at ? String(row.updated_at) : null,
+      updatedAt: dbTimestampToIso(row.updated_at),
     }));
 }
 
@@ -604,8 +614,8 @@ export function listTrackerSchedules(): TrackerSchedule[] {
       trackerId: String(row.tracker_id),
       enabled: Boolean(row.enabled),
       intervalHours: Number(row.interval_hours),
-      nextRunAt: row.next_run_at ? String(row.next_run_at) : null,
-      lastRunAt: row.last_run_at ? String(row.last_run_at) : null,
+      nextRunAt: dbTimestampToIso(row.next_run_at),
+      lastRunAt: dbTimestampToIso(row.last_run_at),
     }));
 }
 
@@ -622,8 +632,8 @@ export function getTrackerSchedule(trackerId: string): TrackerSchedule | null {
     trackerId: String(row.tracker_id),
     enabled: Boolean(row.enabled),
     intervalHours: Number(row.interval_hours),
-    nextRunAt: row.next_run_at ? String(row.next_run_at) : null,
-    lastRunAt: row.last_run_at ? String(row.last_run_at) : null,
+    nextRunAt: dbTimestampToIso(row.next_run_at),
+    lastRunAt: dbTimestampToIso(row.last_run_at),
   };
 }
 
@@ -700,7 +710,7 @@ export function getLatestOkStatSnapshot(tracker: TrackerConfig): TrackerStats | 
       name: String(row.tracker_name || tracker.name),
       trackerUrl: tracker.baseUrl,
       status: 'ok',
-      lastUpdated: String(row.captured_at),
+      lastUpdated: dbTimestampToIso(row.captured_at) ?? String(row.captured_at),
       byteUnit: tracker.dashboard?.byteUnit ?? 'binary',
       fields,
     };
@@ -739,7 +749,7 @@ export function listStatSnapshots(trackerId: string | null, limit = 500): StatSn
           status: String(row.status),
           error: row.error === null || row.error === undefined ? null : String(row.error),
           fields: JSON.parse(String(row.fields_json)) as Record<string, string | number>,
-          capturedAt: String(row.captured_at),
+          capturedAt: dbTimestampToIso(row.captured_at) ?? String(row.captured_at),
         };
       } catch {
         return null;

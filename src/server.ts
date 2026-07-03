@@ -126,6 +126,19 @@ function startupBanner(port: number): string {
 
 let cachedStats: TrackerStats[] = [];
 let lastRefresh: string | null  = null;
+
+function appTimeZone(): string {
+  const configured = String(process.env.TZ || '').trim();
+  if (configured) {
+    try {
+      new Intl.DateTimeFormat('fr-FR', { timeZone: configured }).format();
+      return configured;
+    } catch {
+      console.warn(`[Fuseau horaire] TZ invalide: ${configured}`);
+    }
+  }
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+}
 let isRefreshing                = false;
 const pendingScheduledRuns = new Set<string>();
 
@@ -2682,7 +2695,7 @@ export async function start(): Promise<void> {
       ratioless: Boolean(ratioless),
       baseId,
     }));
-    res.json({ trackers: safe });
+    res.json({ trackers: safe, timeZone: appTimeZone() });
   });
 
   app.get('/api/beta/cross-seed/summary', (_req, res) => {

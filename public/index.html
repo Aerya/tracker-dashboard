@@ -2572,6 +2572,17 @@
 </div>
 
 <script>
+  let dashboardTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+
+  function setDashboardTimeZone(value) {
+    if (!value || typeof value !== 'string') return;
+    try {
+      new Intl.DateTimeFormat('fr-FR', { timeZone: value }).format();
+      dashboardTimeZone = value;
+    } catch {
+      // Conserver le fuseau du navigateur si le serveur fournit une valeur invalide.
+    }
+  }
   // ─── Formatage ─────────────────────────────────────────────────────────────
 
   function formatBytes(bytes, byteUnit = 'binary') {
@@ -2653,6 +2664,7 @@
     return new Intl.DateTimeFormat('fr-FR', {
       dateStyle: 'short',
       timeStyle: 'short',
+      timeZone: dashboardTimeZone,
     }).format(new Date(iso));
   }
 
@@ -4979,7 +4991,7 @@
       <div id="beta-schedule-weekdays" class="beta-form-row" style="grid-template-columns:1fr">
         <div class="beta-field"><label>Jours</label><div style="display:flex;gap:8px;flex-wrap:wrap">${dayLabels.map((label, day) => `<label><input type="checkbox" data-beta-weekday="${day}" ${weekdays.has(day) ? 'checked' : ''}> ${label}</label>`).join('')}</div></div>
       </div>
-      <p class="beta-note">Prochaine exécution : ${schedule.nextRunAt ? escapeHtml(new Date(schedule.nextRunAt).toLocaleString('fr-FR')) : 'non planifiée'}${schedule.lastRunAt ? ` · Dernière : ${escapeHtml(new Date(schedule.lastRunAt).toLocaleString('fr-FR'))}` : ''}</p>
+      <p class="beta-note">Prochaine exécution : ${schedule.nextRunAt ? escapeHtml(formatDateTime(schedule.nextRunAt)) : 'non planifiée'}${schedule.lastRunAt ? ` · Dernière : ${escapeHtml(formatDateTime(schedule.lastRunAt))}` : ''}</p>
       <div style="margin:10px 0 6px; display:flex; gap:8px; flex-wrap:wrap">
         <button class="beta-icon-btn primary" onclick="saveBetaSettings()" type="button">Enregistrer</button>
       </div>
@@ -4990,7 +5002,7 @@
         ${trackerConfig.filter(tracker => tracker.enabled !== false).map(tracker => {
           const override = (betaSettings.scheduleOverrides || []).find(item => item.trackerId === tracker.id) || { mode: 'global', intervalHours: 24 };
           const value = override.mode === 'interval' ? String(override.intervalHours) : override.mode;
-          const next = override.nextRunAt ? ` · prochaine ${escapeHtml(new Date(override.nextRunAt).toLocaleString('fr-FR'))}` : '';
+          const next = override.nextRunAt ? ` · prochaine ${escapeHtml(formatDateTime(override.nextRunAt))}` : '';
           return `<div class="beta-form-row" data-beta-schedule-override="${escapeHtml(tracker.id)}" style="grid-template-columns:2fr 1fr">
             <div class="beta-field"><label>${escapeHtml(tracker.name)}</label><span class="beta-note">${value === 'global' ? 'Suit le calendrier global' : value === 'disabled' ? 'Login planifié désactivé' : `Toutes les ${value}h${next}`}</span></div>
             <div class="beta-field"><label>Fréquence</label><select data-field="scheduleMode"><option value="global" ${value === 'global' ? 'selected' : ''}>Global</option><option value="disabled" ${value === 'disabled' ? 'selected' : ''}>Désactivé</option>${[6,12,24,48,168,504].map(hours => `<option value="${hours}" ${value === String(hours) ? 'selected' : ''}>${hours < 168 ? `${hours}h` : `${hours / 24}j`}</option>`).join('')}</select></div>
@@ -6573,6 +6585,7 @@
     try {
       const r = await fetch('/api/config');
       const d = await r.json();
+      setDashboardTimeZone(d.timeZone);
       trackerConfig = d.trackers || [];
       trackerCount = d.trackers.filter(t => t.enabled).length;
       renderSchedulePanel(trackerConfig);
