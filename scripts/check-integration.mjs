@@ -54,6 +54,15 @@ if (!avistazPresetIsUsable) {
   errors.push('AvistaZ Network definitions must resolve their cookie-only login and site-specific overrides before configuration');
 }
 
+const honorsServerTimeZone = (
+  server.includes('timeZone: appTimeZone()')
+  && html.includes('setDashboardTimeZone(d.timeZone)')
+  && html.includes('timeZone: dashboardTimeZone')
+);
+if (!honorsServerTimeZone) {
+  errors.push('Displayed timestamps must honor the server TZ setting');
+}
+
 const retiresClosedNexumTracker = (
   !fs.existsSync(nexumPath)
   && readme.includes('Retrait de Nexum')
