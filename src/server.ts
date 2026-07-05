@@ -2642,12 +2642,17 @@ export async function start(): Promise<void> {
     }
     trackers = normalizeTrackerConfigs();
     const qbitSeeding = qbitSeedingByTrackerId(trackers);
+    const trackerById = new Map(trackers.map(tracker => [tracker.id, tracker]));
     const stats = applyTrackerOrder(visibleStats(trackers)).map(stat => {
       const entry = qbitSeeding.get(stat.id);
+      const config = trackerById.get(stat.id);
       return {
         ...stat,
         qbitSeeding: entry ? entry.count : null,
         qbitSeedingTypes: entry ? [...entry.types] : [],
+        // Prerequis du tracker (badges UI) : cookie de session colle / runtime navigateur.
+        requiresCookie: Boolean(config?.login?.cookieOnly),
+        requiresBrowser: config?.fetch?.mode === 'browser',
       };
     });
     res.json({ stats, lastRefresh, isRefreshing });
@@ -2875,6 +2880,9 @@ export async function start(): Promise<void> {
     const definitions = listAllTrackerSummaries()
       .map(definition => {
         const configuredTracker = configured.get(definition.id);
+        // Prerequis affiches dans l'UI (badges) : resolus sur la config effective
+        // (preset moteur applique), car ex. le mode browser de Gazelle vient du preset.
+        const effective = configuredTracker ?? loadEffectiveTrackerDefinition(definition.id);
         return {
           ...definition,
           enabled: Boolean(configuredTracker && configuredTracker.enabled !== false),
@@ -2882,6 +2890,8 @@ export async function start(): Promise<void> {
           isDefault: isDefaultTracker(definition.id),
           isCustom: !isDefaultTracker(definition.id),
           baseId: configuredTracker?.baseId ?? definition.baseId,
+          requiresCookie: Boolean(effective?.login?.cookieOnly),
+          requiresBrowser: effective?.fetch?.mode === 'browser',
         };
       })
       .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
