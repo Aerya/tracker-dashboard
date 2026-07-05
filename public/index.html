@@ -1622,6 +1622,20 @@
       vertical-align: middle;
       cursor: help;
     }
+    /* Pastilles de prérequis (cookie de session, runtime navigateur) : icône seule,
+       affichées dans la liste principale, le sélecteur de trackers et la fiche config. */
+    .req-marks { display: inline-flex; gap: 4px; align-items: center; vertical-align: middle; flex: none; }
+    .req-mark {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 18px; height: 18px; border-radius: 5px; cursor: help; flex: none;
+    }
+    .req-mark svg { width: 12px; height: 12px; }
+    .req-mark-cookie { color: var(--yellow); background: color-mix(in srgb, var(--yellow) 15%, transparent); }
+    .req-mark-browser { color: var(--blue); background: color-mix(in srgb, var(--blue) 15%, transparent); }
+    .req-mark-browser-missing { color: var(--red); background: color-mix(in srgb, var(--red) 15%, transparent); }
+    .nav-sub-item .req-marks { margin-left: auto; }
+    .nav-sub-item .req-mark { width: 16px; height: 16px; }
+    .nav-sub-item .req-mark svg { width: 11px; height: 11px; }
     .definition-new-slot {
       display: block;
       min-width: 0;
@@ -2959,6 +2973,44 @@
     return crossSeedMarks([...counts.keys()], { linked, counts });
   }
 
+  // Icônes de prérequis (style Lucide, trait fin, couleur héritée).
+  const REQ_ICON_COOKIE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5"/><path d="M8.5 8.5v.01"/><path d="M16 15.5v.01"/><path d="M12 12v.01"/><path d="M11 17v.01"/><path d="M7 14v.01"/></svg>';
+  const REQ_ICON_BROWSER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 4v4"/><path d="M2 8h20"/><path d="M6 4v4"/></svg>';
+
+  // Disponibilité du runtime navigateur externe : null = inconnue, sinon booléen.
+  // Alimenté par loadBrowserRuntimeStatus() ; colore la pastille « navigateur ».
+  let browserRuntimeAvailable = null;
+
+  // Met à jour la disponibilité du runtime et re-rend les pastilles qui en
+  // dépendent (liste principale, sélecteur, fiche config) si l'état a changé.
+  function updateBrowserRuntimeAvailability(available) {
+    if (browserRuntimeAvailable === available) return;
+    browserRuntimeAvailable = available;
+    try {
+      if (latestSortedStats.length) renderGrid();
+      renderTrackerConfigNav();
+      renderSelectedTrackerCard();
+    } catch (e) { console.warn('updateBrowserRuntimeAvailability:', e.message); }
+  }
+
+  // Pastilles de prérequis d'un tracker (item = définition ou stat portant
+  // requiresCookie / requiresBrowser). Icône seule + tooltip explicatif.
+  function requirementMarks(item) {
+    if (!item) return '';
+    const marks = [];
+    if (item.requiresCookie) {
+      marks.push(`<span class="req-mark req-mark-cookie" title="Fonctionne uniquement par cookie de session collé (pas de login par identifiants). Le cookie devra être renouvelé quand il expire.">${REQ_ICON_COOKIE}</span>`);
+    }
+    if (item.requiresBrowser) {
+      const missing = browserRuntimeAvailable === false;
+      const title = missing
+        ? 'Nécessite le conteneur tracker-dashboard-browser — non détecté. Voir Configuration → Runtime navigateur.'
+        : 'Récupère ses stats via le runtime navigateur (conteneur tracker-dashboard-browser).';
+      marks.push(`<span class="req-mark ${missing ? 'req-mark-browser-missing' : 'req-mark-browser'}" title="${title}">${REQ_ICON_BROWSER}</span>`);
+    }
+    return marks.length ? `<span class="req-marks">${marks.join('')}</span>` : '';
+  }
+
   function trackerName(stat) {
     const href = trackerLink(stat);
     const name = escapeHtml(stat.name);
@@ -2969,7 +3021,7 @@
     const tracker = href
       ? `<a class="${cls}"${staleTitle} href="${escapeHtml(href)}" target="_blank" rel="noreferrer noopener">${logo}${name}${dot}</a>`
       : `<span class="${cls}"${staleTitle}>${logo}${name}${dot}</span>`;
-    return `<span class="tracker-name-line">${tracker}${crossSeedTrackerMarks(stat.id)}</span>`;
+    return `<span class="tracker-name-line">${tracker}${requirementMarks(stat)}${crossSeedTrackerMarks(stat.id)}</span>`;
   }
 
   function staleBadge(stat) {
@@ -3287,7 +3339,7 @@
     const nameById = new Map(cachedTrackerDefinitions.map(def => [def.id, def.name]));
     const itemHtml = def => `
       <button class="nav-sub-item ${currentView === 'trackers' && def.id === configSelectedTrackerId ? 'active' : ''}" onclick="openTrackerConfig('${escapeHtml(def.id)}')" type="button">
-        <span class="nav-sub-name">${escapeHtml(def.name)}</span>
+        <span class="nav-sub-name">${escapeHtml(def.name)}</span>${requirementMarks(def)}
       </button>`;
     if (subAdd) {
       const groups = groupTrackersByBase(cachedTrackerDefinitions.filter(def => !def.enabled), nameById);
@@ -6228,19 +6280,34 @@
   function trackerDefinitionCardHtml(definition, credential = {}, isNew = false) {
     const isEnabled = Boolean(definition.enabled);
     const safeId = escapeHtml(definition.id);
-    const cookieOnly = Boolean(credential.cookieOnly);
+    const cookieOnly = Boolean(credential.cookieOnly || definition.requiresCookie);
     const statusBadge = cookieOnly
       ? `<span class="credential-badge ${credential.hasCookie ? 'credential-ok' : 'credential-missing'}">${credential.hasCookie ? 'Cookie OK' : 'Cookie requis'}</span>`
       : `<span class="credential-badge ${credential.hasPassword ? 'credential-ok' : 'credential-missing'}">${credential.hasPassword ? 'Configuré' : 'Manquant'}</span>`;
+    // Bloc cookie de session : champ principal pour un tracker cookie-only (les
+    // identifiants sont masqués, inutiles), sinon rangé dans Options avancées.
+    const cookieFieldHtml = `
+                      <div class="advanced-cookie-row">
+                        <textarea class="tracker-input" id="credential-cookie-${safeId}" autocomplete="off" rows="3" spellcheck="false" style="flex:1; resize:vertical; font-family:monospace; font-size:11px; white-space:pre"
+                          placeholder="${credential.hasCookie ? '•••••••• (enregistré — colle pour remplacer, vide pour effacer)' : 'Colle ici un fichier cookies.txt (Netscape), un export JSON Cookie-Editor, ou nom=valeur; nom2=valeur2'}"
+                          title="Connecte-toi au site dans ton navigateur avec la même IP de sortie que celle configurée pour ce tracker (même proxy ou même connexion directe), puis exporte les cookies. Le dashboard les injecte dans le navigateur headless et saute le login + Turnstile."></textarea>
+                        <button class="btn-save" style="padding:6px 10px" onclick="saveTrackerCookie('${safeId}', this)">Enregistrer cookie</button>
+                      </div>`;
     return `
               <div class="definition-row" id="tracker-def-${safeId}">
                 <div class="definition-info">
-                  <strong>${trackerLogo(definition.id)}${escapeHtml(definition.name)}${definition.baseId ? ' <span class="definition-badge" title="Compte dupliqué : même site et même login que le tracker source, identifiants et stats indépendants.">Copie</span>' : ''}${cookieOnly ? ' <span class="definition-badge definition-badge-cookie" title="Login automatique désactivé : ce tracker nécessite un cookie de session (CAPTCHA/anti-bot). Renseigne-le dans Options avancées.">Cookie uniquement</span>' : ''}</strong>
+                  <strong>${trackerLogo(definition.id)}${escapeHtml(definition.name)}${definition.baseId ? ' <span class="definition-badge" title="Compte dupliqué : même site et même login que le tracker source, identifiants et stats indépendants.">Copie</span>' : ''}${cookieOnly ? ' <span class="definition-badge definition-badge-cookie" title="Login automatique désactivé : ce site fonctionne uniquement par cookie de session collé (CAPTCHA/anti-bot). Renseigne le cookie ci-dessous ; il devra être renouvelé quand il expire.">Cookie uniquement</span>' : ''}${definition.requiresBrowser ? ` ${requirementMarks({ requiresBrowser: true })}` : ''}</strong>
                   <small>${escapeHtml(definition.file)} · <a href="${escapeHtml(definition.baseUrl)}" target="_blank" rel="noreferrer noopener">${escapeHtml(definition.baseUrl)}</a></small>
                 </div>
                 ${isNew ? '<span class="definition-badge">Nouveau</span>' : '<span class="definition-new-slot"></span>'}
                 <span class="definition-badge ${isEnabled ? '' : 'definition-badge-muted'}">${isEnabled ? 'Actif' : 'Disponible'}</span>
                 ${statusBadge}
+                ${cookieOnly ? `
+                <div class="tracker-field" style="grid-column: span 2">
+                  <label>Cookie de session <span style="color:var(--muted)">— seul mode de connexion de ce site${credential.hasCookie ? ' · <b style="color:var(--green)">défini</b>' : ''}</span></label>
+                  ${cookieFieldHtml}
+                </div>
+                <div class="definition-actions"></div>` : `
                 <div class="tracker-field">
                   <label>Utilisateur</label>
                   <input class="tracker-input" id="credential-user-${safeId}" value="${escapeHtml(credential.username || '')}" autocomplete="off">
@@ -6251,7 +6318,7 @@
                 </div>
                 <div class="definition-actions">
                   <button class="btn-save" style="padding:6px 8px" onclick="saveTrackerCredential('${safeId}')">Enregistrer</button>
-                </div>
+                </div>`}
                 <div class="definition-actions">
                   <button class="btn-test" style="padding:6px 10px" onclick="resetCredential('${safeId}')">Réinitialiser</button>
                 </div>
@@ -6271,16 +6338,15 @@
                 <details class="definition-advanced" style="grid-column:1/-1">
                   <summary>Options avancées${credential.hasCookie ? ' · <b style="color:var(--green)">cookie défini</b>' : ''}${credential.hasTotp ? ' · <b style="color:var(--green)">2FA défini</b>' : ''}</summary>
                   <div class="definition-advanced-body">
+                    ${cookieOnly ? `
+                    <div class="advanced-field advanced-cookie-field">
+                      <p class="beta-note" style="margin-top:0"><b>Important :</b> exporte tous les cookies avec la même IP de sortie que celle utilisée par ce tracker dans Tracker Dashboard (même proxy, ou même connexion directe). Vérifie notamment que <code>cf_clearance</code> est présent pour les sites protégés par Cloudflare ; les sessions liées à l’IP et les cookies anti-bot seront sinon refusés.</p>
+                    </div>` : `
                     <div class="advanced-field advanced-cookie-field">
                       <label>Cookie de session <span style="color:var(--muted)">— sites à CAPTCHA / Cloudflare Turnstile${credential.hasCookie ? ' · <b style="color:var(--green)">défini</b>' : ''}</span></label>
-                      <div class="advanced-cookie-row">
-                        <textarea class="tracker-input" id="credential-cookie-${safeId}" autocomplete="off" rows="3" spellcheck="false" style="flex:1; resize:vertical; font-family:monospace; font-size:11px; white-space:pre"
-                          placeholder="${credential.hasCookie ? '•••••••• (enregistré — colle pour remplacer, vide pour effacer)' : 'Colle ici un fichier cookies.txt (Netscape), un export JSON Cookie-Editor, ou nom=valeur; nom2=valeur2'}"
-                          title="Connecte-toi au site dans ton navigateur avec la même IP de sortie que celle configurée pour ce tracker (même proxy ou même connexion directe), puis exporte les cookies. Le dashboard les injecte dans le navigateur headless et saute le login + Turnstile."></textarea>
-                        <button class="btn-save" style="padding:6px 10px" onclick="saveTrackerCookie('${safeId}', this)">Enregistrer cookie</button>
-                      </div>
+                      ${cookieFieldHtml}
                       <p class="beta-note" style="margin-top:6px"><b>Important :</b> exporte tous les cookies avec la même IP de sortie que celle utilisée par ce tracker dans Tracker Dashboard (même proxy, ou même connexion directe). Vérifie notamment que <code>cf_clearance</code> est présent pour les sites protégés par Cloudflare ; les sessions liées à l’IP et les cookies anti-bot seront sinon refusés.</p>
-                    </div>
+                    </div>`}
                     <div class="advanced-field advanced-cookie-field">
                       <label>Secret 2FA (TOTP) <span style="color:var(--muted)">— authentification à deux facteurs${credential.hasTotp ? ' · <b style="color:var(--green)">défini</b>' : ''}</span></label>
                       <div class="advanced-cookie-row">
@@ -6389,6 +6455,15 @@
   }
 
   async function setTrackerEnabled(trackerId, enabled) {
+    // Prévenir avant d'activer un tracker qui dépend du runtime navigateur
+    // quand celui-ci n'est pas détecté : sans lui, le refresh échouera.
+    if (enabled) {
+      const definition = cachedTrackerDefinitions.find(def => def.id === trackerId);
+      if (definition?.requiresBrowser && browserRuntimeAvailable === false) {
+        const proceed = confirm(`${definition.name} récupère ses stats via le conteneur tracker-dashboard-browser, qui n'est pas détecté.\n\nSans lui, ce tracker restera en erreur. Les instructions d'installation sont dans Configuration → Runtime navigateur.\n\nActiver quand même ?`);
+        if (!proceed) return;
+      }
+    }
     await fetch(`/api/trackers/${trackerId}/enabled`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -6767,6 +6842,7 @@
       const r = await fetch('/api/browser-runtime/status');
       const d = await r.json();
       const s = d.status || {};
+      updateBrowserRuntimeAvailability(Boolean(s.available));
       if (s.available) {
         const stale = s.upToDate === false;
         badge.textContent = stale ? 'Runtime navigateur — mise à jour requise' : 'Runtime navigateur — disponible';
