@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Container version="2">
+  <Name>tracker-dashboard-flaresolverr</Name>
+  <Repository>ghcr.io/flaresolverr/flaresolverr:latest</Repository>
+  <Registry>https://github.com/orgs/FlareSolverr/packages/container/package/flaresolverr</Registry>
+  <Network>container:tracker-dashboard</Network>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/Tracker-Dashboard/tracker-dashboard/issues</Support>
+  <Project>https://github.com/FlareSolverr/FlareSolverr</Project>
+  <Overview>Sidecar FlareSolverr facultatif pour Tracker Dashboard. Il partage le réseau du conteneur principal afin de rester accessible uniquement sur 127.0.0.1:8191.</Overview>
+  <Category>Tools:</Category>
+  <WebUI/>
+  <TemplateURL>https://raw.githubusercontent.com/Tracker-Dashboard/tracker-dashboard/main/unraid/tracker-dashboard-flaresolverr.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/Tracker-Dashboard/tracker-dashboard/main/public/logo.png</Icon>
+  <ExtraParams>--restart=unless-stopped</ExtraParams>
+  <PostArgs/>
+  <Config Name="Adresse d'écoute" Target="HOST" Default="127.0.0.1" Mode="" Description="Conserver 127.0.0.1 : FlareSolverr partage le réseau de Tracker Dashboard." Type="Variable" Display="always-hide" Required="true" Mask="false">127.0.0.1</Config>
+  <Config Name="Niveau de journalisation" Target="LOG_LEVEL" Default="warning" Mode="" Description="Niveau de logs FlareSolverr." Type="Variable" Display="advanced" Required="true" Mask="false">warning</Config>
+  <Config Name="Fuseau horaire" Target="TZ" Default="Europe/Paris" Mode="" Description="Fuseau IANA utilisé par FlareSolverr." Type="Variable" Display="always" Required="true" Mask="false">Europe/Paris</Config>
+</Container>

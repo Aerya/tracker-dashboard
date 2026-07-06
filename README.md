@@ -161,6 +161,10 @@ Avec le type **SSH**, le dashboard ouvre un tunnel SSH (SOCKS5 local adossé au 
 
 ## Runtime navigateur
 
+### Unraid — templates bêta
+
+Des templates Unraid sont disponibles pour installer séparément l'application, le runtime navigateur et FlareSolverr sans Docker Compose. Consultez le [guide Unraid](unraid/README.md). Nous recherchons activement des retours avant une éventuelle publication dans Community Applications.
+
 Le navigateur (Playwright/Chromium/CloakBrowser) est externalisé dans l'image `ghcr.io/tracker-dashboard/tracker-dashboard-browser:latest`. L'image principale reste allégée.
 
 Si vous gérez Tracker Dashboard avec Compose, ajoutez une petite stack parallèle pour le runtime navigateur :
