@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Container version="2">
+  <Name>tracker-dashboard-browser</Name>
+  <Repository>ghcr.io/tracker-dashboard/tracker-dashboard-browser:latest</Repository>
+  <Registry>https://github.com/orgs/Tracker-Dashboard/packages/container/package/tracker-dashboard-browser</Registry>
+  <Network>container:tracker-dashboard</Network>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/Tracker-Dashboard/tracker-dashboard/issues</Support>
+  <Project>https://github.com/Tracker-Dashboard/tracker-dashboard</Project>
+  <Overview>Runtime Playwright, Chromium et CloakBrowser de Tracker Dashboard. Le conteneur tracker-dashboard doit être installé et démarré avant celui-ci. Aucun port ne doit être exposé.</Overview>
+  <Category>Tools:</Category>
+  <WebUI/>
+  <TemplateURL>https://raw.githubusercontent.com/Tracker-Dashboard/tracker-dashboard/main/unraid/tracker-dashboard-browser.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/Tracker-Dashboard/tracker-dashboard/main/public/logo.png</Icon>
+  <ExtraParams>--restart=unless-stopped</ExtraParams>
+  <PostArgs/>
+  <Config Name="Appdata partagé" Target="/app/config" Default="/mnt/user/appdata/tracker-dashboard" Mode="rw" Description="Doit être strictement identique au chemin Appdata du conteneur tracker-dashboard." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/tracker-dashboard</Config>
+  <Config Name="Fuseau horaire" Target="TZ" Default="Europe/Paris" Mode="" Description="Fuseau IANA utilisé par le runtime." Type="Variable" Display="always" Required="true" Mask="false">Europe/Paris</Config>
+</Container>

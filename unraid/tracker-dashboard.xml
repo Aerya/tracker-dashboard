@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Container version="2">
+  <Name>tracker-dashboard</Name>
+  <Repository>ghcr.io/tracker-dashboard/tracker-dashboard:latest</Repository>
+  <Registry>https://github.com/orgs/Tracker-Dashboard/packages/container/package/tracker-dashboard</Registry>
+  <Network>bridge</Network>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/Tracker-Dashboard/tracker-dashboard/issues</Support>
+  <Project>https://github.com/Tracker-Dashboard/tracker-dashboard</Project>
+  <Overview>WebUI de suivi des statistiques de trackers BitTorrent. Installez ensuite les templates tracker-dashboard-browser et tracker-dashboard-flaresolverr pour activer toutes les fonctions.</Overview>
+  <Category>Tools:</Category>
+  <WebUI>http://[IP]:[PORT:3000]</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/Tracker-Dashboard/tracker-dashboard/main/unraid/tracker-dashboard.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/Tracker-Dashboard/tracker-dashboard/main/public/logo.png</Icon>
+  <ExtraParams>--restart=unless-stopped</ExtraParams>
+  <PostArgs/>
+  <Config Name="WebUI" Target="3000" Default="4832" Mode="tcp" Description="Port de la WebUI Tracker Dashboard." Type="Port" Display="always" Required="true" Mask="false">4832</Config>
+  <Config Name="Appdata" Target="/app/config" Default="/mnt/user/appdata/tracker-dashboard" Mode="rw" Description="Configuration, base SQLite, profils navigateur et fichiers de diagnostic." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/tracker-dashboard</Config>
+  <Config Name="Fuseau horaire" Target="TZ" Default="Europe/Paris" Mode="" Description="Fuseau IANA utilisé par l'application." Type="Variable" Display="always" Required="true" Mask="false">Europe/Paris</Config>
+  <Config Name="Token Prometheus" Target="METRICS_TOKEN" Default="" Mode="" Description="Token facultatif protégeant /metrics. Laissez vide pour désactiver l'export." Type="Variable" Display="advanced" Required="false" Mask="true"/>
+</Container>
