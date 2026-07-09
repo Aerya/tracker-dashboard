@@ -646,6 +646,26 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    .beta-column-picker {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 6px 0 8px;
+    }
+    .beta-column-picker label {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 4px 7px;
+      color: var(--muted);
+      font-size: 11px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .beta-column-picker label:hover { color: var(--text); border-color: var(--blue); }
+    .beta-column-picker input { width: 13px; height: 13px; margin: 0; }
     .beta-link-picker { display: inline-flex; gap: 6px; align-items: center; }
     .beta-link-picker select { max-width: 200px; }
     .beta-chart {
@@ -3167,6 +3187,15 @@
   let betaSelectedCalendarDay = new Date().toISOString().slice(0, 10);
   let betaTableSort = { key: 'name', dir: 'asc' };
   let betaTorrentSort = { key: null, dir: 'asc' };
+  const betaTorrentOptionalColumns = [
+    ['state', 'État'],
+    ['crossseed', 'Cross-Seed'],
+    ['added', 'Ajouté le'],
+    ['seedtime', 'Seedtime'],
+    ['size', 'Taille'],
+    ['progress', 'Progression'],
+  ];
+  let betaTorrentColumns = Object.fromEntries(betaTorrentOptionalColumns.map(([key]) => [key, true]));
   // État déplié/replié de la section « Fréquences individuelles » (AutoVisit).
   // Conservé en mémoire pour survivre aux re-renders périodiques de la vue.
   let betaOverridesExpanded = false;
@@ -4223,6 +4252,67 @@
     return `<th class="sortable" onclick="setBetaTorrentSort('${key}')">${label} ${betaTorrentSortIndicator(key)}</th>`;
   }
 
+  function loadBetaTorrentColumns() {
+    try {
+      const stored = JSON.parse(localStorage.getItem('tracker-dashboard-beta-torrent-columns') || '{}');
+      betaTorrentColumns = Object.fromEntries(betaTorrentOptionalColumns.map(([key]) => [key, stored[key] !== false]));
+    } catch {
+      betaTorrentColumns = Object.fromEntries(betaTorrentOptionalColumns.map(([key]) => [key, true]));
+    }
+  }
+
+  function saveBetaTorrentColumns() {
+    localStorage.setItem('tracker-dashboard-beta-torrent-columns', JSON.stringify(betaTorrentColumns));
+  }
+
+  function setBetaTorrentColumn(key, visible) {
+    betaTorrentColumns[key] = Boolean(visible);
+    if (betaTorrentOptionalColumns.some(([columnKey]) => columnKey === betaTorrentSort.key) && !betaTorrentColumns[betaTorrentSort.key]) {
+      betaTorrentSort = { key: null, dir: 'asc' };
+    }
+    saveBetaTorrentColumns();
+    renderBetaTrackerPage();
+  }
+
+  function betaTorrentColumnVisible(key) {
+    return betaTorrentColumns[key] !== false;
+  }
+
+  function betaTorrentColumnPicker() {
+    return `<div class="beta-column-picker" role="group" aria-label="Colonnes torrents">${
+      betaTorrentOptionalColumns.map(([key, label]) => `
+        <label><input type="checkbox" ${betaTorrentColumnVisible(key) ? 'checked' : ''} onchange="setBetaTorrentColumn('${key}', this.checked)">${escapeHtml(label)}</label>
+      `).join('')
+    }</div>`;
+  }
+
+  function betaTorrentOptionalHead() {
+    return betaTorrentOptionalColumns
+      .filter(([key]) => betaTorrentColumnVisible(key))
+      .map(([key, label]) => betaTorrentTh(key, label))
+      .join('');
+  }
+
+  function betaTorrentOptionalCells(torrent) {
+    const cells = {
+      state: `<td>${escapeHtml(torrentStateLabel(torrent.state))}</td>`,
+      crossseed: `<td>${crossSeedMarks(torrent.crossSeedInstanceIds, { linked: true }) || '-'}</td>`,
+      added: `<td>${torrent.addedAt ? formatDateTime(torrent.addedAt) : '-'}</td>`,
+      seedtime: `<td>${formatDurationSeconds(torrent.seedTimeSeconds)}</td>`,
+      size: `<td>${bytesText(torrent.sizeBytes)}</td>`,
+      progress: `<td>${Math.round((Number(torrent.progress) || 0) * 100)}%</td>`,
+    };
+    return betaTorrentOptionalColumns
+      .filter(([key]) => betaTorrentColumnVisible(key))
+      .map(([key]) => cells[key])
+      .join('');
+  }
+
+  function betaTorrentTableMinWidth() {
+    const visibleOptional = betaTorrentOptionalColumns.filter(([key]) => betaTorrentColumnVisible(key)).length;
+    return 760 + visibleOptional * 110;
+  }
+
   function betaQbitGroupMatchesTracker(item, stat, host, multiAccount) {
     if (item.trackerId === stat.id) return true;
     if (multiAccount) return false;
@@ -4450,24 +4540,20 @@
       </div>` : ''}
       <div style="margin-top:12px">
         <h3>Torrents liés dans les clients BitTorrent</h3>
+        ${betaTorrentColumnPicker()}
         <div class="beta-local-scroll">
-        <table class="beta-mini-table beta-torrents-table">
-          <thead><tr><th>Client</th><th>Torrent</th>${betaTorrentTh('state', 'État')}${betaTorrentTh('crossseed', 'Cross-Seed')}${betaTorrentTh('added', 'Ajouté le')}${betaTorrentTh('seedtime', 'Seedtime')}${betaTorrentTh('size', 'Taille')}${betaTorrentTh('progress', 'Progression')}${betaTorrentTh('uploaded', 'UP')}${betaTorrentTh('downloaded', 'DL')}${betaTorrentTh('ratio', 'Ratio')}</tr></thead>
+        <table class="beta-mini-table beta-torrents-table" style="min-width:${betaTorrentTableMinWidth()}px">
+          <thead><tr><th>Client</th><th>Torrent</th>${betaTorrentOptionalHead()}${betaTorrentTh('uploaded', 'UP')}${betaTorrentTh('downloaded', 'DL')}${betaTorrentTh('ratio', 'Ratio')}</tr></thead>
           <tbody>${sortedTorrents.map(torrent => `
             <tr>
               <td>${torrent.clientBaseUrl ? `<a href="${escapeHtml(torrent.clientBaseUrl)}" target="_blank" rel="noreferrer noopener" title="Ouvrir ${escapeHtml(torrent.clientLabel)} dans un nouvel onglet">${escapeHtml(torrent.clientLabel)}</a>` : escapeHtml(torrent.clientLabel)}</td>
               <td class="torrent-name" title="${escapeHtml(torrent.hash)}">${escapeHtml(torrent.name || torrent.hash || '-')}</td>
-              <td>${escapeHtml(torrentStateLabel(torrent.state))}</td>
-              <td>${crossSeedMarks(torrent.crossSeedInstanceIds, { linked: true }) || '-'}</td>
-              <td>${torrent.addedAt ? formatDateTime(torrent.addedAt) : '-'}</td>
-              <td>${formatDurationSeconds(torrent.seedTimeSeconds)}</td>
-              <td>${bytesText(torrent.sizeBytes)}</td>
-              <td>${Math.round((Number(torrent.progress) || 0) * 100)}%</td>
+              ${betaTorrentOptionalCells(torrent)}
               <td>${bytesText(torrent.uploadedBytes)}</td>
               <td>${bytesText(torrent.downloadedBytes)}</td>
               <td>${torrent.ratio === null ? '-' : formatRatio(torrent.ratio)}</td>
             </tr>
-          `).join('') || '<tr><td colspan="11" class="cell-muted">Aucun torrent lié. Vérifier les associations BitTorrent.</td></tr>'}</tbody>
+          `).join('') || `<tr><td colspan="${5 + betaTorrentOptionalColumns.filter(([key]) => betaTorrentColumnVisible(key)).length}" class="cell-muted">Aucun torrent lié. Vérifier les associations BitTorrent.</td></tr>`}</tbody>
         </table>
         </div>
       </div>
@@ -7366,6 +7452,7 @@
     await showMigrationNoticeIfNeeded();
     loadViewMode();
     loadBetaSettings();
+    loadBetaTorrentColumns();
     await loadBetaSettingsFromServer();
     loadActiveView();
     await loadPresentationMode();
