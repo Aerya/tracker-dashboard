@@ -4202,6 +4202,13 @@
     return `<th class="sortable" onclick="setBetaTorrentSort('${key}')">${label} ${betaTorrentSortIndicator(key)}</th>`;
   }
 
+  function betaQbitGroupMatchesTracker(item, stat, host, multiAccount) {
+    if (item.trackerId === stat.id) return true;
+    if (multiAccount) return false;
+    if (trackerHostFromUrl(item.trackerHost) === host) return true;
+    return betaTrackerMatchForHost(item.trackerHost)?.tracker.id === stat.id;
+  }
+
   // État des mini-courbes d'évolution de la fiche (conservé entre les re-renders).
   let ficheChartPeriod = '7'; // '7' | '30' | 'all'
   let ficheBufferOn = false;
@@ -4284,8 +4291,12 @@
     // En multi-comptes, on n'affiche que les torrents resolus vers ce compte (sinon
     // tous les comptes du site partageraient le meme hote). En compte unique, on garde
     // le repli par hote pour les annonces non encore reliees.
-    const qbits = (betaOverview?.qbitStats || []).filter(item => item.trackerId === stat.id || (!multiAccount && item.trackerHost === host));
-    const suggestedQbits = (betaOverview?.qbitStats || []).filter(item => !item.trackerId && betaTrackerMatchForHost(item.trackerHost)?.tracker.id === stat.id);
+    const qbits = (betaOverview?.qbitStats || []).filter(item => betaQbitGroupMatchesTracker(item, stat, host, multiAccount));
+    const qbitGroupKeys = new Set(qbits.map(item => `${item.clientId || ''}::${item.trackerHost || ''}::${item.announceKey || ''}`));
+    const suggestedQbits = (betaOverview?.qbitStats || []).filter(item => {
+      const key = `${item.clientId || ''}::${item.trackerHost || ''}::${item.announceKey || ''}`;
+      return !qbitGroupKeys.has(key) && !item.trackerId && betaTrackerMatchForHost(item.trackerHost)?.tracker.id === stat.id;
+    });
     const torrents = qbits.flatMap(item => (item.torrents || []).map(torrent => ({ ...torrent, clientLabel: item.clientLabel, clientBaseUrl: item.clientBaseUrl })));
     const sortedTorrents = betaSortedTorrents(torrents);
     const crossSeedTorrentCount = torrents.filter(torrent => (torrent.crossSeedInstanceIds || []).length > 0).length;
