@@ -154,6 +154,18 @@ if (!cardEditOpensSelectedTracker) {
   errors.push('Card edit buttons must open the selected tracker configuration view');
 }
 
+const torrentTrackerMatchingIsDefensive = (
+  server.includes('function trackerHostMapFor(activeTrackers: TrackerConfig[], settings: BetaSettings): Map<string, string>')
+  && server.includes('if (ids.size === 1) trackerHosts.set(key, [...ids][0]);')
+  && server.includes('activeTrackers.filter(tracker => tracker.enabled !== false)')
+  && html.includes('function betaQbitGroupMatchesTracker(item, stat, host, multiAccount, siblings = [])')
+  && html.includes('const explicitAccount = (betaSettings.accountAnnounceMappings || []).find(mapping => mapping.key && mapping.key === item.announceKey);')
+  && html.includes('return stat.id === (siblings[0]?.id || stat.id);')
+);
+if (!torrentTrackerMatchingIsDefensive) {
+  errors.push('BitTorrent tracker matching must keep unassigned multi-account torrents visible and avoid ambiguous server-side host attribution');
+}
+
 const synchronizesAllBundledTrackers = (
   server.includes('const definition = loadDefaultTrackerDefinition(tracker.baseId ?? tracker.id);')
   && !server.includes('CANONICAL_CONNECTION_TRACKERS')
