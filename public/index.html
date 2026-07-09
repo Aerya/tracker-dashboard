@@ -327,6 +327,7 @@
       overflow-y: auto;
       display: flex;
       flex-direction: column;
+      min-width: 0;
     }
 
     /* ── Grid ────────────────────────────────────────────────────── */
@@ -336,10 +337,14 @@
       justify-items: center;
       align-content: start;
       flex: 1;
+      width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
     }
     .tab-view {
       display: none;
       width: 100%;
+      min-width: 0;
       justify-items: center;
       align-content: start;
     }
@@ -626,6 +631,21 @@
     .beta-mini-table th.sortable:hover { color: var(--text); }
     .beta-mini-table th .sort-ind { font-size: 10px; opacity: .4; margin-left: 2px; }
     .beta-mini-table th .sort-ind.active { opacity: 1; color: var(--blue); }
+    .beta-local-scroll {
+      width: 100%;
+      max-width: 100%;
+      overflow-x: auto;
+      overscroll-behavior-inline: contain;
+      -webkit-overflow-scrolling: touch;
+    }
+    .beta-torrents-table {
+      min-width: 1480px;
+    }
+    .beta-torrents-table .torrent-name {
+      max-width: 760px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
     .beta-link-picker { display: inline-flex; gap: 6px; align-items: center; }
     .beta-link-picker select { max-width: 200px; }
     .beta-chart {
@@ -954,7 +974,7 @@
     .beta-overrides-details > summary:hover h4 { color: var(--text); }
     .beta-detail-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
       gap: 10px;
       margin-bottom: 12px;
     }
@@ -973,6 +993,7 @@
       margin-bottom: 5px;
     }
     .beta-detail-stat strong { font-size: 18px; }
+    #beta-tracker-page { width: 100%; min-width: 0; }
     .beta-link-row {
       display: flex;
       gap: 8px;
@@ -4429,12 +4450,13 @@
       </div>` : ''}
       <div style="margin-top:12px">
         <h3>Torrents liés dans les clients BitTorrent</h3>
-        <table class="beta-mini-table">
+        <div class="beta-local-scroll">
+        <table class="beta-mini-table beta-torrents-table">
           <thead><tr><th>Client</th><th>Torrent</th>${betaTorrentTh('state', 'État')}${betaTorrentTh('crossseed', 'Cross-Seed')}${betaTorrentTh('added', 'Ajouté le')}${betaTorrentTh('seedtime', 'Seedtime')}${betaTorrentTh('size', 'Taille')}${betaTorrentTh('progress', 'Progression')}${betaTorrentTh('uploaded', 'UP')}${betaTorrentTh('downloaded', 'DL')}${betaTorrentTh('ratio', 'Ratio')}</tr></thead>
           <tbody>${sortedTorrents.map(torrent => `
             <tr>
               <td>${torrent.clientBaseUrl ? `<a href="${escapeHtml(torrent.clientBaseUrl)}" target="_blank" rel="noreferrer noopener" title="Ouvrir ${escapeHtml(torrent.clientLabel)} dans un nouvel onglet">${escapeHtml(torrent.clientLabel)}</a>` : escapeHtml(torrent.clientLabel)}</td>
-              <td title="${escapeHtml(torrent.hash)}">${escapeHtml(torrent.name || torrent.hash || '-')}</td>
+              <td class="torrent-name" title="${escapeHtml(torrent.hash)}">${escapeHtml(torrent.name || torrent.hash || '-')}</td>
               <td>${escapeHtml(torrentStateLabel(torrent.state))}</td>
               <td>${crossSeedMarks(torrent.crossSeedInstanceIds, { linked: true }) || '-'}</td>
               <td>${torrent.addedAt ? formatDateTime(torrent.addedAt) : '-'}</td>
@@ -4447,6 +4469,7 @@
             </tr>
           `).join('') || '<tr><td colspan="11" class="cell-muted">Aucun torrent lié. Vérifier les associations BitTorrent.</td></tr>'}</tbody>
         </table>
+        </div>
       </div>
       ${suggestedTorrents.length ? `
         <div style="margin-top:12px">
