@@ -2700,6 +2700,18 @@
     }).format(new Date(iso));
   }
 
+  function formatDurationSeconds(value) {
+    const seconds = Number(value);
+    if (!Number.isFinite(seconds) || seconds < 0) return '-';
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    if (days > 0) return `${days} j ${hours} h`;
+    if (hours > 0) return `${hours} h ${minutes} min`;
+    if (minutes > 0) return `${minutes} min`;
+    return `${Math.floor(seconds)} s`;
+  }
+
   // ─── Rendu des cartes ──────────────────────────────────────────────────────
 
   function statCell(label, value, unit, colorClass) {
@@ -4144,6 +4156,8 @@
   function betaTorrentSortValue(torrent, key) {
     switch (key) {
       case 'state': return torrentStateLabel(torrent.state).toLowerCase();
+      case 'added': return Date.parse(torrent.addedAt || '') || 0;
+      case 'seedtime': return toNum(torrent.seedTimeSeconds);
       case 'size': return toNum(torrent.sizeBytes);
       case 'progress': return toNum(torrent.progress);
       case 'uploaded': return toNum(torrent.uploadedBytes);
@@ -4402,19 +4416,21 @@
       <div style="margin-top:12px">
         <h3>Torrents liés dans les clients BitTorrent</h3>
         <table class="beta-mini-table">
-          <thead><tr><th>Client</th><th>Torrent</th>${betaTorrentTh('state', 'État')}${betaTorrentTh('size', 'Taille')}${betaTorrentTh('progress', 'Progression')}${betaTorrentTh('uploaded', 'UP')}${betaTorrentTh('downloaded', 'DL')}${betaTorrentTh('ratio', 'Ratio')}</tr></thead>
+          <thead><tr><th>Client</th><th>Torrent</th>${betaTorrentTh('state', 'État')}${betaTorrentTh('added', 'Ajouté le')}${betaTorrentTh('seedtime', 'Seedtime')}${betaTorrentTh('size', 'Taille')}${betaTorrentTh('progress', 'Progression')}${betaTorrentTh('uploaded', 'UP')}${betaTorrentTh('downloaded', 'DL')}${betaTorrentTh('ratio', 'Ratio')}</tr></thead>
           <tbody>${sortedTorrents.map(torrent => `
             <tr>
               <td>${torrent.clientBaseUrl ? `<a href="${escapeHtml(torrent.clientBaseUrl)}" target="_blank" rel="noreferrer noopener" title="Ouvrir ${escapeHtml(torrent.clientLabel)} dans un nouvel onglet">${escapeHtml(torrent.clientLabel)}</a>` : escapeHtml(torrent.clientLabel)}</td>
               <td title="${escapeHtml(torrent.hash)}">${escapeHtml(torrent.name || torrent.hash || '-')}${crossSeedMarks(torrent.crossSeedInstanceIds, { linked: true })}</td>
               <td>${escapeHtml(torrentStateLabel(torrent.state))}</td>
+              <td>${torrent.addedAt ? formatDateTime(torrent.addedAt) : '-'}</td>
+              <td>${formatDurationSeconds(torrent.seedTimeSeconds)}</td>
               <td>${bytesText(torrent.sizeBytes)}</td>
               <td>${Math.round((Number(torrent.progress) || 0) * 100)}%</td>
               <td>${bytesText(torrent.uploadedBytes)}</td>
               <td>${bytesText(torrent.downloadedBytes)}</td>
               <td>${torrent.ratio === null ? '-' : formatRatio(torrent.ratio)}</td>
             </tr>
-          `).join('') || '<tr><td colspan="8" class="cell-muted">Aucun torrent lié. Vérifier les associations BitTorrent.</td></tr>'}</tbody>
+          `).join('') || '<tr><td colspan="10" class="cell-muted">Aucun torrent lié. Vérifier les associations BitTorrent.</td></tr>'}</tbody>
         </table>
       </div>
       ${suggestedTorrents.length ? `

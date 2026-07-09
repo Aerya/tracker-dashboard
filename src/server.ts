@@ -297,6 +297,8 @@ interface QbitTrackerAggregate {
     uploadedBytes: number;
     downloadedBytes: number;
     ratio: number | null;
+    addedAt: string | null;
+    seedTimeSeconds: number | null;
     category: string;
     tags: string[];
     crossSeedInstanceIds: string[];
@@ -2108,6 +2110,17 @@ function cleanClientBaseUrl(value: string): string {
   }
 }
 
+function unixSecondsToIso(value: unknown): string | null {
+  const seconds = Number(value);
+  if (!Number.isFinite(seconds) || seconds <= 0) return null;
+  return new Date(seconds * 1000).toISOString();
+}
+
+function finiteSeconds(value: unknown): number | null {
+  const seconds = Number(value);
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
+}
+
 function qbitHttpError(endpoint: string, status: number, data: unknown, authState: 'none' | 'attempted' | 'authenticated'): Error {
   const preview = responsePreview(data);
   const authHint = authState === 'authenticated'
@@ -2285,6 +2298,8 @@ async function fetchQbitClient(client: BetaQbitClient): Promise<QbitTrackerAggre
       uploadedBytes: Number.isFinite(up) ? up : 0,
       downloadedBytes: Number.isFinite(down) ? down : 0,
       ratio: Number.isFinite(Number(torrent.ratio)) ? Number(torrent.ratio) : null,
+      addedAt: unixSecondsToIso(torrent.added_on),
+      seedTimeSeconds: finiteSeconds(torrent.seeding_time),
       category,
       tags,
       crossSeedInstanceIds: detectCrossSeedInstanceIds(crossSeedInstances, client.id, category, tags),
@@ -2344,7 +2359,7 @@ async function fetchRutorrentClient(client: BetaQbitClient): Promise<QbitTracker
   const crossSeedInstances = loadBetaSettings().crossSeedInstances;
   betaLog(`${betaClientLogName(client)}: scan ruTorrent/rTorrent sur ${baseUrl}`);
   await rtorrentRpc(client, 'download_list', ['main']);
-  const xml = await rtorrentRpc(client, 'd.multicall2', [
+  const baseFields = [
     '',
     'main',
     'd.hash=',
@@ -2356,14 +2371,27 @@ async function fetchRutorrentClient(client: BetaQbitClient): Promise<QbitTracker
     'd.ratio=',
     'd.complete=',
     'd.custom1=',
-  ]);
+  ];
+  let fieldCount = 11;
+  let xml: string;
+  try {
+    xml = await rtorrentRpc(client, 'd.multicall2', [
+      ...baseFields,
+      'd.creation_date=',
+      'd.timestamp.finished=',
+    ]);
+  } catch (err: unknown) {
+    betaWarn(`${betaClientLogName(client)}: d.multicall2 avec dates KO - ${err instanceof Error ? err.message : String(err)}; repli sans dates/seedtime`);
+    fieldCount = 9;
+    xml = await rtorrentRpc(client, 'd.multicall2', baseFields);
+  }
   const scalars = parseXmlRpcScalars(xml);
-  betaLog(`${betaClientLogName(client)}: d.multicall2 a retourne ${scalars.length} valeur(s), ${Math.floor(scalars.length / 9)} torrent(s) potentiel(s)`);
+  betaLog(`${betaClientLogName(client)}: d.multicall2 a retourne ${scalars.length} valeur(s), ${Math.floor(scalars.length / fieldCount)} torrent(s) potentiel(s)`);
   const groups = new Map<string, QbitTrackerAggregate>();
   let trackerDetailCalls = 0;
   let unknownSkipped = 0;
-  for (let i = 0; i + 8 < scalars.length; i += 9) {
-    const [hash, name, stateRaw, sizeRaw, upRaw, downRaw, ratioRaw, completeRaw, labelRaw] = scalars.slice(i, i + 9);
+  for (let i = 0; i + fieldCount - 1 < scalars.length; i += fieldCount) {
+    const [hash, name, stateRaw, sizeRaw, upRaw, downRaw, ratioRaw, completeRaw, labelRaw, creationRaw, finishedRaw] = scalars.slice(i, i + fieldCount);
     let announce = '';
     try {
       trackerDetailCalls += 1;
@@ -2381,6 +2409,10 @@ async function fetchRutorrentClient(client: BetaQbitClient): Promise<QbitTracker
     const up = Number(upRaw) || 0;
     const down = Number(downRaw) || 0;
     const complete = completeRaw === '1';
+    const finishedSeconds = Number(finishedRaw) || 0;
+    const seedTimeSeconds = complete && finishedSeconds > 0
+      ? Math.max(0, Math.floor(Date.now() / 1000) - finishedSeconds)
+      : null;
     const existing = groups.get(groupKey) ?? {
       clientId: client.id,
       clientLabel: client.label,
@@ -2412,6 +2444,8 @@ async function fetchRutorrentClient(client: BetaQbitClient): Promise<QbitTracker
       uploadedBytes: up,
       downloadedBytes: down,
       ratio: Number.isFinite(Number(ratioRaw)) ? Number(ratioRaw) / 1000 : null,
+      addedAt: unixSecondsToIso(creationRaw),
+      seedTimeSeconds,
       category: labelRaw || '',
       tags: labelRaw ? [labelRaw] : [],
       crossSeedInstanceIds: detectCrossSeedInstanceIds(crossSeedInstances, client.id, labelRaw, labelRaw ? [labelRaw] : []),
