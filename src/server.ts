@@ -2354,6 +2354,10 @@ function parseXmlRpcScalars(xml: string): string[] {
   return values;
 }
 
+function xmlRpcHasFault(xml: string): boolean {
+  return /<fault>/i.test(xml);
+}
+
 async function fetchRutorrentClient(client: BetaQbitClient): Promise<QbitTrackerAggregate[]> {
   const baseUrl = cleanClientBaseUrl(client.baseUrl);
   const crossSeedInstances = loadBetaSettings().crossSeedInstances;
@@ -2380,6 +2384,7 @@ async function fetchRutorrentClient(client: BetaQbitClient): Promise<QbitTracker
       'd.creation_date=',
       'd.timestamp.finished=',
     ]);
+    if (xmlRpcHasFault(xml)) throw new Error(responsePreview(xml));
   } catch (err: unknown) {
     betaWarn(`${betaClientLogName(client)}: d.multicall2 avec dates KO - ${err instanceof Error ? err.message : String(err)}; repli sans dates/seedtime`);
     fieldCount = 9;
