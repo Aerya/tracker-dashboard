@@ -2014,18 +2014,39 @@ function resolveTorrentTrackerId(
   return betaTrackerIdForAnnounceHost(item.trackerHost, trackerHosts, trackers);
 }
 
-function qbitStatsWithTrackerIds(settings: BetaSettings, activeTrackers: TrackerConfig[]) {
-  const trackerHosts = new Map<string, string>();
-  for (const tracker of activeTrackers) {
+function trackerHostMapFor(activeTrackers: TrackerConfig[], settings: BetaSettings): Map<string, string> {
+  const candidates = new Map<string, Set<string>>();
+  const addCandidate = (key: string, trackerId: string) => {
+    if (!key || key === 'unknown' || !trackerId) return;
+    const ids = candidates.get(key) ?? new Set<string>();
+    ids.add(trackerId);
+    candidates.set(key, ids);
+  };
+
+  for (const tracker of activeTrackers.filter(tracker => tracker.enabled !== false)) {
     const host = trackerHost(tracker.baseUrl);
-    trackerHosts.set(host, tracker.id);
-    trackerHosts.set(hostDomainKey(host), tracker.id);
+    addCandidate(host, tracker.id);
+    addCandidate(hostDomainKey(host), tracker.id);
   }
+
+  const trackerHosts = new Map<string, string>();
+  for (const [key, ids] of candidates.entries()) {
+    if (ids.size === 1) trackerHosts.set(key, [...ids][0]);
+  }
+
+  // Les liaisons manuelles gagnent sur l'heuristique, y compris pour des sites
+  // multi-comptes ou des domaines d'annonce ambigus.
   for (const mapping of settings.announceMappings) {
     const host = trackerHost(mapping.announceHost);
     trackerHosts.set(host, mapping.trackerId);
     trackerHosts.set(hostDomainKey(host), mapping.trackerId);
   }
+
+  return trackerHosts;
+}
+
+function qbitStatsWithTrackerIds(settings: BetaSettings, activeTrackers: TrackerConfig[]) {
+  const trackerHosts = trackerHostMapFor(activeTrackers, settings);
   const accountByKey = new Map(settings.accountAnnounceMappings.map(mapping => [mapping.key, mapping.trackerId]));
   return betaQbitStats.map(item => ({
     ...item,
@@ -2047,17 +2068,7 @@ function qbitSeedingByTrackerId(trackers: TrackerConfig[]): Map<string, { count:
   if (betaQbitStats.length === 0) return result;
   const settings = loadBetaSettings();
   const clientType = new Map(settings.qbitClients.map(client => [client.id, client.type === 'rutorrent' ? 'rutorrent' : 'qbittorrent']));
-  const trackerHosts = new Map<string, string>();
-  for (const tracker of trackers) {
-    const host = trackerHost(tracker.baseUrl);
-    trackerHosts.set(host, tracker.id);
-    trackerHosts.set(hostDomainKey(host), tracker.id);
-  }
-  for (const mapping of settings.announceMappings) {
-    const host = trackerHost(mapping.announceHost);
-    trackerHosts.set(host, mapping.trackerId);
-    trackerHosts.set(hostDomainKey(host), mapping.trackerId);
-  }
+  const trackerHosts = trackerHostMapFor(trackers, settings);
   const accountByKey = new Map(settings.accountAnnounceMappings.map(mapping => [mapping.key, mapping.trackerId]));
   for (const item of betaQbitStats) {
     const trackerId = resolveTorrentTrackerId(item, trackerHosts, accountByKey, trackers);

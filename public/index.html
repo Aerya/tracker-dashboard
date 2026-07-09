@@ -4313,11 +4313,22 @@
     return 760 + visibleOptional * 110;
   }
 
-  function betaQbitGroupMatchesTracker(item, stat, host, multiAccount) {
+  function betaQbitGroupMatchesTracker(item, stat, host, multiAccount, siblings = []) {
     if (item.trackerId === stat.id) return true;
-    if (multiAccount) return false;
-    if (trackerHostFromUrl(item.trackerHost) === host) return true;
-    return betaTrackerMatchForHost(item.trackerHost)?.tracker.id === stat.id;
+    const itemHost = trackerHostFromUrl(item.trackerHost);
+    const hostMatches = itemHost === host || betaTrackerMatchForHost(item.trackerHost)?.tracker.id === stat.id;
+    if (!hostMatches) return false;
+    if (!multiAccount) return true;
+
+    const explicitAccount = (betaSettings.accountAnnounceMappings || []).find(mapping => mapping.key && mapping.key === item.announceKey);
+    if (explicitAccount) return explicitAccount.trackerId === stat.id;
+
+    const siblingIds = new Set(siblings.map(sibling => sibling.id));
+    if (item.trackerId && siblingIds.has(item.trackerId)) return false;
+
+    // Tant qu'une passkey n'est pas attribuee a un compte, garder les torrents
+    // visibles sur le premier compte du site plutot que les masquer partout.
+    return stat.id === (siblings[0]?.id || stat.id);
   }
 
   // État des mini-courbes d'évolution de la fiche (conservé entre les re-renders).
@@ -4393,7 +4404,7 @@
     if (multiAccount) {
       const seenKeys = new Set();
       for (const item of (betaOverview?.qbitStats || [])) {
-        if (item.trackerHost !== host || !item.announceKey || seenKeys.has(item.announceKey)) continue;
+        if (trackerHostFromUrl(item.trackerHost) !== host || !item.announceKey || seenKeys.has(item.announceKey)) continue;
         seenKeys.add(item.announceKey);
         const mapping = (betaSettings.accountAnnounceMappings || []).find(m => m.key === item.announceKey);
         siteAnnounceGroups.push({ key: item.announceKey, label: item.announceLabel || item.announceKey, assigned: mapping?.trackerId || item.trackerId || '' });
@@ -4402,7 +4413,7 @@
     // En multi-comptes, on n'affiche que les torrents resolus vers ce compte (sinon
     // tous les comptes du site partageraient le meme hote). En compte unique, on garde
     // le repli par hote pour les annonces non encore reliees.
-    const qbits = (betaOverview?.qbitStats || []).filter(item => betaQbitGroupMatchesTracker(item, stat, host, multiAccount));
+    const qbits = (betaOverview?.qbitStats || []).filter(item => betaQbitGroupMatchesTracker(item, stat, host, multiAccount, siblings));
     const qbitGroupKeys = new Set(qbits.map(item => `${item.clientId || ''}::${item.trackerHost || ''}::${item.announceKey || ''}`));
     const suggestedQbits = (betaOverview?.qbitStats || []).filter(item => {
       const key = `${item.clientId || ''}::${item.trackerHost || ''}::${item.announceKey || ''}`;
