@@ -154,16 +154,16 @@ if (!cardEditOpensSelectedTracker) {
   errors.push('Card edit buttons must open the selected tracker configuration view');
 }
 
-const torrentTrackerMatchingIsDefensive = (
-  server.includes('function trackerHostMapFor(activeTrackers: TrackerConfig[], settings: BetaSettings): Map<string, string>')
-  && server.includes('if (ids.size === 1) trackerHosts.set(key, [...ids][0]);')
-  && server.includes('activeTrackers.filter(tracker => tracker.enabled !== false)')
-  && html.includes('function betaQbitGroupMatchesTracker(item, stat, host, multiAccount, siblings = [])')
-  && html.includes('const explicitAccount = (betaSettings.accountAnnounceMappings || []).find(mapping => mapping.key && mapping.key === item.announceKey);')
-  && html.includes('return stat.id === (siblings[0]?.id || stat.id);')
+const torrentTrackerListingPreservesFallback = (
+  html.includes('function betaQbitGroupMatchesTracker(item, stat, host, multiAccount)')
+  && html.includes('if (multiAccount) return false;')
+  && html.includes('if (trackerHostFromUrl(item.trackerHost) === host) return true;')
+  && html.includes('return betaTrackerMatchForHost(item.trackerHost)?.tracker.id === stat.id;')
+  && server.includes('function qbitStatsWithTrackerIds(settings: BetaSettings, activeTrackers: TrackerConfig[])')
+  && !server.includes('function trackerHostMapFor(activeTrackers: TrackerConfig[], settings: BetaSettings): Map<string, string>')
 );
-if (!torrentTrackerMatchingIsDefensive) {
-  errors.push('BitTorrent tracker matching must keep unassigned multi-account torrents visible and avoid ambiguous server-side host attribution');
+if (!torrentTrackerListingPreservesFallback) {
+  errors.push('Tracker fiches must preserve the BitTorrent torrent listing fallback used before optional columns');
 }
 
 const synchronizesAllBundledTrackers = (
