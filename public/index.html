@@ -4156,6 +4156,7 @@
   function betaTorrentSortValue(torrent, key) {
     switch (key) {
       case 'state': return torrentStateLabel(torrent.state).toLowerCase();
+      case 'crossseed': return (torrent.crossSeedInstanceIds || []).length;
       case 'added': return Date.parse(torrent.addedAt || '') || 0;
       case 'seedtime': return toNum(torrent.seedTimeSeconds);
       case 'size': return toNum(torrent.sizeBytes);
@@ -4287,6 +4288,7 @@
     const suggestedQbits = (betaOverview?.qbitStats || []).filter(item => !item.trackerId && betaTrackerMatchForHost(item.trackerHost)?.tracker.id === stat.id);
     const torrents = qbits.flatMap(item => (item.torrents || []).map(torrent => ({ ...torrent, clientLabel: item.clientLabel, clientBaseUrl: item.clientBaseUrl })));
     const sortedTorrents = betaSortedTorrents(torrents);
+    const crossSeedTorrentCount = torrents.filter(torrent => (torrent.crossSeedInstanceIds || []).length > 0).length;
     const suggestedTorrents = suggestedQbits.flatMap(item => (item.torrents || []).map(torrent => ({ ...torrent, trackerHost: item.trackerHost, clientLabel: item.clientLabel })));
     const crossSeedCounts = crossSeedUsageForTracker(stat.id);
     const trackerCrossSeedIds = [...crossSeedCounts.keys()];
@@ -4317,7 +4319,8 @@
         <div class="beta-detail-stat"><span>Ratio</span><strong>${hasStatValue(ratio) ? formatRatio(ratio) : '-'}</strong></div>
         <div class="beta-detail-stat"><span>Buffer</span><strong>${Array.isArray(buffer) ? buffer.join(' ') : buffer}</strong></div>
         <div class="beta-detail-stat"><span>Seed</span><strong>${formatCount(stat.fields.seeding ?? stat.fields.seedTimeDays ?? stat.fields.seedTime)}</strong></div>
-        <div class="beta-detail-stat"><span>Torrents client</span><strong>${torrents.length}</strong></div>
+        <div class="beta-detail-stat"><span>Torrents liés</span><strong>${torrents.length}</strong></div>
+        <div class="beta-detail-stat"><span>Torrents Cross-Seed</span><strong>${crossSeedTorrentCount}</strong></div>
       </div>
       <div class="beta-link-row">
         ${trackerUrl ? `<a class="beta-icon-btn" href="${escapeHtml(trackerUrl)}" target="_blank" rel="noreferrer noopener">Ouvrir le tracker</a>` : ''}
@@ -4416,12 +4419,13 @@
       <div style="margin-top:12px">
         <h3>Torrents liés dans les clients BitTorrent</h3>
         <table class="beta-mini-table">
-          <thead><tr><th>Client</th><th>Torrent</th>${betaTorrentTh('state', 'État')}${betaTorrentTh('added', 'Ajouté le')}${betaTorrentTh('seedtime', 'Seedtime')}${betaTorrentTh('size', 'Taille')}${betaTorrentTh('progress', 'Progression')}${betaTorrentTh('uploaded', 'UP')}${betaTorrentTh('downloaded', 'DL')}${betaTorrentTh('ratio', 'Ratio')}</tr></thead>
+          <thead><tr><th>Client</th><th>Torrent</th>${betaTorrentTh('state', 'État')}${betaTorrentTh('crossseed', 'Cross-Seed')}${betaTorrentTh('added', 'Ajouté le')}${betaTorrentTh('seedtime', 'Seedtime')}${betaTorrentTh('size', 'Taille')}${betaTorrentTh('progress', 'Progression')}${betaTorrentTh('uploaded', 'UP')}${betaTorrentTh('downloaded', 'DL')}${betaTorrentTh('ratio', 'Ratio')}</tr></thead>
           <tbody>${sortedTorrents.map(torrent => `
             <tr>
               <td>${torrent.clientBaseUrl ? `<a href="${escapeHtml(torrent.clientBaseUrl)}" target="_blank" rel="noreferrer noopener" title="Ouvrir ${escapeHtml(torrent.clientLabel)} dans un nouvel onglet">${escapeHtml(torrent.clientLabel)}</a>` : escapeHtml(torrent.clientLabel)}</td>
-              <td title="${escapeHtml(torrent.hash)}">${escapeHtml(torrent.name || torrent.hash || '-')}${crossSeedMarks(torrent.crossSeedInstanceIds, { linked: true })}</td>
+              <td title="${escapeHtml(torrent.hash)}">${escapeHtml(torrent.name || torrent.hash || '-')}</td>
               <td>${escapeHtml(torrentStateLabel(torrent.state))}</td>
+              <td>${crossSeedMarks(torrent.crossSeedInstanceIds, { linked: true }) || '-'}</td>
               <td>${torrent.addedAt ? formatDateTime(torrent.addedAt) : '-'}</td>
               <td>${formatDurationSeconds(torrent.seedTimeSeconds)}</td>
               <td>${bytesText(torrent.sizeBytes)}</td>
@@ -4430,7 +4434,7 @@
               <td>${bytesText(torrent.downloadedBytes)}</td>
               <td>${torrent.ratio === null ? '-' : formatRatio(torrent.ratio)}</td>
             </tr>
-          `).join('') || '<tr><td colspan="10" class="cell-muted">Aucun torrent lié. Vérifier les associations BitTorrent.</td></tr>'}</tbody>
+          `).join('') || '<tr><td colspan="11" class="cell-muted">Aucun torrent lié. Vérifier les associations BitTorrent.</td></tr>'}</tbody>
         </table>
       </div>
       ${suggestedTorrents.length ? `
