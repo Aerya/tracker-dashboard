@@ -622,6 +622,10 @@
       width: 132px;
     }
     .beta-mini-table th { color: var(--muted); font-size: 11px; font-weight: 600; }
+    .beta-mini-table th.sortable { cursor: pointer; user-select: none; }
+    .beta-mini-table th.sortable:hover { color: var(--text); }
+    .beta-mini-table th .sort-ind { font-size: 10px; opacity: .4; margin-left: 2px; }
+    .beta-mini-table th .sort-ind.active { opacity: 1; color: var(--blue); }
     .beta-link-picker { display: inline-flex; gap: 6px; align-items: center; }
     .beta-link-picker select { max-width: 200px; }
     .beta-chart {
@@ -3129,6 +3133,7 @@
   let betaSelectedTrackerId = null;
   let betaSelectedCalendarDay = new Date().toISOString().slice(0, 10);
   let betaTableSort = { key: 'name', dir: 'asc' };
+  let betaTorrentSort = { key: null, dir: 'asc' };
   // État déplié/replié de la section « Fréquences individuelles » (AutoVisit).
   // Conservé en mémoire pour survivre aux re-renders périodiques de la vue.
   let betaOverridesExpanded = false;
@@ -4136,6 +4141,52 @@
     return map[key] || (key ? key.charAt(0).toUpperCase() + key.slice(1) : '-');
   }
 
+  function betaTorrentSortValue(torrent, key) {
+    switch (key) {
+      case 'state': return torrentStateLabel(torrent.state).toLowerCase();
+      case 'size': return toNum(torrent.sizeBytes);
+      case 'progress': return toNum(torrent.progress);
+      case 'uploaded': return toNum(torrent.uploadedBytes);
+      case 'downloaded': return toNum(torrent.downloadedBytes);
+      case 'ratio': return torrent.ratio === null ? -1 : toNum(torrent.ratio);
+      default: return String(torrent.clientLabel || '').toLowerCase() + '\u0000' + String(torrent.name || torrent.hash || '').toLowerCase();
+    }
+  }
+
+  function betaSortedTorrents(torrents) {
+    if (!betaTorrentSort.key) {
+      return [...torrents].sort((a, b) => String(betaTorrentSortValue(a, null)).localeCompare(String(betaTorrentSortValue(b, null)), 'fr', { sensitivity: 'base' }));
+    }
+    const mult = betaTorrentSort.dir === 'asc' ? 1 : -1;
+    return [...torrents].sort((a, b) => {
+      const va = betaTorrentSortValue(a, betaTorrentSort.key);
+      const vb = betaTorrentSortValue(b, betaTorrentSort.key);
+      const byValue = (typeof va === 'string' || typeof vb === 'string')
+        ? String(va).localeCompare(String(vb), 'fr', { sensitivity: 'base' })
+        : va - vb;
+      if (byValue !== 0) return byValue * mult;
+      return String(betaTorrentSortValue(a, null)).localeCompare(String(betaTorrentSortValue(b, null)), 'fr', { sensitivity: 'base' });
+    });
+  }
+
+  function setBetaTorrentSort(key) {
+    if (betaTorrentSort.key === key) {
+      betaTorrentSort.dir = betaTorrentSort.dir === 'asc' ? 'desc' : 'asc';
+    } else {
+      betaTorrentSort = { key, dir: key === 'state' ? 'asc' : 'desc' };
+    }
+    renderBetaTrackerPage();
+  }
+
+  function betaTorrentSortIndicator(key) {
+    if (betaTorrentSort.key !== key) return '<span class="sort-ind">↕</span>';
+    return `<span class="sort-ind active">${betaTorrentSort.dir === 'asc' ? '↑' : '↓'}</span>`;
+  }
+
+  function betaTorrentTh(key, label) {
+    return `<th class="sortable" onclick="setBetaTorrentSort('${key}')">${label} ${betaTorrentSortIndicator(key)}</th>`;
+  }
+
   // État des mini-courbes d'évolution de la fiche (conservé entre les re-renders).
   let ficheChartPeriod = '7'; // '7' | '30' | 'all'
   let ficheBufferOn = false;
@@ -4221,6 +4272,7 @@
     const qbits = (betaOverview?.qbitStats || []).filter(item => item.trackerId === stat.id || (!multiAccount && item.trackerHost === host));
     const suggestedQbits = (betaOverview?.qbitStats || []).filter(item => !item.trackerId && betaTrackerMatchForHost(item.trackerHost)?.tracker.id === stat.id);
     const torrents = qbits.flatMap(item => (item.torrents || []).map(torrent => ({ ...torrent, clientLabel: item.clientLabel, clientBaseUrl: item.clientBaseUrl })));
+    const sortedTorrents = betaSortedTorrents(torrents);
     const suggestedTorrents = suggestedQbits.flatMap(item => (item.torrents || []).map(torrent => ({ ...torrent, trackerHost: item.trackerHost, clientLabel: item.clientLabel })));
     const crossSeedCounts = crossSeedUsageForTracker(stat.id);
     const trackerCrossSeedIds = [...crossSeedCounts.keys()];
@@ -4350,8 +4402,8 @@
       <div style="margin-top:12px">
         <h3>Torrents liés dans les clients BitTorrent</h3>
         <table class="beta-mini-table">
-          <thead><tr><th>Client</th><th>Torrent</th><th>État</th><th>Taille</th><th>Progression</th><th>UP</th><th>DL</th><th>Ratio</th></tr></thead>
-          <tbody>${torrents.map(torrent => `
+          <thead><tr><th>Client</th><th>Torrent</th>${betaTorrentTh('state', 'État')}${betaTorrentTh('size', 'Taille')}${betaTorrentTh('progress', 'Progression')}${betaTorrentTh('uploaded', 'UP')}${betaTorrentTh('downloaded', 'DL')}${betaTorrentTh('ratio', 'Ratio')}</tr></thead>
+          <tbody>${sortedTorrents.map(torrent => `
             <tr>
               <td>${torrent.clientBaseUrl ? `<a href="${escapeHtml(torrent.clientBaseUrl)}" target="_blank" rel="noreferrer noopener" title="Ouvrir ${escapeHtml(torrent.clientLabel)} dans un nouvel onglet">${escapeHtml(torrent.clientLabel)}</a>` : escapeHtml(torrent.clientLabel)}</td>
               <td title="${escapeHtml(torrent.hash)}">${escapeHtml(torrent.name || torrent.hash || '-')}${crossSeedMarks(torrent.crossSeedInstanceIds, { linked: true })}</td>
