@@ -8,7 +8,7 @@
   <Privileged>false</Privileged>
   <Support>https://github.com/Tracker-Dashboard/tracker-dashboard/issues</Support>
   <Project>https://github.com/Tracker-Dashboard/tracker-dashboard</Project>
-  <Overview>WebUI de suivi des statistiques de trackers BitTorrent. Installez ensuite les templates tracker-dashboard-browser et tracker-dashboard-flaresolverr pour activer toutes les fonctions.</Overview>
+  <Overview>WebUI de suivi des statistiques de trackers BitTorrent. Installez ensuite les templates tracker-dashboard-browser, tracker-dashboard-flaresolverr et tracker-dashboard-trawl pour activer toutes les fonctions.</Overview>
   <Category>Tools:</Category>
   <WebUI>http://[IP]:[PORT:3000]</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/Tracker-Dashboard/tracker-dashboard/main/unraid/tracker-dashboard.xml</TemplateURL>

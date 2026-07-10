@@ -11,7 +11,7 @@ fi
 
 mkdir -p "$destination"
 
-for name in tracker-dashboard tracker-dashboard-browser tracker-dashboard-flaresolverr; do
+for name in tracker-dashboard tracker-dashboard-browser tracker-dashboard-flaresolverr tracker-dashboard-trawl; do
   target="$destination/my-$name.xml"
   curl -fsSL "$base_url/$name.xml" -o "$target"
   echo "Template installé : $target"
@@ -22,3 +22,4 @@ echo "Ouvrez Docker > Add Container, puis installez les trois templates dans cet
 echo "1. tracker-dashboard"
 echo "2. tracker-dashboard-browser"
 echo "3. tracker-dashboard-flaresolverr"
+echo "4. tracker-dashboard-trawl"

@@ -9,6 +9,7 @@ const templateNames = [
   'tracker-dashboard',
   'tracker-dashboard-browser',
   'tracker-dashboard-flaresolverr',
+  'tracker-dashboard-trawl',
 ];
 
 const parsed = new Map();
@@ -30,7 +31,7 @@ assert.equal(main('Container > Network').text(), 'bridge');
 assert.equal(main('Config[Type="Port"][Target="3000"]').text(), '4832');
 assert.equal(main('Config[Type="Path"][Target="/app/config"]').text(), '/mnt/user/appdata/tracker-dashboard');
 
-for (const name of ['tracker-dashboard-browser', 'tracker-dashboard-flaresolverr']) {
+for (const name of ['tracker-dashboard-browser', 'tracker-dashboard-flaresolverr', 'tracker-dashboard-trawl']) {
   const $ = parsed.get(name);
   assert.equal($('Container > Network').text(), 'container:tracker-dashboard');
   assert.equal($('Config[Type="Port"]').length, 0, `${name} ne doit exposer aucun port`);
@@ -42,6 +43,10 @@ assert.equal(browser('Config[Type="Path"][Target="/app/config"]').text(), '/mnt/
 const flare = parsed.get('tracker-dashboard-flaresolverr');
 assert.equal(flare('Config[Type="Variable"][Target="HOST"]').text(), '127.0.0.1');
 
+const trawl = parsed.get('tracker-dashboard-trawl');
+assert.equal(trawl('Container > Repository').text(), 'ghcr.io/germondai/trawl:baseline');
+assert.equal(trawl('Config[Type="Variable"][Target="PORT"]').text(), '8192');
+
 const guide = fs.readFileSync(path.join(unraidDir, 'README.md'), 'utf8');
 const installer = fs.readFileSync(path.join(unraidDir, 'install-templates.sh'), 'utf8');
 assert.match(guide, /phase bêta/i);
@@ -49,4 +54,4 @@ assert.match(guide, /Retours recherchés/);
 assert.match(guide, /N'incluez jamais d'identifiants/);
 for (const name of templateNames) assert.match(installer, new RegExp(name));
 
-console.log('Unraid template checks OK: three DockerMan templates, private sidecars, installer and feedback guide.');
+console.log('Unraid template checks OK: DockerMan templates, private sidecars, installer and feedback guide.');

@@ -5,6 +5,7 @@ import { getSshLocalEndpoint } from './sshTunnel.js';
 import { type TrackerConfig } from './types.js';
 
 const DEFAULT_FLARESOLVERR_URL = 'http://127.0.0.1:8191';
+const DEFAULT_TRAWL_URL = 'http://127.0.0.1:8192';
 
 interface FlareCookie {
   name: string;
@@ -30,11 +31,13 @@ export interface FlareSolverrFetchResult {
   html: string;
   url: string;
   extraHtml?: string;
+  provider?: 'flaresolverr' | 'trawl';
 }
 
 export interface FlareSolverrStatus {
   available: boolean;
   url: string;
+  provider?: 'flaresolverr' | 'trawl';
   version?: string;
   userAgent?: string;
   error?: string;
@@ -54,6 +57,10 @@ export function isFlareSolverrCandidate(error: unknown): boolean {
 
 function serviceUrl(override?: string): string {
   return (override || process.env.FLARESOLVERR_URL || DEFAULT_FLARESOLVERR_URL).replace(/\/+$/, '');
+}
+
+function trawlUrl(override?: string): string {
+  return (override || process.env.TRAWL_URL || DEFAULT_TRAWL_URL).replace(/\/+$/, '');
 }
 
 function resolveUrl(baseUrl: string, relativePath: string): string {
@@ -143,7 +150,26 @@ export async function fetchWithFlareSolverr(
   credentials: { username: string; password: string },
   overrides: FlareSolverrOverrides = {},
 ): Promise<FlareSolverrFetchResult> {
-  const baseUrl = serviceUrl(overrides.baseUrl);
+  return fetchWithSolver(serviceUrl(overrides.baseUrl), 'flaresolverr', tracker, credentials, overrides)
+    .catch(async (primaryError) => {
+      if (overrides.baseUrl) throw primaryError;
+      try {
+        return await fetchWithSolver(trawlUrl(), 'trawl', tracker, credentials, overrides);
+      } catch (secondaryError) {
+        const primaryMessage = primaryError instanceof Error ? primaryError.message : String(primaryError);
+        const secondaryMessage = secondaryError instanceof Error ? secondaryError.message : String(secondaryError);
+        throw new Error(`FlareSolverr indisponible/echec (${primaryMessage}); TRAWL indisponible/echec (${secondaryMessage})`);
+      }
+    });
+}
+
+async function fetchWithSolver(
+  baseUrl: string,
+  provider: 'flaresolverr' | 'trawl',
+  tracker: TrackerConfig,
+  credentials: { username: string; password: string },
+  overrides: FlareSolverrOverrides = {},
+): Promise<FlareSolverrFetchResult> {
   const requestedTimeout = overrides.timeoutMs ?? Number.parseInt(process.env.FLARESOLVERR_TIMEOUT_MS || '90000', 10);
   const timeoutMs = Number.isFinite(requestedTimeout)
     ? Math.max(5_000, Math.min(180_000, requestedTimeout))
@@ -192,23 +218,26 @@ export async function fetchWithFlareSolverr(
       html: primary.response ?? '',
       url: primary.url || primaryUrl,
       extraHtml,
+      provider,
     };
   } finally {
     await callFlareSolverr(baseUrl, { cmd: 'sessions.destroy', session: activeSession }, 15_000).catch(() => {});
   }
 }
 
-export async function getFlareSolverrStatus(baseUrlOverride?: string): Promise<FlareSolverrStatus> {
-  const url = serviceUrl(baseUrlOverride);
+async function getSolverStatus(url: string, provider: 'flaresolverr' | 'trawl'): Promise<FlareSolverrStatus> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 5_000);
   try {
-    const response = await fetch(`${url}/`, { signal: controller.signal });
+    const response = provider === 'trawl'
+      ? await fetch(`${url}/health`, { signal: controller.signal })
+      : await fetch(`${url}/`, { signal: controller.signal });
     const data = await response.json().catch(() => ({})) as Record<string, unknown>;
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return {
       available: true,
       url,
+      provider,
       version: typeof data.version === 'string' ? data.version : undefined,
       userAgent: typeof data.userAgent === 'string' ? data.userAgent : undefined,
     };
@@ -217,4 +246,12 @@ export async function getFlareSolverrStatus(baseUrlOverride?: string): Promise<F
   } finally {
     clearTimeout(timer);
   }
+}
+
+export async function getFlareSolverrStatus(baseUrlOverride?: string): Promise<FlareSolverrStatus> {
+  return getSolverStatus(serviceUrl(baseUrlOverride), 'flaresolverr');
+}
+
+export async function getTrawlStatus(baseUrlOverride?: string): Promise<FlareSolverrStatus> {
+  return getSolverStatus(trawlUrl(baseUrlOverride), 'trawl');
 }

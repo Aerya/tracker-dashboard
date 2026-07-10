@@ -1057,16 +1057,17 @@ export async function fetchTracker(
   const attemptFlareSolverr = async (): Promise<TrackerStats | null> => {
     try {
       const solved = await fetchWithFlareSolverr(tracker, creds);
+      const provider = solved.provider === 'trawl' ? 'TRAWL' : 'FlareSolverr';
       const failed = hasBrowserAuthFailure(tracker, solved.url, solved.html);
       if (failed) {
-        console.log(`  [${tracker.name}] FlareSolverr: page non authentifiee (${failed}), repli navigateur`);
+        console.log(`  [${tracker.name}] ${provider}: page non authentifiee (${failed}), repli navigateur`);
         return null;
       }
       const stats = buildStatsFromHtml(solved.url, solved.html, solved.extraHtml);
-      console.log(`  [${tracker.name}] Lecture via FlareSolverr OK`);
+      console.log(`  [${tracker.name}] Lecture via ${provider} OK`);
       return stats;
     } catch (error) {
-      console.log(`  [${tracker.name}] FlareSolverr indisponible/echec, repli navigateur - ${error instanceof Error ? error.message : String(error)}`);
+      console.log(`  [${tracker.name}] Repli anti-bot indisponible/echec, repli navigateur - ${error instanceof Error ? error.message : String(error)}`);
       return null;
     }
   };

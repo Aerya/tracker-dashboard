@@ -25,3 +25,13 @@ services:
       # Evite de journaliser les corps de requete, qui contiennent les cookies de session.
       LOG_LEVEL: warning
       TZ: Europe/Paris
+
+  tracker-dashboard-trawl:
+    image: ghcr.io/germondai/trawl:baseline
+    container_name: tracker-dashboard-trawl
+    restart: unless-stopped
+    network_mode: "service:tracker-dashboard"
+    environment:
+      PORT: 8192
+      LOG_LEVEL: warning
+      TZ: Europe/Paris

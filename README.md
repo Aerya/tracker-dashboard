@@ -29,7 +29,7 @@ Au premier accès, l'application demande de créer le compte administrateur de l
 - **Plusieurs comptes par tracker** : duplication d'un tracker, noms d'affichage personnalisables, regroupement sous le site et attribution des torrents par passkey entre comptes.
 - **Clients BitTorrent et cross-seed** : comparaison aux torrents locaux, rafraîchissement automatique par client, plusieurs instances cross-seed et plusieurs clients associés à une même instance.
 - **Seeding comparé** : compteurs annoncés par le site et détectés dans les clients BitTorrent affichés côte à côte.
-- **Protection anti-bot renforcée** : sessions navigateur plus fiables, cookies par tracker et repli automatique via FlareSolverr lorsqu'un challenge bloque la lecture normale.
+- **Protection anti-bot renforcée** : sessions navigateur plus fiables, cookies par tracker, repli automatique via FlareSolverr puis secours TRAWL lorsqu'un challenge bloque la lecture normale.
 - **Ajout de trackers simplifié** : presets UNIT3D, Gazelle, TorrentLeech, MyAnonamouse et API JSON, modes guidé/expert et catalogue enrichi, notamment avec IPTorrents et DarkPeers.
 - **Interface modernisée** : navigation latérale, vues cartes/lignes, taille des cartes partagée entre appareils, thèmes clair/sombre/système et fiches trackers enrichies.
 - **Graphiques et calendrier** : activation facultative, courbes UP/DL/ratio, comparaisons multi-trackers et historique des rafraîchissements OK/KO.
@@ -163,7 +163,7 @@ Avec le type **SSH**, le dashboard ouvre un tunnel SSH (SOCKS5 local adossé au 
 
 ### Unraid — templates bêta
 
-Des templates Unraid sont disponibles pour installer séparément l'application, le runtime navigateur et FlareSolverr sans Docker Compose. Consultez le [guide Unraid](unraid/README.md). Nous recherchons activement des retours avant une éventuelle publication dans Community Applications.
+Des templates Unraid sont disponibles pour installer séparément l'application, le runtime navigateur, FlareSolverr et TRAWL sans Docker Compose. Consultez le [guide Unraid](unraid/README.md). Nous recherchons activement des retours avant une éventuelle publication dans Community Applications.
 
 Le navigateur (Playwright/Chromium/CloakBrowser) est externalisé dans l'image `ghcr.io/tracker-dashboard/tracker-dashboard-browser:latest`. L'image principale reste allégée.
 
@@ -201,11 +201,11 @@ Si le runtime navigateur est absent, les trackers en `mode: browser` affichent u
 
 Les lectures en mode navigateur utilisent **Chromium** (Playwright) par défaut. Une option (panneau Proxies → Moteur navigateur) bascule sur **[CloakBrowser](https://github.com/CloakHQ/CloakBrowser)**, un Chromium modifié pour présenter une empreinte de vrai navigateur (TLS, fingerprint) et franchir davantage de protections anti-bot. S'il est indisponible, l'app repart automatiquement sur Chromium.
 
-### Repli Cloudflare (FlareSolverr)
+### Repli Cloudflare (FlareSolverr puis TRAWL)
 
-Tracker Dashboard peut utiliser **[FlareSolverr](https://github.com/FlareSolverr/FlareSolverr)** en dernier recours lorsqu'un tracker renvoie explicitement un challenge Cloudflare ou anti-bot. Le sidecar reçoit uniquement l'URL, les cookies et le proxy du tracker concerné, résout le challenge dans une session temporaire, renvoie le HTML puis détruit cette session. Les erreurs de credentials, de réseau ou d'extraction ne déclenchent pas ce navigateur supplémentaire. Un tracker connu pour nécessiter FlareSolverr, comme YGGReborn, peut déclarer ce repli en priorité après les lectures HTTP légères.
+Tracker Dashboard peut utiliser **[FlareSolverr](https://github.com/FlareSolverr/FlareSolverr)** en dernier recours lorsqu'un tracker renvoie explicitement un challenge Cloudflare ou anti-bot. Si FlareSolverr échoue ou reste injoignable, l'application tente ensuite **[TRAWL](https://github.com/germondai/trawl)** via son API compatible FlareSolverr. Les sidecars reçoivent uniquement l'URL, les cookies et le proxy du tracker concerné, résolvent le challenge dans une session temporaire, renvoient le HTML puis détruisent cette session. Les erreurs de credentials, de réseau ou d'extraction ne déclenchent pas ces navigateurs supplémentaires. Un tracker connu pour nécessiter ce repli, comme YGGReborn, peut le déclarer en priorité après les lectures HTTP légères.
 
-Le fichier `docker-compose.yml` fourni inclut déjà ce sidecar. Pour une stack existante, ajoutez :
+Le fichier `docker-compose.yml` fourni inclut déjà FlareSolverr et TRAWL. Pour une stack existante, ajoutez d'abord FlareSolverr :
 
 ```yaml
 services:
@@ -221,7 +221,22 @@ services:
       TZ: Europe/Paris
 ```
 
-Le partage du réseau du conteneur principal est important : FlareSolverr est alors joignable en interne sur `http://127.0.0.1:8191` et réutilise aussi les tunnels SOCKS locaux des proxies SSH. Aucun port FlareSolverr n'est exposé sur l'hôte. Une URL différente peut être fournie avec `FLARESOLVERR_URL`.
+Ajoutez ensuite TRAWL comme secours. L'image `baseline` est retenue pour sa compatibilité avec les vieux CPU, les anciens kernels et les NAS Synology ; ce n'est pas une promesse de consommation CPU/RAM plus basse que FlareSolverr.
+
+```yaml
+services:
+  tracker-dashboard-trawl:
+    image: ghcr.io/germondai/trawl:baseline
+    container_name: tracker-dashboard-trawl
+    restart: unless-stopped
+    network_mode: "container:tracker-dashboard"
+    environment:
+      PORT: 8192
+      LOG_LEVEL: warning
+      TZ: Europe/Paris
+```
+
+Le partage du réseau du conteneur principal est important : FlareSolverr est alors joignable en interne sur `http://127.0.0.1:8191`, TRAWL sur `http://127.0.0.1:8192`, et les deux réutilisent aussi les tunnels SOCKS locaux des proxies SSH. Aucun port anti-bot n'est exposé sur l'hôte. Une URL différente peut être fournie avec `FLARESOLVERR_URL` ou `TRAWL_URL`.
 
 ## Lecture rapide (curl-impersonate)
 
@@ -295,5 +310,6 @@ Le ratio peut être calculé depuis upload/download s'il n'est pas exposé ; ide
 - [Autovisit](https://github.com/Gusdezup/Autovisit) — idée de la prise en charge du 2FA (TOTP).
 - [CloakBrowser](https://github.com/CloakHQ/CloakBrowser) — moteur Chromium furtif proposé en option.
 - [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr) — résolution de challenges Cloudflare via un sidecar interne optionnel.
+- [TRAWL](https://github.com/germondai/trawl) — secours anti-bot compatible FlareSolverr lorsque le premier repli échoue.
 - [cross-seed](https://github.com/cross-seed/cross-seed) — détection des torrents injectés et logo officiel (licence Apache-2.0).
 - Et tous les contributeurs qui partagent des définitions de trackers.
