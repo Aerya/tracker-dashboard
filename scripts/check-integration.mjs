@@ -270,15 +270,21 @@ if (!yggUsesFlareSolverrFallback) {
 const shipsFlareSolverrSidecar = (
   compose.includes('tracker-dashboard-flaresolverr:')
   && compose.includes('ghcr.io/flaresolverr/flaresolverr:latest')
+  && compose.includes('tracker-dashboard-trawl:')
+  && compose.includes('ghcr.io/germondai/trawl:baseline')
+  && compose.includes('PORT: 8192')
   && compose.includes('LOG_LEVEL: warning')
   && compose.includes('network_mode: "service:tracker-dashboard"')
   && compose.includes('HOST: 127.0.0.1')
   && html.includes('/api/flaresolverr/status')
+  && html.includes('/api/trawl/status')
   && server.includes("app.get('/api/flaresolverr/status'")
-  && readme.includes('### Repli Cloudflare (FlareSolverr)')
+  && server.includes("app.get('/api/trawl/status'")
+  && readme.includes('### Repli Cloudflare (FlareSolverr puis TRAWL)')
+  && readme.includes('ghcr.io/germondai/trawl:baseline')
 );
 if (!shipsFlareSolverrSidecar) {
-  errors.push('FlareSolverr sidecar wiring must remain available in Compose, WebUI and README');
+  errors.push('FlareSolverr and TRAWL anti-bot sidecar wiring must remain available in Compose, WebUI and README');
 }
 
 const shipsCrossSeedIntegration = (

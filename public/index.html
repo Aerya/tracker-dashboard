@@ -2075,12 +2075,13 @@
     </div>
     <div class="proxy-info" style="margin-top:14px; max-width:760px">
       <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
-        <b>Repli Cloudflare (FlareSolverr)</b>
+        <b>Repli Cloudflare (FlareSolverr puis TRAWL)</b>
         <span id="flaresolverr-badge" class="definition-badge definition-badge-muted">…</span>
+        <span id="trawl-badge" class="definition-badge definition-badge-muted">…</span>
         <button class="btn-test" style="padding:4px 10px" onclick="loadFlareSolverrStatus()" type="button">Vérifier</button>
       </div>
       <div id="flaresolverr-detail" class="beta-note" style="margin-top:8px"></div>
-      <p class="beta-note" style="margin-top:8px">Dernier recours automatique pour les challenges Cloudflare/anti-bot explicites. CloakBrowser reste le moteur normal ; les erreurs de credentials ou de regex ne déclenchent pas FlareSolverr.</p>
+      <p class="beta-note" style="margin-top:8px">Dernier recours automatique pour les challenges Cloudflare/anti-bot explicites : FlareSolverr est essayé d'abord, puis TRAWL si FlareSolverr échoue. CloakBrowser reste le moteur normal ; les erreurs de credentials ou de regex ne déclenchent pas ces sidecars.</p>
     </div>
     <div class="proxy-form" style="align-items:flex-start; margin-top:14px">
       <label class="toggle-switch" style="grid-column:span 5" title="Lecture rapide via curl-impersonate">
@@ -7054,7 +7055,7 @@
   --restart unless-stopped \\
   --network container:tracker-dashboard \\
   -e HOST=127.0.0.1 \\
-  -e LOG_LEVEL=info \\
+  -e LOG_LEVEL=warning \\
   -e TZ=Europe/Paris \\
   ghcr.io/flaresolverr/flaresolverr:latest`;
 
@@ -7066,7 +7067,27 @@
     network_mode: "container:tracker-dashboard"
     environment:
       HOST: 127.0.0.1
-      LOG_LEVEL: info
+      LOG_LEVEL: warning
+      TZ: Europe/Paris`;
+
+  const TRAWL_INSTALL_COMMAND = `docker run -d \\
+  --name tracker-dashboard-trawl \\
+  --restart unless-stopped \\
+  --network container:tracker-dashboard \\
+  -e PORT=8192 \\
+  -e LOG_LEVEL=warning \\
+  -e TZ=Europe/Paris \\
+  ghcr.io/germondai/trawl:baseline`;
+
+  const TRAWL_COMPOSE_SNIPPET = `services:
+  tracker-dashboard-trawl:
+    image: ghcr.io/germondai/trawl:baseline
+    container_name: tracker-dashboard-trawl
+    restart: unless-stopped
+    network_mode: "container:tracker-dashboard"
+    environment:
+      PORT: 8192
+      LOG_LEVEL: warning
       TZ: Europe/Paris`;
 
   // Etat du runtime navigateur externe + versions.
@@ -7114,19 +7135,28 @@
 
   async function loadFlareSolverrStatus() {
     const badge = document.getElementById('flaresolverr-badge');
+    const trawlBadge = document.getElementById('trawl-badge');
     const detail = document.getElementById('flaresolverr-detail');
-    if (!badge || !detail) return;
+    if (!badge || !trawlBadge || !detail) return;
     badge.textContent = 'Vérification…';
+    trawlBadge.textContent = 'Vérification…';
     badge.className = 'definition-badge definition-badge-muted';
+    trawlBadge.className = 'definition-badge definition-badge-muted';
     badge.style.color = '';
+    trawlBadge.style.color = '';
     try {
-      const response = await fetch('/api/flaresolverr/status');
-      const data = await response.json();
-      const status = data.status || {};
+      const [flareResponse, trawlResponse] = await Promise.all([
+        fetch('/api/flaresolverr/status'),
+        fetch('/api/trawl/status'),
+      ]);
+      const flareData = await flareResponse.json();
+      const trawlData = await trawlResponse.json();
+      const status = flareData.status || {};
+      const trawlStatus = trawlData.status || {};
       if (status.available) {
         badge.textContent = 'FlareSolverr — disponible';
         badge.className = 'definition-badge';
-        detail.innerHTML = `Version <b>${escapeHtml(status.version || '?')}</b><br><span style="color:var(--muted)">${escapeHtml(status.url || '')}</span>`;
+        detail.innerHTML = `FlareSolverr <b>${escapeHtml(status.version || '?')}</b><br><span style="color:var(--muted)">${escapeHtml(status.url || '')}</span>`;
       } else {
         badge.textContent = 'FlareSolverr — absent';
         badge.className = 'definition-badge definition-badge-muted';
@@ -7141,8 +7171,27 @@
             <button class="btn-test" style="padding:4px 10px;margin-top:6px" onclick="copyFlareSolverrInstall(this, 'run')" type="button">Copier la commande</button>
           </details>`;
       }
+      if (trawlStatus.available) {
+        trawlBadge.textContent = 'TRAWL — disponible';
+        trawlBadge.className = 'definition-badge';
+        detail.innerHTML += `<div style="margin-top:8px">TRAWL <b>${escapeHtml(trawlStatus.version || 'baseline')}</b><br><span style="color:var(--muted)">${escapeHtml(trawlStatus.url || '')}</span></div>`;
+      } else {
+        trawlBadge.textContent = 'TRAWL — absent';
+        trawlBadge.className = 'definition-badge definition-badge-muted';
+        trawlBadge.style.color = 'var(--red)';
+        detail.innerHTML += `<div style="margin-top:12px">Le sidecar TRAWL de secours est absent ou injoignable${trawlStatus.error ? ' : ' + escapeHtml(trawlStatus.error) : ''}.
+          <div style="margin-top:10px"><b>Stack Compose / Dockge / Portainer</b></div>
+          <pre style="white-space:pre-wrap;margin-top:8px"><code>${escapeHtml(TRAWL_COMPOSE_SNIPPET)}</code></pre>
+          <button class="btn-test" style="padding:4px 10px;margin-top:6px" onclick="copyTrawlInstall(this, 'compose')" type="button">Copier le compose</button>
+          <details style="margin-top:10px">
+            <summary style="cursor:pointer">Commande Docker équivalente</summary>
+            <pre style="white-space:pre-wrap;margin-top:8px"><code>${escapeHtml(TRAWL_INSTALL_COMMAND)}</code></pre>
+            <button class="btn-test" style="padding:4px 10px;margin-top:6px" onclick="copyTrawlInstall(this, 'run')" type="button">Copier la commande</button>
+          </details></div>`;
+      }
     } catch (error) {
       badge.textContent = 'Inconnu';
+      trawlBadge.textContent = 'Inconnu';
       detail.textContent = 'Statut indisponible : ' + error.message;
     }
   }
@@ -7178,6 +7227,17 @@
       setTimeout(() => { button.textContent = previous; }, 1500);
     } catch (error) {
       console.warn('copyFlareSolverrInstall:', error.message);
+    }
+  }
+
+  async function copyTrawlInstall(button, mode) {
+    try {
+      await navigator.clipboard.writeText(mode === 'compose' ? TRAWL_COMPOSE_SNIPPET : TRAWL_INSTALL_COMMAND);
+      const previous = button.textContent;
+      button.textContent = 'Copié';
+      setTimeout(() => { button.textContent = previous; }, 1500);
+    } catch (error) {
+      console.warn('copyTrawlInstall:', error.message);
     }
   }
 

@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { fetchWithFlareSolverr, getFlareSolverrStatus, isFlareSolverrCandidate } from '../dist/flareSolverr.js';
+import { fetchWithFlareSolverr, getFlareSolverrStatus, getTrawlStatus, isFlareSolverrCandidate } from '../dist/flareSolverr.js';
 
 const calls = [];
 const server = http.createServer(async (request, response) => {
@@ -101,6 +101,73 @@ try {
   if (!status.available || status.version !== 'test') {
     throw new Error('FlareSolverr status endpoint was not detected');
   }
+  const trawlStatus = await getTrawlStatus(baseUrl);
+  if (!trawlStatus.available || trawlStatus.provider !== 'trawl') {
+    throw new Error('TRAWL health endpoint was not detected');
+  }
+
+  const failingFlare = http.createServer(async (request, response) => {
+    response.setHeader('Content-Type', 'application/json');
+    if (request.method === 'GET') {
+      response.end(JSON.stringify({ version: 'failing-flare' }));
+      return;
+    }
+    response.end(JSON.stringify({ status: 'error', message: 'primary solver failed' }));
+  });
+  const trawlCalls = [];
+  const trawlServer = http.createServer(async (request, response) => {
+    if (request.method === 'GET') {
+      response.setHeader('Content-Type', 'application/json');
+      response.end(JSON.stringify({ ok: true, version: 'trawl-test' }));
+      return;
+    }
+    let raw = '';
+    for await (const chunk of request) raw += chunk;
+    const payload = JSON.parse(raw);
+    trawlCalls.push(payload);
+    response.setHeader('Content-Type', 'application/json');
+    if (payload.cmd === 'sessions.create') {
+      response.end(JSON.stringify({ status: 'ok', session: payload.session }));
+      return;
+    }
+    if (payload.cmd === 'sessions.destroy') {
+      response.end(JSON.stringify({ status: 'ok' }));
+      return;
+    }
+    response.end(JSON.stringify({
+      status: 'ok',
+      solution: {
+        status: 200,
+        url: payload.url,
+        response: '<div>TRAWL fallback</div><span>Upload</span>',
+        cookies: [],
+      },
+    }));
+  });
+  await new Promise(resolve => failingFlare.listen(0, '127.0.0.1', resolve));
+  await new Promise(resolve => trawlServer.listen(0, '127.0.0.1', resolve));
+  try {
+    const failingAddress = failingFlare.address();
+    const trawlAddress = trawlServer.address();
+    process.env.FLARESOLVERR_URL = `http://127.0.0.1:${failingAddress.port}`;
+    process.env.TRAWL_URL = `http://127.0.0.1:${trawlAddress.port}`;
+    const fallbackResult = await fetchWithFlareSolverr(tracker, { username: 'user', password: 'unused' }, {
+      cookieRaw: 'remember_token=session',
+      timeoutMs: 5_000,
+    });
+    if (fallbackResult.provider !== 'trawl' || !fallbackResult.html.includes('TRAWL fallback')) {
+      throw new Error('TRAWL must be tried when FlareSolverr fails');
+    }
+    if (!trawlCalls.some(call => call.cmd === 'request.get')) {
+      throw new Error('TRAWL fallback did not receive the tracker request');
+    }
+  } finally {
+    delete process.env.FLARESOLVERR_URL;
+    delete process.env.TRAWL_URL;
+    await new Promise(resolve => failingFlare.close(resolve));
+    await new Promise(resolve => trawlServer.close(resolve));
+  }
+
   if (!isFlareSolverrCandidate(new Error('Challenge anti-bot/Cloudflare affiche'))
     || isFlareSolverrCandidate(new Error('Identifiants invalides'))
     || isFlareSolverrCandidate(new Error('Aucune donnee extraite'))) {

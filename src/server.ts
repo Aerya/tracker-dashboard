@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import axios from 'axios';
 import { fetchTracker, invalidateAllSessions, invalidateSession } from './fetcher.js';
 import { resetBrowserProfile, closeBrowserSession, fetchRawHtmlWithBrowser, getBrowserRuntimeStatus } from './browserBackend.js';
-import { getFlareSolverrStatus } from './flareSolverr.js';
+import { getFlareSolverrStatus, getTrawlStatus } from './flareSolverr.js';
 import {
   cleanCrossSeedBaseUrl,
   detectCrossSeedInstanceIds,
@@ -3369,6 +3369,10 @@ export async function start(): Promise<void> {
 
   app.get('/api/flaresolverr/status', async (_req, res) => {
     res.json({ ok: true, status: await getFlareSolverrStatus() });
+  });
+
+  app.get('/api/trawl/status', async (_req, res) => {
+    res.json({ ok: true, status: await getTrawlStatus() });
   });
 
   app.post('/api/settings/browser-engine', (req, res) => {

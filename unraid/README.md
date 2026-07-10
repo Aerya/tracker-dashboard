@@ -1,10 +1,11 @@
 # Templates Unraid — bêta
 
-Ce dossier fournit trois templates DockerMan pour installer Tracker Dashboard sur Unraid sans Docker Compose :
+Ce dossier fournit quatre templates DockerMan pour installer Tracker Dashboard sur Unraid sans Docker Compose :
 
 1. `tracker-dashboard` — application et WebUI ;
 2. `tracker-dashboard-browser` — runtime Playwright/Chromium/CloakBrowser requis par les trackers en mode navigateur ;
-3. `tracker-dashboard-flaresolverr` — repli anti-bot facultatif.
+3. `tracker-dashboard-flaresolverr` — repli anti-bot facultatif principal ;
+4. `tracker-dashboard-trawl` — repli anti-bot secondaire si FlareSolverr échoue.
 
 > [!IMPORTANT]
 > Ces templates sont en phase bêta. Nous recherchons des retours d'utilisateurs Unraid avant de proposer une publication dans Community Applications.
@@ -25,17 +26,18 @@ Dans **Docker → Add Container**, sélectionnez et appliquez les templates dans
 
 1. `tracker-dashboard` ;
 2. `tracker-dashboard-browser` ;
-3. `tracker-dashboard-flaresolverr`.
+3. `tracker-dashboard-flaresolverr` ;
+4. `tracker-dashboard-trawl`.
 
-Les deux sidecars utilisent `container:tracker-dashboard` : ils partagent le réseau du conteneur principal. Les ports internes `3001` et `8191` ne sont donc pas exposés sur le réseau local. Le runtime navigateur partage également le même dossier appdata `/app/config`.
+Les trois sidecars utilisent `container:tracker-dashboard` : ils partagent le réseau du conteneur principal. Les ports internes `3001`, `8191` et `8192` ne sont donc pas exposés sur le réseau local. Le runtime navigateur partage également le même dossier appdata `/app/config`.
 
 ## Ordre de démarrage
 
 Dans l'onglet **Docker** :
 
 1. déverrouillez la liste avec le cadenas ;
-2. placez les conteneurs dans l'ordre `tracker-dashboard`, `tracker-dashboard-browser`, `tracker-dashboard-flaresolverr` ;
-3. activez **AutoStart** pour les trois ;
+2. placez les conteneurs dans l'ordre `tracker-dashboard`, `tracker-dashboard-browser`, `tracker-dashboard-flaresolverr`, `tracker-dashboard-trawl` ;
+3. activez **AutoStart** pour les quatre ;
 4. en vue avancée, ajoutez si nécessaire une attente de quelques secondes après `tracker-dashboard`.
 
 Unraid démarre les conteneurs AutoStart dans l'ordre affiché et permet d'ajouter un délai entre eux : [documentation Unraid](https://docs.unraid.net/fr/unraid-os/using-unraid-to/run-docker-containers/managing-and-customizing-containers/).
@@ -50,9 +52,10 @@ Depuis le terminal Unraid :
 docker ps --filter name=tracker-dashboard
 docker exec tracker-dashboard curl -fsS http://127.0.0.1:3001/health
 docker exec tracker-dashboard curl -fsS http://127.0.0.1:8191/health
+docker exec tracker-dashboard curl -fsS http://127.0.0.1:8192/health
 ```
 
-Le runtime navigateur doit répondre `{"ok":true}`. FlareSolverr doit renvoyer une réponse HTTP valide.
+Le runtime navigateur doit répondre `{"ok":true}`. FlareSolverr et TRAWL doivent renvoyer une réponse HTTP valide.
 
 ## Retours recherchés
 
@@ -60,7 +63,7 @@ Merci d'ouvrir un [retour Unraid](https://github.com/Tracker-Dashboard/tracker-d
 
 - la version d'Unraid ;
 - l'architecture et le matériel ;
-- si les trois templates s'installent sans modification ;
+- si les quatre templates s'installent sans modification ;
 - si l'ordre AutoStart fonctionne après un redémarrage de l'array ;
 - le résultat des commandes de vérification ;
 - toute correction nécessaire dans les chemins, le réseau ou les libellés.
