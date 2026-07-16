@@ -1,0 +1,36 @@
+{
+  "id": "pussytorrents",
+  "name": "PussyTorrents",
+  "baseUrl": "https://pussytorrents.org",
+  "enabled": true,
+  "login": {
+    "cookieOnly": true,
+    "failurePatterns": [
+      "type=\"password\"",
+      "name=\"password\"",
+      "/user/account/login"
+    ]
+  },
+  "fetch": {
+    "url": "/",
+    "mode": "browser",
+    "responseType": "html",
+    "fields": {
+      "uploadedBytes": {
+        "regex": "title=\"Uploaded\"[^>]*class=\"uploaded\"[^>]*>[\\s\\S]{0,80}?</span>\\s*(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))",
+        "transform": "bytes"
+      },
+      "downloadedBytes": {
+        "regex": "title=\"Downloaded\"[^>]*class=\"downloaded\"[^>]*>[\\s\\S]{0,80}?</span>\\s*(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))",
+        "transform": "bytes"
+      },
+      "ratio": {
+        "regex": ">Ratio:\\s*</span>\\s*(?<value>(?:[\\d\\s.,]+|inf(?:inite|inity)?|∞))",
+        "transform": "number"
+      }
+    }
+  },
+  "dashboard": {
+    "byteUnit": "decimal"
+  }
+}

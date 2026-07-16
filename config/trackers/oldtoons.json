@@ -1,0 +1,12 @@
+{
+  "id": "oldtoons",
+  "name": "Oldtoons",
+  "baseUrl": "https://oldtoons.world",
+  "enabled": true,
+  "engine": "unit3d",
+  "login": {
+    "url": "login",
+    "method": "POST",
+    "contentType": "form"
+  }
+}
