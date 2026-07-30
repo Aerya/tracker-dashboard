@@ -1879,12 +1879,84 @@
       background: var(--surface-2, rgba(127,127,127,.05));
     }
     .guided-summary b { font-weight: 700; }
+
+    /* ── Menu escamotable ─────────────────────────────────────────
+       Un seul bouton, un seul etat (classe .sidebar-hidden sur <body>).
+       Seul le defaut differe : deplie sur ordi (choix memorise),
+       replie sur mobile (jamais memorise).
+       Tout est en surcharge : aucune regle existante n'est modifiee. */
+    #sidebar-toggle {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      z-index: 20;
+      width: 34px;
+      height: 34px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text2);
+      cursor: pointer;
+      transition: color .15s, border-color .15s;
+    }
+    #sidebar-toggle:hover { color: var(--accent); border-color: var(--accent); }
+    #sidebar-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    #sidebar-toggle svg { width: 18px; height: 18px; }
+    #sidebar-toggle .icon-close { display: none; }
+    body:not(.sidebar-hidden) #sidebar-toggle .icon-open { display: none; }
+    body:not(.sidebar-hidden) #sidebar-toggle .icon-close { display: block; }
+
+    /* Le logo laisse la place au bouton quand la barre est visible. */
+    body:not(.sidebar-hidden) .sidebar-brand { padding-left: 52px; }
+
+    /* ── Etat replie (ordi ET mobile) : le contenu recupere les 250px ── */
+    body.sidebar-hidden { grid-template-columns: 1fr; }
+    body.sidebar-hidden .sidebar { display: none; }
+    body.sidebar-hidden main { padding-top: 54px; }
+
+    /* ── Mobile, menu deplie : une seule colonne, defilement d'un bloc.
+       Le menu occupe l'ecran, les tuiles sont dessous. ── */
+    @media (max-width: 760px) {
+      body:not(.sidebar-hidden) {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto;
+        height: auto;
+        min-height: 100vh;
+        overflow-y: auto;
+      }
+      body:not(.sidebar-hidden) .sidebar {
+        grid-row: 1;
+        grid-column: 1;
+        min-height: 100vh;
+        overflow-y: visible;
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+      }
+      body:not(.sidebar-hidden) .content-area {
+        grid-row: 2;
+        grid-column: 1;
+        overflow-y: visible;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      #sidebar-toggle { transition: none; }
+    }
   </style>
   <link rel="stylesheet" href="/responsive.css">
 </head>
 <body>
 
-<nav class="sidebar">
+<button id="sidebar-toggle" type="button" onclick="toggleSidebar()" aria-controls="sidebar" aria-expanded="true" aria-label="Afficher ou masquer le menu" title="Afficher ou masquer le menu">
+  <svg class="icon-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+  <svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+</button>
+
+<nav class="sidebar" id="sidebar">
   <span class="sidebar-brand">
     <img class="brand-logo" src="/logo.png" alt="Tracker Dashboard" />
     <span class="header-logo-text">tracker<span>.dashboard</span></span>
@@ -7558,6 +7630,59 @@
       window.prompt('Copiez la nouvelle image :', image);
     }
   }
+
+  // ── Menu escamotable ────────────────────────────────────────────
+  // Etat unique porte par <body class="sidebar-hidden">.
+  // Ordi : deplie par defaut, le choix de l'utilisateur est memorise.
+  // Mobile : replie par defaut, jamais memorise (comportement hamburger).
+  const SIDEBAR_MOBILE_MQ = '(max-width: 760px)';
+  const SIDEBAR_STORE_KEY = 'tracker-dashboard-sidebar-hidden';
+
+  function isSidebarMobile() {
+    return window.matchMedia(SIDEBAR_MOBILE_MQ).matches;
+  }
+
+  function setSidebarHidden(hidden, persist) {
+    document.body.classList.toggle('sidebar-hidden', hidden);
+    const btn = document.getElementById('sidebar-toggle');
+    if (btn) btn.setAttribute('aria-expanded', hidden ? 'false' : 'true');
+    if (persist && !isSidebarMobile()) {
+      try { localStorage.setItem(SIDEBAR_STORE_KEY, hidden ? '1' : '0'); } catch (e) {}
+    }
+  }
+
+  function toggleSidebar() {
+    setSidebarHidden(!document.body.classList.contains('sidebar-hidden'), true);
+  }
+
+  function initSidebarToggle() {
+    if (isSidebarMobile()) { setSidebarHidden(true, false); return; }
+    let stored = null;
+    try { stored = localStorage.getItem(SIDEBAR_STORE_KEY); } catch (e) {}
+    setSidebarHidden(stored === '1', false);
+  }
+
+  // Sur mobile, taper une entree de navigation replie le menu : on arrive
+  // directement sur le contenu sans avoir a faire defiler.
+  document.addEventListener('click', function (ev) {
+    if (!isSidebarMobile()) return;
+    const el = ev.target && ev.target.closest ? ev.target.closest('.sidebar [data-nav]') : null;
+    if (el) setSidebarHidden(true, false);
+  });
+
+  // Echap referme le menu sur mobile uniquement (pour ne pas interferer
+  // avec les modales sur ordi).
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key !== 'Escape' || !isSidebarMobile()) return;
+    if (!document.body.classList.contains('sidebar-hidden')) setSidebarHidden(true, false);
+  });
+
+  // Rotation / redimensionnement : on repasse par le defaut du nouveau format.
+  try {
+    window.matchMedia(SIDEBAR_MOBILE_MQ).addEventListener('change', initSidebarToggle);
+  } catch (e) {}
+
+  initSidebarToggle();
 
   init();
 </script>
