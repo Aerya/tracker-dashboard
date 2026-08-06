@@ -15,36 +15,8 @@ permissions:
   pull-requests: write
 
 jobs:
-  prepare:
-    name: Prepare internal pull request
-    if: >-
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.draft == false
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Update branch from main
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const pull = context.payload.pull_request;
-
-            try {
-              await github.rest.pulls.updateBranch({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                pull_number: pull.number,
-                expected_head_sha: pull.head.sha,
-              });
-              core.info('Pull request branch update requested.');
-            } catch (error) {
-              if (error.status !== 422) throw error;
-              core.info('Pull request branch is already up to date.');
-            }
-
   enable-auto-merge:
     name: Activer la fusion automatique
-    needs: prepare
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.draft == false
