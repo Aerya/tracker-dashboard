@@ -1087,12 +1087,12 @@ async function refreshScheduledTracker(
   }
 
   const creds = loadCredentialsFromDb()[tracker.id];
-  if (!creds) {
+  if (!creds && !cookieOnlyReady(tracker)) {
     console.warn(`  [${tracker.name}] Refresh planifie ignore : credentials manquants`);
     return;
   }
 
-  const fetched = await fetchTrackerBounded(tracker, creds);
+  const fetched = await fetchTrackerBounded(tracker, creds ?? EMPTY_CREDENTIALS);
   processIncidentStreak(fetched);
   const stat = preserveLastKnownOnTimeout(tracker, fetched);
   updateRetryState(tracker, fetched, stat);

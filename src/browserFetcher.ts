@@ -98,7 +98,7 @@ function interpolate(tpl: string, vars: Record<string, string>): string {
   return tpl.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? '');
 }
 
-function hasFailurePattern(text: string, patterns: string[]): boolean {
+function hasFailurePattern(text: string, patterns: string[] = []): boolean {
   return patterns.some(pattern => text.toLowerCase().includes(pattern.toLowerCase()));
 }
 
@@ -286,24 +286,7 @@ async function waitForTrackerContent(tracker: TrackerConfig, page: Page): Promis
       return false;
     }
   }
-  if (tracker.id === 'torr9') {
-    try {
-      await page.waitForFunction(
-        () => {
-          const text = document.body?.innerText ?? '';
-          const hasRatio = /RATIO\s*[\d.,]+/i.test(text);
-          const byteValues = text.match(/\d[\d\s.,]*\s*[KMGTPE](?:i?B|B)/gi) ?? [];
-          return hasRatio && byteValues.length >= 2;
-        },
-        null,
-        { timeout: 30_000 },
-      );
-      return true;
-    } catch {
-      return false;
-    }
-  }
-  if (tracker.id !== 'tr4ker') return false;
+  if ((tracker.baseId ?? tracker.id) !== 'tr4ker') return false;
   try {
     await page.waitForFunction(
       () => {
@@ -408,7 +391,7 @@ async function ensureLoggedIn(
   overrides?: BrowserFetchOverrides,
 ): Promise<void> {
   const html = await safeContent(page);
-  if (!hasFailurePattern(html, tracker.login.failurePatterns)) return;
+  if (!hasFailurePattern(html, tracker.login.failurePatterns ?? [])) return;
 
   // Mode cookie uniquement : on ne soumet JAMAIS le formulaire (sinon, sur des sites
   // comme MyAnonamouse, chaque tentative cree une session et finit par bloquer le compte).
@@ -572,23 +555,29 @@ async function ensureLoggedIn(
   await waitForAnubis(page);
   await waitForLiveView(page);
 
-  // ── 2FA en deux etapes (Fortify/UNIT3D) : page de challenge apres le password ──
+  // ── 2FA en deux etapes : page de challenge apres le mot de passe ────────────
   if (totpSecret) {
     const postHtml = await safeContent(page);
     const onTwoFa = /two-factor-challenge/i.test(page.url()) ||
       /two-factor-challenge/i.test(postHtml) ||
       /Two[\s-]?Factor Authentication/i.test(postHtml) ||
+      /One Time Password/i.test(postHtml) ||
       (/name=["']code["']/i.test(postHtml) && /recovery_code/i.test(postHtml));
     if (onTwoFa) {
       const code = generateTotp(totpSecret);
       if (code) {
-        for (const s of ['input[name="code"]', 'input[name="two_step_code"]', 'input[autocomplete="one-time-code"]', 'input[inputmode="numeric"]', '#code']) {
+        for (const s of ['input[name="code"]', 'input[name="two_step_code"]', 'input[name="otp"]', 'input[name="totp"]', 'input[autocomplete="one-time-code"]', 'input[inputmode="numeric"]', 'input[type="tel"]', '#code']) {
           const inp = page.locator(s);
           if (await inp.count() === 0) continue;
           const t = inp.first();
           if (!(await t.isVisible().catch(() => false))) continue;
           await t.fill(code, { timeout: 5000 }).catch(() => {});
           break;
+        }
+        const genericOtp = page.locator('form input:visible:not([type="hidden"]):not([type="password"]):not([type="submit"]):not([name="username"]):not([name="email"])');
+        if (await genericOtp.count() === 1) {
+          const current = await genericOtp.first().inputValue().catch(() => '');
+          if (!current) await genericOtp.first().fill(code, { timeout: 5000 }).catch(() => {});
         }
         const submit2 = page.locator('form button[type="submit"]:visible, button[type="submit"]:visible, input[type="submit"]:visible');
         if (await submit2.count() > 0) await submit2.first().click({ timeout: 10_000 }).catch(() => {});
@@ -619,16 +608,6 @@ export async function fetchWithBrowser(
     await waitForAnubis(page);
     await waitForAntiBotChallenge(page);
     await waitForLiveView(page);
-    if (tracker.id === 'torr9') {
-      await page.waitForFunction(
-        () => {
-          const text = document.body?.innerText ?? '';
-          return Boolean(document.querySelector('input[type="password"]')) || /RATIO\s*[\d.,]+/i.test(text);
-        },
-        null,
-        { timeout: 30_000 },
-      ).catch(() => {});
-    }
     await ensureLoggedIn(tracker, credentials, page, overrides);
     await page.goto(url, { waitUntil: 'commit', timeout: 45_000 });
     await page.waitForLoadState('domcontentloaded', { timeout: 30_000 }).catch(() => {});

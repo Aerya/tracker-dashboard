@@ -269,7 +269,7 @@ export function importLegacyTrackersIfNeeded(): void {
 // Les définitions retirées restent sinon présentes dans le volume et dans SQLite
 // après une mise à jour d'image. Les supprimer explicitement évite qu'un tracker
 // fermé continue d'apparaître ou d'être rafraîchi sur les installations existantes.
-const RETIRED_BUNDLED_TRACKER_IDS = new Set(['nexum']);
+const RETIRED_BUNDLED_TRACKER_IDS = new Set(['nexum', 'torr9']);
 
 function removeRetiredDefinitionFiles(trackersDir: string): void {
   if (!fs.existsSync(trackersDir)) return;

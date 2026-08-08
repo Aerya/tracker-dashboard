@@ -27,7 +27,8 @@ const browserFetcher = fs.readFileSync(browserFetcherPath, 'utf8');
 const db = fs.readFileSync(dbPath, 'utf8');
 const redacted = JSON.parse(fs.readFileSync(redactedPath, 'utf8'));
 const tr4ker = JSON.parse(fs.readFileSync(tr4kerPath, 'utf8'));
-const torr9 = JSON.parse(fs.readFileSync(torr9Path, 'utf8'));
+const speedapp = JSON.parse(fs.readFileSync(path.join(root, 'config', 'trackers', 'speedapp.json'), 'utf8'));
+const memphis = JSON.parse(fs.readFileSync(path.join(root, 'config', 'trackers', 'memphis.json'), 'utf8'));
 const lesRescapes = JSON.parse(fs.readFileSync(lesRescapesPath, 'utf8'));
 const { applyEnginePreset } = await import('../dist/trackerTemplates.js');
 const errors = [];
@@ -67,11 +68,36 @@ const retiresClosedNexumTracker = (
   !fs.existsSync(nexumPath)
   && readme.includes('Retrait de Nexum')
   && readme.includes('fermé définitivement')
-  && db.includes("RETIRED_BUNDLED_TRACKER_IDS = new Set(['nexum'])")
+  && db.includes("RETIRED_BUNDLED_TRACKER_IDS = new Set(['nexum', 'torr9'])")
   && db.includes('removeRetiredBundledTrackers();')
 );
 if (!retiresClosedNexumTracker) {
   errors.push('Closed Nexum tracker must be removed from bundled definitions and migrated out of existing installations');
+}
+
+const retiresTorr9Tracker = (
+  !fs.existsSync(torr9Path)
+  && readme.includes('Retrait de Torr9')
+  && db.includes("RETIRED_BUNDLED_TRACKER_IDS = new Set(['nexum', 'torr9'])")
+  && !browserFetcher.includes("tracker.id === 'torr9'")
+);
+if (!retiresTorr9Tracker) {
+  errors.push('Torr9 must be removed from bundled definitions, existing installations and browser-specific behavior');
+}
+
+const supportsAffectedTrackerLogins = (
+  speedapp.login?.body?.email === '{{username}}'
+  && speedapp.login?.body?.username === undefined
+  && memphis.login?.cookieOnly === true
+  && memphis.login?.failurePatterns?.includes('class="auth-locked"')
+  && browserFetcher.includes("(tracker.baseId ?? tracker.id) !== 'tr4ker'")
+  && browserFetcher.includes('patterns: string[] = []')
+  && fetcher.includes('patterns: string[] = []')
+  && server.includes('if (!creds && !cookieOnlyReady(tracker))')
+  && server.includes('fetchTrackerBounded(tracker, creds ?? EMPTY_CREDENTIALS)')
+);
+if (!supportsAffectedTrackerLogins) {
+  errors.push('SpeedApp email login, Memphis cookie-only refresh and duplicated TR4KER browser readiness must remain supported');
 }
 
 function normalizeRoute(route) {
@@ -195,26 +221,6 @@ if (
   || tr4kerValue(tr4ker.fetch?.fields?.ratio) !== '45.67'
 ) {
   errors.push('TR4KER home-page extractors must parse the rendered upload, download and ratio values');
-}
-
-const torr9HomeFixture = `
-  <div class="account-stats">
-    <div title="Upload"><svg></svg><span>12.34 TB</span></div>
-    <div title="Download"><svg></svg><span>56.78 GB</span></div>
-    <div title="Ratio"><span>Ratio</span><strong>90.12</strong></div>
-  </div>`;
-const torr9Value = field => new RegExp(field.regex, 's').exec(torr9HomeFixture)?.groups?.value;
-const torr9UsesDisplayedHomeStats = (
-  torr9.fetch?.url === '/'
-  && torr9.fetch?.mode === 'browser'
-  && torr9.fetch?.responseType === 'html'
-  && torr9Value(torr9.fetch.fields?.uploadedBytes) === '12.34 TB'
-  && torr9Value(torr9.fetch.fields?.downloadedBytes) === '56.78 GB'
-  && torr9Value(torr9.fetch.fields?.ratio) === '90.12'
-  && !JSON.stringify(torr9.fetch).includes('api.torr9.net')
-);
-if (!torr9UsesDisplayedHomeStats) {
-  errors.push('Torr9 must scrape upload, download and ratio displayed on the authenticated home page');
 }
 
 const lesRescapesUsesBrowserLogin = (
