@@ -15,29 +15,49 @@ permissions:
   pull-requests: write
 
 jobs:
-  prepare:
-    name: Prepare internal pull request
+  enable-auto-merge:
+    name: Activer la fusion automatique
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.draft == false
     runs-on: ubuntu-latest
 
     steps:
-      - name: Update branch from main
+      - name: Attendre les contrôles requis puis fusionner
         uses: actions/github-script@v8
         with:
           script: |
             const pull = context.payload.pull_request;
+            const query = `
+              query($owner: String!, $repo: String!, $number: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  pullRequest(number: $number) {
+                    id
+                    autoMergeRequest { enabledAt }
+                  }
+                }
+              }
+            `;
+            const result = await github.graphql(query, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              number: pull.number,
+            });
+            const pullRequest = result.repository.pullRequest;
 
-            try {
-              await github.rest.pulls.updateBranch({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                pull_number: pull.number,
-                expected_head_sha: pull.head.sha,
-              });
-              core.info('Pull request branch update requested.');
-            } catch (error) {
-              if (error.status !== 422) throw error;
-              core.info('Pull request branch is already up to date.');
+            if (pullRequest.autoMergeRequest) {
+              core.info('La fusion automatique est déjà activée.');
+              return;
             }
+
+            await github.graphql(`
+              mutation($pullRequestId: ID!) {
+                enablePullRequestAutoMerge(input: {
+                  pullRequestId: $pullRequestId,
+                  mergeMethod: SQUASH
+                }) {
+                  pullRequest { number }
+                }
+              }
+            `, { pullRequestId: pullRequest.id });
+            core.info('Fusion automatique activée : GitHub attend les contrôles requis.');
