@@ -1,4 +1,10 @@
-import { extractExtraFieldResponse, fetchExtraField, isAntiBotPage } from '../dist/fetcher.js';
+import {
+  extractExtraFieldResponse,
+  extractOtpFieldName,
+  fetchExtraField,
+  isAntiBotPage,
+  isTwoFactorPage,
+} from '../dist/fetcher.js';
 
 const gazelleTracker = {
   id: 'gazelle-test',
@@ -74,6 +80,17 @@ if (!isAntiBotPage('<script src="/cdn-cgi/challenge-platform/h/b/orchestrate/chl
 
 if (isAntiBotPage('<script src="/cdn-cgi/challenge-platform/scripts/jsd/main.js"></script>')) {
   throw new Error('Cloudflare Insights beacon must not be treated as an anti-bot challenge');
+}
+
+const torrentLeechOtpFixture = `
+  <html><head><title>Login :: One Time Password :: TorrentLeech.org</title></head>
+  <body><form method="post" action="/user/account/login/otp/">
+    <input type="hidden" name="csrf" value="fixture">
+    <input type="text" name="otp" autocomplete="one-time-code">
+    <button type="submit">Login</button>
+  </form></body></html>`;
+if (!isTwoFactorPage(torrentLeechOtpFixture) || extractOtpFieldName(torrentLeechOtpFixture) !== 'otp') {
+  throw new Error('TorrentLeech one-time-password page must be detected with its submitted OTP field');
 }
 
 console.log('extraFetch response extraction OK.');

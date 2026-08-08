@@ -4,7 +4,10 @@
   "baseUrl": "https://memphis.fit",
   "enabled": true,
   "login": {
-    "cookieOnly": true
+    "cookieOnly": true,
+    "failurePatterns": [
+      "class=\"auth-locked\""
+    ]
   },
   "fetch": {
     "url": "/",

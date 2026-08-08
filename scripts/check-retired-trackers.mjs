@@ -24,11 +24,17 @@ try {
     path.join(temp, 'config', 'trackers', 'nexum.json'),
     JSON.stringify(nexum),
   );
+  const torr9 = { ...nexum, id: 'torr9', name: 'Torr9', baseUrl: 'https://torr9.invalid' };
+  fs.writeFileSync(
+    path.join(temp, 'config', 'trackers', 'torr9.json'),
+    JSON.stringify(torr9),
+  );
 
   process.chdir(temp);
   const db = await import(`${pathToFileURL(path.join(root, 'dist', 'db.js')).href}?retired=${Date.now()}`);
   db.saveTrackerConfig(nexum);
   db.saveTrackerConfig({ ...nexum, id: 'nexum-2', name: 'Nexum (2)', baseId: 'nexum' });
+  db.saveTrackerConfig(torr9);
   db.saveTrackerCredentials('nexum', 'fixture-user', 'fixture-password');
   db.saveTrackerCredentials('nexum-2', 'fixture-user-2', 'fixture-password-2');
   db.setTrackerCookie('nexum', 'session=fixture');
@@ -66,6 +72,7 @@ try {
   assert.deepEqual(Object.keys(beta.trackerAlerts), ['kept']);
   assert.deepEqual(beta.schedule.lastFailedTrackerIds, ['kept']);
   assert.equal(fs.existsSync(path.join(temp, 'config', 'trackers', 'nexum.json')), false);
+  assert.equal(fs.existsSync(path.join(temp, 'config', 'trackers', 'torr9.json')), false);
 
   console.log('Retired tracker cleanup OK: definition, duplicate, credentials, cookie and TOTP removed.');
 } finally {

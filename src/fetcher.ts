@@ -452,7 +452,7 @@ function extractHiddenInputs(html: string): Record<string, string> {
   return fields;
 }
 
-function hasFailurePattern(text: string, patterns: string[]): string | null {
+function hasFailurePattern(text: string, patterns: string[] = []): string | null {
   for (const p of patterns) {
     if (text.toLowerCase().includes(p.toLowerCase())) return p;
   }
@@ -473,7 +473,7 @@ function hasBrowserAuthFailure(
     const hasLogoutLink = lower.includes('href="/logout"') || lower.includes("href='/logout'");
     if (hasLoginLink && !hasLogoutLink) return 'public-home';
   }
-  return hasFailurePattern(html, tracker.login.failurePatterns);
+  return hasFailurePattern(html, tracker.login.failurePatterns ?? []);
 }
 
 function isAnubisChallenge(html: string): boolean {
@@ -486,10 +486,25 @@ function isAnubisChallenge(html: string): boolean {
 // ─── 2FA en deux etapes (Laravel Fortify / UNIT3D) ─────────────────────────────
 // Apres le login user+password, certains trackers redirigent vers une page dediee
 // "two-factor-challenge" ou il faut soumettre le code TOTP avec un nouveau CSRF.
-function isTwoFactorPage(html: string): boolean {
+export function isTwoFactorPage(html: string): boolean {
   return /two-factor-challenge/i.test(html) ||
     /Two[\s-]?Factor Authentication/i.test(html) ||
+    /<title>[^<]*One Time Password[^<]*<\/title>/i.test(html) ||
     (/name=["']code["']/i.test(html) && /recovery_code/i.test(html));
+}
+
+export function extractOtpFieldName(html: string, fallback = 'code'): string {
+  const inputs = html.match(/<input\b[^>]*>/gi) ?? [];
+  for (const input of inputs) {
+    const type = /\btype=["']?([^\s"'>]+)/i.exec(input)?.[1]?.toLowerCase() ?? 'text';
+    if (['hidden', 'submit', 'button', 'checkbox', 'radio', 'password'].includes(type)) continue;
+    const name = /\bname=["']([^"']+)["']/i.exec(input)?.[1];
+    if (!name || /^(?:username|email|login|identifier)$/i.test(name)) continue;
+    if (/otp|totp|code|token|passcode|pin/i.test(name)
+      || /one-time-code/i.test(input)
+      || /inputmode=["']?numeric/i.test(input)) return name;
+  }
+  return fallback;
 }
 
 function extractCsrfToken(html: string): string {
@@ -1280,7 +1295,10 @@ export async function fetchTracker(
         const token = extractCsrfToken(postRes.body);
         const action = extractFormAction(postRes.body);
         const challengeUrl = action ? resolveUrl(base, action) : resolveUrl(base, 'two-factor-challenge');
-        const twoFaBody: Record<string, string> = { [cfg.otpField || 'code']: cvars.otp };
+        const twoFaBody: Record<string, string> = {
+          ...extractHiddenInputs(postRes.body),
+          [extractOtpFieldName(postRes.body, cfg.otpField || 'code')]: cvars.otp,
+        };
         if (token) twoFaBody['_token'] = token;
         const twoFaRes = await sess.request(challengeUrl, {
           method: 'POST',
