@@ -2895,6 +2895,62 @@
     return hasStatValue(value) ? value : '-';
   }
 
+  // Les trackers n'utilisent pas tous la meme convention pour les points :
+  // espaces ou virgules pour les milliers, virgule ou point pour les decimales.
+  // On ne modifie pas la valeur stockee ; seule sa presentation est uniformisee.
+  function parseLocalizedPoints(value) {
+    if (!hasStatValue(value)) return null;
+    if (typeof value === 'number') {
+      return Number.isFinite(value) ? { number: value, decimals: null } : null;
+    }
+    const raw = String(value)
+      .replace(/&nbsp;|&#160;|&#xa0;/gi, ' ')
+      .replace(/[\u00a0\u202f]/g, ' ')
+      .trim();
+    if (!/^[+-]?[\d\s.,]+$/.test(raw)) return null;
+
+    const compact = raw.replace(/\s/g, '');
+    const separators = [...compact.matchAll(/[.,]/g)];
+    let decimalSeparator = '';
+    let decimals = 0;
+    if (separators.length) {
+      const lastIndex = separators[separators.length - 1].index;
+      const last = compact[lastIndex];
+      const digitsAfter = compact.length - lastIndex - 1;
+      const sameSeparator = separators.every(match => match[0] === last);
+      const groupedThousands = sameSeparator
+        && digitsAfter === 3
+        && compact.split(last).slice(1).every(group => group.length === 3);
+      if (!groupedThousands) {
+        decimalSeparator = last;
+        decimals = digitsAfter;
+      }
+    }
+
+    let normalized = compact;
+    if (decimalSeparator) {
+      const decimalIndex = compact.lastIndexOf(decimalSeparator);
+      normalized = compact.slice(0, decimalIndex).replace(/[.,]/g, '')
+        + '.' + compact.slice(decimalIndex + 1).replace(/[.,]/g, '');
+    } else {
+      normalized = compact.replace(/[.,]/g, '');
+    }
+    const number = Number(normalized);
+    return Number.isFinite(number) ? { number, decimals } : null;
+  }
+
+  function formatPoints(value) {
+    const parsed = parseLocalizedPoints(value);
+    if (!parsed) return hasStatValue(value) ? value : '-';
+    const fractionDigits = parsed.decimals === null
+      ? Math.min(20, String(value).split('.')[1]?.length || 0)
+      : Math.min(20, parsed.decimals);
+    return new Intl.NumberFormat('fr-FR', {
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits,
+    }).format(parsed.number).replace(/\u202f/g, ' ');
+  }
+
   function statByteUnit(stat) {
     return stat?.byteUnit === 'decimal' ? 'decimal' : 'binary';
   }
@@ -4108,7 +4164,7 @@
     if (key === 'ratio') return Number(computedRatio(fields) || 0);
     if (key === 'buffer') return Number(fields.bufferBytes ?? fields.buffer ?? 0);
     if (key === 'seed') return Number(fields.seeding ?? fields.seedTimeDays ?? fields.seedTime ?? 0);
-    if (key === 'bonus') return Number(fields.seedBonus ?? fields.points ?? 0);
+    if (key === 'bonus') return parseLocalizedPoints(fields.seedBonus ?? fields.points)?.number ?? 0;
     return String(stat.name || stat.id || '').toLowerCase();
   }
 
@@ -4173,7 +4229,7 @@
                 <td class="num"><span class="${ratioClass(ratio)}">${hasStatValue(ratio) ? formatRatio(ratio) : '-'}</span></td>
                 <td class="num"><span class="${bufferClass(formatBuffer(fields, byteUnit))}">${buffer}</span></td>
                 <td class="num">${formatCount(fields.seeding ?? fields.seedTimeDays ?? fields.seedTime)}</td>
-                <td class="num">${formatCount(bonusRaw)}</td>
+                <td class="num">${formatPoints(bonusRaw)}</td>
                 <td>
                   <div class="beta-table-actions">
                     <button class="beta-icon-btn" onclick="openTrackerFiche('${escapeHtml(stat.id)}')" type="button">Fiche</button>
@@ -6133,7 +6189,7 @@
         return 0;
       }
       case 'seeding':  return toNum(hasStatValue(f.seeding) ? f.seeding : stat.qbitSeeding);
-      case 'bonus':    return toNum(hasStatValue(f.seedBonus) ? f.seedBonus : f.points);
+      case 'bonus':    return parseLocalizedPoints(hasStatValue(f.seedBonus) ? f.seedBonus : f.points)?.number ?? -1;
       case 'status':   return stat.status === 'error' ? 1 : 0; // erreurs regroupees
       default:         return 0;
     }
@@ -6310,7 +6366,7 @@
     const buffer = formatBuffer(f, byteUnit);
 
     const ratiolessCell1 = hasStatValue(f.points)
-      ? statCell('Points', [formatCount(f.points), 'pts'], '', '')
+      ? statCell('Points', [formatPoints(f.points), 'pts'], '', '')
       : (hasStatValue(f.seedTime)
           ? statCell('Seed 24h', formatCount(f.seedTime), '', '')
           : statCell('Points', '-', '', ''));
@@ -6321,7 +6377,7 @@
           : statCell('Taux', '-', '', ''));
     const bonusOrRequired = hasStatValue(f.requiredRatio)
       ? statCell('Req. ratio', formatRatio(f.requiredRatio), '', '')
-      : statCell('Bonus', formatCount(f.seedBonus), '', '');
+      : statCell('Bonus', formatPoints(f.seedBonus), '', '');
     const bottomCells = ratioless
       ? `${ratiolessCell1}${ratiolessCell2}`
       : `${hasStatValue(f.seedTimeDays)
@@ -6428,7 +6484,7 @@
       ? '<span class="cell-muted">—</span>'
       : (hasStatValue(f.requiredRatio)
           ? `${formatRatio(f.requiredRatio)} <span class="stat-source" title="Ratio requis">req.</span>`
-          : formatCount(bonusRaw));
+          : formatPoints(bonusRaw));
 
     const statusCell = hasProblem
       ? `<td class="cell-status" onclick="toggleIncidentEditor('${id}')">${rowStatusBadges(stat)}<span class="chevron">›</span></td>`
