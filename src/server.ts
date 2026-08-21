@@ -940,11 +940,11 @@ function hydrateFromSnapshots(trackers: TrackerConfig[]): TrackerConfig[] {
   return stale;
 }
 
-// Un tracker en cookie-only n'a pas forcement de mot de passe enregistre : sa
-// "credential" est le cookie de session. Sans ce cas, un tracker purement cookie
-// (cookie present, aucun mot de passe) serait rejete a tort en "Credentials manquants".
-function cookieOnlyReady(tracker: TrackerConfig): boolean {
-  return Boolean(tracker.login?.cookieOnly) && hasTrackerCookie(tracker.id);
+// Un cookie de session valide peut authentifier un tracker meme lorsque le tracker
+// accepte aussi username/password. Cela permet un vrai mode dual : credentials OU
+// cookie manuel, sans forcer `cookieOnly: true` dans la definition.
+function storedCookieReady(tracker: TrackerConfig): boolean {
+  return hasTrackerCookie(tracker.id);
 }
 
 const EMPTY_CREDENTIALS = { username: '', password: '' };
@@ -972,7 +972,7 @@ async function refresh(trackers: TrackerConfig[]): Promise<TrackerStats[]> {
     const enabledTrackers = trackers.filter(t => t.enabled !== false);
     const results = await mapWithConcurrency(enabledTrackers, REFRESH_CONCURRENCY, async tracker => {
       const creds = credentials[tracker.id];
-      if (!creds && !cookieOnlyReady(tracker)) {
+      if (!creds && !storedCookieReady(tracker)) {
         const stat: TrackerStats = {
           id:          tracker.id,
           name:        tracker.name,
@@ -1035,7 +1035,7 @@ async function refreshOneTracker(
   }
 
   const creds = loadCredentialsFromDb()[tracker.id];
-  if (!creds && !cookieOnlyReady(tracker)) {
+  if (!creds && !storedCookieReady(tracker)) {
     const stat: TrackerStats = {
       id:          tracker.id,
       name:        tracker.name,
@@ -1087,7 +1087,7 @@ async function refreshScheduledTracker(
   }
 
   const creds = loadCredentialsFromDb()[tracker.id];
-  if (!creds && !cookieOnlyReady(tracker)) {
+  if (!creds && !storedCookieReady(tracker)) {
     console.warn(`  [${tracker.name}] Refresh planifie ignore : credentials manquants`);
     return;
   }
