@@ -209,6 +209,36 @@ async function waitForTurnstile(page: Page): Promise<void> {
  * une coquille "non connecte" avant hydratation (cas TR4KER).
  */
 async function waitForTrackerContent(tracker: TrackerConfig, page: Page): Promise<boolean> {
+  if ((tracker.baseId ?? tracker.id) === 'digitalcore') {
+    try {
+      await page.waitForFunction(
+        () => {
+          const text = document.body?.innerText ?? '';
+          return text.includes('Ratio:') && text.includes('UL:') && text.includes('DL:') && text.includes('Buffer:');
+        },
+        null,
+        { timeout: 30_000 },
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  if ((tracker.baseId ?? tracker.id) === 'lesaloonv2') {
+    try {
+      await page.waitForFunction(
+        () => {
+          const text = document.body?.innerText ?? '';
+          return text.includes('Rang') && text.includes('Upload') && text.includes('Download') && text.includes("Pièces d'or");
+        },
+        null,
+        { timeout: 20_000 },
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
   if (tracker.id === 'lesrescapesdeygg') {
     try {
       await page.waitForFunction(

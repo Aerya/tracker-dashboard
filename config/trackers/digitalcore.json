@@ -1,0 +1,48 @@
+{
+  "id": "digitalcore",
+  "name": "DigitalCore",
+  "baseUrl": "https://digitalcore.club",
+  "enabled": true,
+  "login": {
+    "url": "login?redirect=/",
+    "method": "POST",
+    "contentType": "form",
+    "body": {},
+    "failurePatterns": [
+      "Welcome back",
+      ">Captcha<",
+      "placeholder=\"Username\""
+    ],
+    "cookieOnly": true
+  },
+  "fetch": {
+    "url": "/",
+    "mode": "browser",
+    "responseType": "html",
+    "fields": {
+      "ratio": {
+        "regex": ">Ratio:?[\\s\\S]{0,120}?>\\s*(?<value>(?:[\\d\\s.,]+|inf(?:inite|inity)?|∞|100\\+))\\s*<",
+        "transform": "number"
+      },
+      "uploadedBytes": {
+        "regex": ">UL:?[\\s\\S]{0,120}?>\\s*(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))\\s*<",
+        "transform": "bytes"
+      },
+      "downloadedBytes": {
+        "regex": ">DL:?[\\s\\S]{0,120}?>\\s*(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))\\s*<",
+        "transform": "bytes"
+      },
+      "bufferBytes": {
+        "regex": ">Buffer:?[\\s\\S]{0,120}?>\\s*(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))\\s*<",
+        "transform": "bytes"
+      },
+      "seedBonus": {
+        "regex": ">Points:?[\\s\\S]{0,120}?>\\s*(?<value>[\\d\\s.,\\u202f]+)\\s*<",
+        "transform": "string"
+      }
+    }
+  },
+  "dashboard": {
+    "byteUnit": "binary"
+  }
+}
