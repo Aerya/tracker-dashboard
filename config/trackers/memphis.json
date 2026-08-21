@@ -10,33 +10,25 @@
     ]
   },
   "fetch": {
-    "url": "/",
+    "url": "/?view=profile",
     "mode": "browser",
     "responseType": "html",
     "fields": {
       "uploadedBytes": {
-        "regex": "<article[^>]*>\\s*<strong[^>]*>\\s*(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))\\s*</strong>\\s*<span[^>]*>\\s*(?:Envoyé|Envoye|Upload)(?:\\s+total)?\\s*</span>",
+        "regex": "<strong[^>]*>\\s*(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))\\s*</strong>\\s*<span[^>]*>\\s*Envoyé\\s*</span>",
         "transform": "bytes"
       },
       "downloadedBytes": {
-        "regex": "<article[^>]*>\\s*<strong[^>]*>\\s*(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))\\s*</strong>\\s*<span[^>]*>\\s*(?:Reçu|Recu|Download|Téléchargé|Telecharge)(?:\\s+total)?\\s*</span>",
+        "regex": "<strong[^>]*>\\s*(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))\\s*</strong>\\s*<span[^>]*>\\s*Reçu\\s*</span>",
         "transform": "bytes"
       },
       "ratio": {
-        "regex": "<article[^>]*>\\s*<strong[^>]*>\\s*(?<value>(?:[\\d\\s.,]+|inf(?:inite|inity)?|∞))\\s*</strong>\\s*<span[^>]*>\\s*Ratio\\s+indicatif\\s*</span>",
+        "regex": "<strong[^>]*>\\s*(?<value>(?:[\\d\\s.,]+|[Ii]nf(?:inite|inity)?|∞))\\s*</strong>\\s*<span[^>]*>\\s*Ratio\\s+indicatif\\s*</span>",
         "transform": "number"
       },
-      "seedBonus": {
-        "regex": "<article[^>]*>\\s*<strong[^>]*>\\s*(?:Crédits|Credits)\\s*</strong>\\s*<span[^>]*>\\s*(?<value>[\\d\\s.,]+)\\s*</span>",
-        "transform": "string"
-      },
       "seeding": {
-        "regex": "<button[^>]*class=\"[^\"]*account-stat[^\"]*\"[^>]*>[\\s\\S]{0,250}?<strong[^>]*>\\s*En\\s+seed\\s+actuellement\\s*</strong>\\s*<span[^>]*>\\s*(?<value>\\d+)\\s*</span>",
+        "regex": "<strong[^>]*>\\s*(?<value>\\d+)\\s*</strong>\\s*<span[^>]*>\\s*[Aa]ctifs\\s*</span>",
         "transform": "integer"
-      },
-      "seedTime": {
-        "regex": "<article[^>]*>\\s*<strong[^>]*>\\s*Seed\\s+cumulé\\s*</strong>\\s*<span[^>]*>\\s*(?<value>[\\d\\s.,]+\\s*h)\\s*</span>",
-        "transform": "string"
       }
     }
   },

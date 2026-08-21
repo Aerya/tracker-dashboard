@@ -290,12 +290,25 @@ if (!preservesRateLimitErrors) {
   errors.push('HTTP 429 login responses must stop fallback retries and keep their real error message');
 }
 
-const browserLoginTrackerIds = ['crazyspirits', 'lesrescapesdeygg', 'yggreborn'];
+const browserLoginTrackerIds = ['lesrescapesdeygg', 'yggreborn'];
 for (const trackerId of browserLoginTrackerIds) {
   const tracker = JSON.parse(fs.readFileSync(path.join(root, 'config', 'trackers', `${trackerId}.json`), 'utf8'));
   if (tracker.login?.cookieOnly === true || tracker.fetch?.mode !== 'browser') {
     errors.push(`${tracker.name} must allow automatic browser login`);
   }
+}
+
+const crazyspirits = JSON.parse(
+  fs.readFileSync(path.join(root, 'config', 'trackers', 'crazyspirits.json'), 'utf8'),
+);
+const crazySpiritsUsesTurnstileCookieSession = (
+  crazyspirits.login?.cookieOnly === true
+  && crazyspirits.fetch?.mode === 'browser'
+  && crazyspirits.login?.failurePatterns?.includes('cf-turnstile')
+  && crazyspirits.login?.failurePatterns?.includes('account-login.php')
+);
+if (!crazySpiritsUsesTurnstileCookieSession) {
+  errors.push('CrazySpirits must use a cookie-authenticated browser session when Turnstile is enabled');
 }
 
 const documentsCookieIpBinding = (
