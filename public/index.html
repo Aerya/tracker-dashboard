@@ -4570,6 +4570,7 @@
         <div class="beta-detail-stat"><span>Ratio</span><strong>${hasStatValue(ratio) ? formatRatio(ratio) : '-'}</strong></div>
         <div class="beta-detail-stat"><span>Buffer</span><strong>${Array.isArray(buffer) ? buffer.join(' ') : buffer}</strong></div>
         <div class="beta-detail-stat"><span>Seed</span><strong>${formatCount(stat.fields.seeding ?? stat.fields.seedTimeDays ?? stat.fields.seedTime)}</strong></div>
+        ${hasStatValue(stat.fields.pointsPerHour) ? `<div class="beta-detail-stat"><span>Points / h</span><strong>${formatCount(stat.fields.pointsPerHour)}</strong></div>` : ''}
         <div class="beta-detail-stat"><span>Torrents liés</span><strong>${torrents.length}</strong></div>
         <div class="beta-detail-stat"><span>Torrents Cross-Seed</span><strong>${crossSeedTorrentCount}</strong></div>
       </div>

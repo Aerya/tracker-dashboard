@@ -15,19 +15,19 @@
     "responseType": "html",
     "fields": {
       "uploadedBytes": {
-        "regex": "id=\"user-stats\"[\\s\\S]{0,4000}?<strong[^>]*>\\s*(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))\\s*</strong>\\s*<span[^>]*>\\s*(?:Upload|Envoyé|Envoye)(?: total)?\\s*</span>",
+        "regex": "<strong[^>]*>\\s*(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))\\s*</strong>\\s*<span[^>]*>\\s*(?:Upload|Envoyé|Envoye)(?:\\s+total)?\\s*</span>",
         "transform": "bytes"
       },
       "downloadedBytes": {
-        "regex": "id=\"user-stats\"[\\s\\S]{0,4000}?<strong[^>]*>\\s*(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))\\s*</strong>\\s*<span[^>]*>\\s*(?:Download|Téléchargé|Telecharge)(?: total)?\\s*</span>",
+        "regex": "<strong[^>]*>\\s*(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))\\s*</strong>\\s*<span[^>]*>\\s*(?:Download|Téléchargé|Telecharge)(?:\\s+total)?\\s*</span>",
         "transform": "bytes"
       },
       "ratio": {
-        "regex": "id=\"user-stats\"[\\s\\S]{0,4000}?<strong[^>]*>\\s*(?<value>(?:[\\d\\s.,]+|inf(?:inite|inity)?|∞))\\s*</strong>\\s*<span[^>]*>\\s*Ratio\\s*</span>",
+        "regex": "<strong[^>]*>\\s*(?<value>(?:[\\d\\s.,]+|inf(?:inite|inity)?|∞))\\s*</strong>\\s*<span[^>]*>\\s*Ratio\\s*</span>",
         "transform": "number"
       },
       "seedBonus": {
-        "regex": "id=\"user-stats\"[\\s\\S]{0,4000}?<strong[^>]*>\\s*(?<value>[\\d\\s.,]+)\\s*</strong>\\s*<span[^>]*>\\s*(?:Bonus|Crédits|Credits)(?: disponibles)?\\s*</span>",
+        "regex": "<strong[^>]*>\\s*(?<value>[\\d\\s.,]+)\\s*</strong>\\s*<span[^>]*>\\s*(?:Bonus|Crédits|Credits)(?:\\s+disponibles)?\\s*</span>",
         "transform": "string"
       }
     }
