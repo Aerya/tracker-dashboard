@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const v3x = JSON.parse(fs.readFileSync('config/trackers/v3x.json', 'utf8'));
+const browserFetcher = fs.readFileSync('src/browserFetcher.ts', 'utf8');
+const server = fs.readFileSync('src/server.ts', 'utf8');
+assert.equal(v3x.login?.cookieOnly, undefined, 'V3X ne doit pas etre force en cookieOnly');
+assert.equal(v3x.login?.body?.identifier, '{{username}}');
+assert.equal(v3x.login?.body?.password, '{{password}}');
+assert.equal(v3x.fetch?.url, '/dashboard');
+assert.equal(v3x.fetch?.mode, 'browser');
+assert.match(browserFetcher, /tracker\.id === 'v3x'[\s\S]*https:\/\/api\.v3x\.club/);
+assert.match(browserFetcher, /storedCookie && !credentials\.username && !credentials\.password/);
+assert.match(server, /function storedCookieReady\(tracker: TrackerConfig\)/);
+assert.doesNotMatch(server, /cookieOnlyReady\(tracker\)/);
+console.log('V3X auth OK: username/password normal + cookie fallback + api.v3x.club cookie scope.');

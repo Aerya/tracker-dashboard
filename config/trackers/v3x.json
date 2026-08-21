@@ -5,15 +5,19 @@
   "enabled": false,
   "login": {
     "url": "/login",
-    "cookieOnly": true,
+    "method": "POST",
+    "contentType": "form",
+    "body": {
+      "identifier": "{{username}}",
+      "password": "{{password}}"
+    },
     "failurePatterns": [
-      "href=\"/login\"",
-      ">Connexion<",
-      "Se connecter"
+      "Nom d'utilisateur ou email",
+      "Mot de passe oublié"
     ]
   },
   "fetch": {
-    "url": "/activity",
+    "url": "/dashboard",
     "mode": "browser",
     "responseType": "html",
     "fields": {

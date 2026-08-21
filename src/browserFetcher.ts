@@ -57,16 +57,19 @@ async function injectStoredCookies(tracker: TrackerConfig, context: BrowserConte
     console.warn(`[Cookies] ${tracker.id} : aucun cookie reconnu dans la valeur fournie (format invalide ?)`);
     return;
   }
-  // Injection via `url` : Playwright en deduit domaine/chemin -> robuste.
-  const url = tracker.baseUrl;
-  const cookies = parsed.map(c => ({
+  // Injection via `url` : Playwright en deduit domaine/chemin.
+  // V3X utilise `v3x_sid` sur api.v3x.club alors que l'interface vit sur v3x.club.
+  const cookieUrls = tracker.id === 'v3x'
+    ? [tracker.baseUrl, 'https://api.v3x.club']
+    : [tracker.baseUrl];
+  const cookies = parsed.flatMap(c => cookieUrls.map(url => ({
     name: c.name,
     value: c.value,
     url,
     ...(c.secure !== undefined ? { secure: c.secure } : {}),
     ...(c.httpOnly !== undefined ? { httpOnly: c.httpOnly } : {}),
     ...(c.expires !== undefined ? { expires: c.expires } : {}),
-  }));
+  })));
   try {
     await context.addCookies(cookies);
     console.log(`[Cookies] ${tracker.id} : ${cookies.length} cookie(s) injecte(s) (${parsed.map(c => c.name).join(', ')})`);
@@ -458,6 +461,16 @@ async function ensureLoggedIn(
     }
     const matched = tracker.login.failurePatterns.find(p => html.includes(p));
     throw new Error(`Session non authentifiee : page de login detectee (motif "${matched ?? '?'}") malgre le cookie injecte. Causes frequentes : session liee a l'IP (sortir par la meme IP via proxy/SSH), cookie incomplet, ou expire${suffix}`);
+  }
+
+  // Mode dual cookie + credentials : si un cookie a ete fourni sans identifiants,
+  // on ne tente pas un formulaire vide si cette session est refusee/expiree.
+  const storedCookie = overrides ? (overrides.cookie ?? '') : getTrackerCookie(tracker.id);
+  if (storedCookie && !credentials.username && !credentials.password) {
+    const currentUrl = page.url();
+    const dump = writeBrowserDump(tracker, currentUrl, html, 'cookie-session');
+    const suffix = dump ? ` - dump: ${dump}` : '';
+    throw new Error(`Cookie de session refuse ou expire ; renseigner username/password ou remplacer le cookie${suffix}`);
   }
 
   const loginUrl = resolveUrl(tracker.baseUrl, tracker.login.url);
