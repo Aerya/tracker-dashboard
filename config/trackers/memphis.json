@@ -27,7 +27,7 @@
         "transform": "number"
       },
       "seeding": {
-        "regex": "<strong[^>]*>\\s*(?<value>\\d+)\\s*</strong>\\s*<span[^>]*>\\s*[Aa]ctifs\\s*</span>",
+        "regex": "(?:En\\s+seed\\s+actuellement\\s*</strong>\\s*<span[^>]*>|Mon\\s+empreinte\\s+de\\s+disponibilité[\\s\\S]{0,1200}?<strong[^>]*>)\\s*(?<value>\\d+)",
         "transform": "integer"
       }
     }

@@ -316,6 +316,28 @@ async function waitForTrackerContent(tracker: TrackerConfig, page: Page): Promis
       return false;
     }
   }
+  if (tracker.id === 'memphis') {
+    try {
+      await page.waitForFunction(
+        () => {
+          // Memphis est une SPA : le HTML initial contient les coquilles des vues,
+          // puis les statistiques du compte sont injectées après le chargement.
+          // textContent est volontairement utilisé pour détecter aussi un panneau
+          // profil encore masqué par la navigation SPA.
+          const panel = document.querySelector('#account-health-panel');
+          const text = panel?.textContent ?? document.body?.textContent ?? '';
+          return /Ratio\s+indicatif/i.test(text)
+            && /Envoyé/i.test(text)
+            && /Reçu/i.test(text);
+        },
+        null,
+        { timeout: 30_000 },
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
   if ((tracker.baseId ?? tracker.id) !== 'tr4ker') return false;
   try {
     await page.waitForFunction(
