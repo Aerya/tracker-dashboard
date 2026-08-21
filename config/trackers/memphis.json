@@ -10,25 +10,25 @@
     ]
   },
   "fetch": {
-    "url": "/",
+    "url": "/?view=profile",
     "mode": "browser",
     "responseType": "html",
     "fields": {
       "uploadedBytes": {
-        "regex": "<strong[^>]*>\\s*(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))\\s*</strong>\\s*<span[^>]*>\\s*(?:Upload|Envoyé|Envoye)(?:\\s+total)?\\s*</span>",
+        "regex": "<strong[^>]*>\\s*(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))\\s*</strong>\\s*<span[^>]*>\\s*Envoyé\\s*</span>",
         "transform": "bytes"
       },
       "downloadedBytes": {
-        "regex": "<strong[^>]*>\\s*(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))\\s*</strong>\\s*<span[^>]*>\\s*(?:Download|Téléchargé|Telecharge)(?:\\s+total)?\\s*</span>",
+        "regex": "<strong[^>]*>\\s*(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))\\s*</strong>\\s*<span[^>]*>\\s*Reçu\\s*</span>",
         "transform": "bytes"
       },
       "ratio": {
-        "regex": "<strong[^>]*>\\s*(?<value>(?:[\\d\\s.,]+|inf(?:inite|inity)?|∞))\\s*</strong>\\s*<span[^>]*>\\s*Ratio\\s*</span>",
+        "regex": "<strong[^>]*>\\s*(?<value>(?:[\\d\\s.,]+|[Ii]nf(?:inite|inity)?|∞))\\s*</strong>\\s*<span[^>]*>\\s*Ratio\\s+indicatif\\s*</span>",
         "transform": "number"
       },
-      "seedBonus": {
-        "regex": "<strong[^>]*>\\s*(?<value>[\\d\\s.,]+)\\s*</strong>\\s*<span[^>]*>\\s*(?:Bonus|Crédits|Credits)(?:\\s+disponibles)?\\s*</span>",
-        "transform": "string"
+      "seeding": {
+        "regex": "<strong[^>]*>\\s*(?<value>\\d+)\\s*</strong>\\s*<span[^>]*>\\s*[Aa]ctifs\\s*</span>",
+        "transform": "integer"
       }
     }
   },
