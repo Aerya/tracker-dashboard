@@ -5,25 +5,13 @@
   "enabled": true,
   "login": {
     "url": "/account-login.php",
-    "method": "POST",
-    "contentType": "form",
-    "body": {
-      "username": "{{username}}",
-      "password": "{{password}}"
-    },
+    "cookieOnly": true,
     "failurePatterns": [
-      "type=\"password\"",
+      "Veuillez compléter la vérification.",
+      "cf-turnstile",
       "name=\"password\"",
       "account-login.php"
-    ],
-    "preVisitUrls": [
-      "/account-login.php"
-    ],
-    "preStep": {
-      "url": "/account-login.php",
-      "extract": {},
-      "includeHiddenInputs": true
-    }
+    ]
   },
   "fetch": {
     "url": "/",

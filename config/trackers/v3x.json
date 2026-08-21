@@ -2,7 +2,7 @@
   "id": "v3x",
   "name": "V3X",
   "baseUrl": "https://v3x.club",
-  "enabled": true,
+  "enabled": false,
   "login": {
     "url": "/login",
     "cookieOnly": true,
