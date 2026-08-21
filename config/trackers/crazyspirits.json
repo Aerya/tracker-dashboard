@@ -4,7 +4,7 @@
   "baseUrl": "https://crazyspirits.com",
   "enabled": true,
   "login": {
-    "url": "account-login.php",
+    "url": "/account-login.php",
     "method": "POST",
     "contentType": "form",
     "body": {
@@ -15,17 +15,36 @@
       "type=\"password\"",
       "name=\"password\"",
       "account-login.php"
-    ]
+    ],
+    "preVisitUrls": [
+      "/account-login.php"
+    ],
+    "preStep": {
+      "url": "/account-login.php",
+      "extract": {},
+      "includeHiddenInputs": true
+    }
   },
   "fetch": {
     "url": "/",
     "mode": "browser",
     "responseType": "html",
     "fields": {
-      "downloadedBytes": { "regex": "/dl\\.png\"[\\s\\S]{0,160}?<font[^>]*>\\s*(?<value>[\\d.,]+\\s*[KMGTPE]?i?B)", "transform": "bytes" },
-      "uploadedBytes":   { "regex": "/up\\.png\"[\\s\\S]{0,160}?<font[^>]*>\\s*(?<value>[\\d.,]+\\s*[KMGTPE]?i?B)", "transform": "bytes" },
-      "seedBonus":       { "regex": "Crazy Bonus\\s*<a[^>]*>\\s*(?<value>[\\d\\s.,]+)",                              "transform": "string" }
+      "downloadedBytes": {
+        "regex": "/dl\\.png\"[\\s\\S]{0,160}?<font[^>]*>\\s*(?<value>[\\d.,]+\\s*[KMGTPE]?i?B)",
+        "transform": "bytes"
+      },
+      "uploadedBytes": {
+        "regex": "/up\\.png\"[\\s\\S]{0,160}?<font[^>]*>\\s*(?<value>[\\d.,]+\\s*[KMGTPE]?i?B)",
+        "transform": "bytes"
+      },
+      "seedBonus": {
+        "regex": "Crazy Bonus\\s*<a[^>]*>\\s*(?<value>[\\d\\s.,]+)",
+        "transform": "string"
+      }
     }
   },
-  "dashboard": { "byteUnit": "binary" }
+  "dashboard": {
+    "byteUnit": "binary"
+  }
 }

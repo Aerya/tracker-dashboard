@@ -1,0 +1,57 @@
+{
+  "id": "v3x",
+  "name": "V3X",
+  "baseUrl": "https://v3x.club",
+  "enabled": true,
+  "login": {
+    "url": "/login",
+    "cookieOnly": true,
+    "failurePatterns": [
+      "href=\"/login\"",
+      ">Connexion<",
+      "Se connecter"
+    ]
+  },
+  "fetch": {
+    "url": "/activity",
+    "mode": "browser",
+    "responseType": "html",
+    "fields": {
+      "uploadedBytes": {
+        "regex": "Upload[\\s\\S]{0,300}?(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))",
+        "transform": "bytes"
+      },
+      "downloadedBytes": {
+        "regex": "Download[\\s\\S]{0,300}?(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))",
+        "transform": "bytes"
+      },
+      "bufferBytes": {
+        "regex": "Buffer[\\s\\S]{0,300}?(?<value>[+\\-]?[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))",
+        "transform": "bytes"
+      },
+      "ratio": {
+        "regex": "Ratio[\\s\\S]{0,200}?(?<value>(?:[\\d\\s.,]+|inf(?:inite|inity)?|∞))",
+        "transform": "number"
+      },
+      "seedTime": {
+        "regex": "Temps\\s+de\\s+seed[\\s\\S]{0,250}?(?<value>\\d+\\s*j(?:\\s*\\d+\\s*h)?(?:\\s*\\d+\\s*m)?)",
+        "transform": "string"
+      },
+      "points": {
+        "regex": "Points(?!\\s*/\\s*h)[\\s\\S]{0,200}?(?<value>[\\d\\s.,]+)",
+        "transform": "string"
+      },
+      "pointsPerHour": {
+        "regex": "Points\\s*/\\s*h[\\s\\S]{0,200}?(?<value>[+\\-]?[\\d\\s.,]+)",
+        "transform": "number"
+      },
+      "seeding": {
+        "regex": "[Ss]eed\\s+en\\s+cours[\\s\\S]{0,200}?(?<value>\\d+)",
+        "transform": "integer"
+      }
+    }
+  },
+  "dashboard": {
+    "byteUnit": "binary"
+  }
+}
