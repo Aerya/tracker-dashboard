@@ -29,6 +29,8 @@ const redacted = JSON.parse(fs.readFileSync(redactedPath, 'utf8'));
 const tr4ker = JSON.parse(fs.readFileSync(tr4kerPath, 'utf8'));
 const speedapp = JSON.parse(fs.readFileSync(path.join(root, 'config', 'trackers', 'speedapp.json'), 'utf8'));
 const memphis = JSON.parse(fs.readFileSync(path.join(root, 'config', 'trackers', 'memphis.json'), 'utf8'));
+const lesaloonv2 = JSON.parse(fs.readFileSync(path.join(root, 'config', 'trackers', 'lesaloonv2.json'), 'utf8'));
+const digitalcore = JSON.parse(fs.readFileSync(path.join(root, 'config', 'trackers', 'digitalcore.json'), 'utf8'));
 const lesRescapes = JSON.parse(fs.readFileSync(lesRescapesPath, 'utf8'));
 const { applyEnginePreset } = await import('../dist/trackerTemplates.js');
 const errors = [];
@@ -98,6 +100,47 @@ const supportsAffectedTrackerLogins = (
 );
 if (!supportsAffectedTrackerLogins) {
   errors.push('SpeedApp email login, Memphis cookie-only refresh and duplicated TR4KER browser readiness must remain supported');
+}
+
+const extractorValue = (tracker, field, fixture) => {
+  const extractor = tracker.fetch?.fields?.[field];
+  return extractor?.regex
+    ? new RegExp(extractor.regex, 's').exec(fixture)?.groups?.value?.trim()
+    : undefined;
+};
+
+const lesaloonFixture = `
+  <font>Rang</font><font>[</font><span><strong>Membre VIP</strong></span><font>]</font>
+  <font>Upload</font><font>[</font><font color="green">82.17 TB</font>
+  <font>Download</font><font>[</font><font color="green">0.00 KB</font>
+  <font>Ratio</font><font>[</font><font color="green">1000</font>
+  <a href="index.php?page=modules&module=seedbonus"><font>Pièces d'or</font><font>[</font><font color="green">6,184,620.11</font></a>`;
+const digitalcoreFixture = `
+  <span>Ratio:</span><strong>100+</strong><span>UL:</span><strong>55.99 GiB</strong>
+  <span>DL:</span><strong>0 KiB</strong><span>Buffer:</span><strong>55.99 GiB</strong>
+  <dt>Points:</dt><dd>22 761,50</dd>`;
+const supportsNewCaptchaTrackers = (
+  lesaloonv2.login?.cookieOnly === true
+  && lesaloonv2.fetch?.mode === 'browser'
+  && lesaloonv2.fetch?.antiBotFallback === 'flaresolverr'
+  && extractorValue(lesaloonv2, 'memberClass', lesaloonFixture) === 'Membre VIP'
+  && extractorValue(lesaloonv2, 'uploadedBytes', lesaloonFixture) === '82.17 TB'
+  && extractorValue(lesaloonv2, 'downloadedBytes', lesaloonFixture) === '0.00 KB'
+  && extractorValue(lesaloonv2, 'ratio', lesaloonFixture) === '1000'
+  && extractorValue(lesaloonv2, 'seedBonus', lesaloonFixture) === '6,184,620.11'
+  && digitalcore.login?.cookieOnly === true
+  && digitalcore.fetch?.mode === 'browser'
+  && digitalcore.fetch?.url === '/'
+  && browserFetcher.includes("(tracker.baseId ?? tracker.id) === 'digitalcore'")
+  && browserFetcher.includes("(tracker.baseId ?? tracker.id) === 'lesaloonv2'")
+  && extractorValue(digitalcore, 'ratio', digitalcoreFixture) === '100+'
+  && extractorValue(digitalcore, 'uploadedBytes', digitalcoreFixture) === '55.99 GiB'
+  && extractorValue(digitalcore, 'downloadedBytes', digitalcoreFixture) === '0 KiB'
+  && extractorValue(digitalcore, 'bufferBytes', digitalcoreFixture) === '55.99 GiB'
+  && extractorValue(digitalcore, 'seedBonus', digitalcoreFixture) === '22 761,50'
+);
+if (!supportsNewCaptchaTrackers) {
+  errors.push('LeSaloon v2 and DigitalCore must use cookie-authenticated browser reads and parse their supplied stats layouts');
 }
 
 function normalizeRoute(route) {

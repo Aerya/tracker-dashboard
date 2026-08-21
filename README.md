@@ -24,6 +24,7 @@ Au premier accès, l'application demande de créer le compte administrateur de l
 
 ## Changements récents
 
+- **LeSaloon v2 et DigitalCore** : ajout des deux trackers avec lecture navigateur des statistiques et authentification par cookie de session, leurs connexions étant protégées par un défi interactif ou un CAPTCHA.
 - **Points bonus uniformisés** : les séparateurs de milliers et de décimales propres à chaque tracker sont normalisés à l'affichage selon la convention française.
 - **Retrait de Torr9** : sa définition intégrée est supprimée et les anciennes installations la nettoient automatiquement au démarrage.
 - **Retrait de Nexum** : le tracker a fermé définitivement. Sa définition intégrée est supprimée et les anciennes installations la nettoient automatiquement au démarrage.

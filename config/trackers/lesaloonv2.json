@@ -1,0 +1,49 @@
+{
+  "id": "lesaloonv2",
+  "name": "LeSaloon v2",
+  "baseUrl": "https://lesaloonv2-0.net",
+  "enabled": true,
+  "login": {
+    "url": "yupy_login.php",
+    "method": "POST",
+    "contentType": "form",
+    "body": {},
+    "failurePatterns": [
+      "yupy_login.php",
+      "N'oubliez pas d'utiliser votre ADRESSE COURRIEL",
+      "CLIQUER SUR LE BOUTON DU BAS"
+    ],
+    "cookieOnly": true
+  },
+  "fetch": {
+    "url": "index.php",
+    "mode": "browser",
+    "antiBotFallback": "flaresolverr",
+    "responseType": "html",
+    "fields": {
+      "memberClass": {
+        "regex": ">Rang<[\\s\\S]{0,220}?<span[^>]*>\\s*(?:<strong[^>]*>)?\\s*(?<value>[^<]+)",
+        "transform": "string"
+      },
+      "uploadedBytes": {
+        "regex": ">Upload<[\\s\\S]{0,180}?<font[^>]*>\\s*(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))",
+        "transform": "bytes"
+      },
+      "downloadedBytes": {
+        "regex": ">Download<[\\s\\S]{0,180}?<font[^>]*>\\s*(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))",
+        "transform": "bytes"
+      },
+      "ratio": {
+        "regex": ">Ratio<[\\s\\S]{0,180}?<font[^>]*>\\s*(?<value>[\\d\\s.,]+)",
+        "transform": "number"
+      },
+      "seedBonus": {
+        "regex": "module=seedbonus[^>]*>[\\s\\S]{0,180}?<font[^>]*>\\s*(?<value>[\\d\\s.,]+)",
+        "transform": "string"
+      }
+    }
+  },
+  "dashboard": {
+    "byteUnit": "binary"
+  }
+}
