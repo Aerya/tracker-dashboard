@@ -1,4 +1,5 @@
 import { start } from './server.js';
+import { migrateV3xCatalogAvailability } from './catalogMigrations.js';
 
 function timestampLogs(): void {
   const stamp = () => new Date().toLocaleString('fr-FR', {
@@ -18,4 +19,5 @@ function timestampLogs(): void {
 }
 
 timestampLogs();
+migrateV3xCatalogAvailability();
 start().catch(console.error);
