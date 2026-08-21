@@ -6,7 +6,14 @@ import { pathToFileURL } from 'node:url';
 
 const root = process.cwd();
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'tracker-dashboard-v3x-catalog-'));
+const serverSource = fs.readFileSync(path.join(root, 'src', 'server.ts'), 'utf8');
 let sqlite;
+
+assert.match(
+  serverSource,
+  /const enabled = definition\.id === 'v3x' && !v3xHasStoredAuth[\s\S]*?\? false[\s\S]*?: Boolean\(configuredTracker && configuredTracker\.enabled !== false\)/,
+  'L API tracker-definitions doit forcer V3X disponible tant qu aucune authentification V3X n est stockee',
+);
 
 try {
   fs.mkdirSync(path.join(temp, 'config', 'trackers'), { recursive: true });

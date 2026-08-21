@@ -2916,15 +2916,36 @@ export async function start(): Promise<void> {
     importLegacyTrackersIfNeeded();
     trackers = normalizeTrackerConfigs();
     const configured = new Map(trackers.map(tracker => [tracker.id, tracker]));
+    const credentialSummaries = new Map(
+      listTrackerCredentialSummaries().map(credential => [credential.trackerId, credential]),
+    );
     const definitions = listAllTrackerSummaries()
       .map(definition => {
         const configuredTracker = configured.get(definition.id);
+        // V3X a ete publie initialement avec enabled=true. Certaines installations
+        // conservent donc une ancienne ligne SQLite active, meme apres mise a jour de
+        // la definition embarquee. Le menu "Ajouter un tracker > Tracker integre"
+        // se base sur CE enabled API : tant que cette ligne vaut true, V3X disparait.
+        //
+        // Pour V3X, l'etat "actif" n'est donc considere reel que si le compte a
+        // effectivement une authentification stockee. Sans mot de passe/cookie/TOTP,
+        // il doit toujours rester disponible dans le catalogue.
+        const credential = credentialSummaries.get(definition.id);
+        const v3xHasStoredAuth = definition.id === 'v3x' && Boolean(
+          credential?.hasPassword
+          || hasTrackerCookie('v3x')
+          || hasTrackerTotpSecret('v3x')
+        );
+        const enabled = definition.id === 'v3x' && !v3xHasStoredAuth
+          ? false
+          : Boolean(configuredTracker && configuredTracker.enabled !== false);
+
         // Prerequis affiches dans l'UI (badges) : resolus sur la config effective
         // (preset moteur applique), car ex. le mode browser de Gazelle vient du preset.
         const effective = configuredTracker ?? loadEffectiveTrackerDefinition(definition.id);
         return {
           ...definition,
-          enabled: Boolean(configuredTracker && configuredTracker.enabled !== false),
+          enabled,
           configured: Boolean(configuredTracker),
           isDefault: isDefaultTracker(definition.id),
           isCustom: !isDefaultTracker(definition.id),
