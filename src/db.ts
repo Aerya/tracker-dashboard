@@ -391,9 +391,15 @@ export function syncDefaultTrackerDefinitions(): void {
   const files = fs.readdirSync(DEFAULT_TRACKERS_DIR)
     .filter(file => file.endsWith('.json') && !file.endsWith('.example.json'));
   for (const file of files) {
+    const source = path.join(DEFAULT_TRACKERS_DIR, file);
     const target = path.join(trackersDir, file);
-    if (fs.existsSync(target)) continue;
-    fs.copyFileSync(path.join(DEFAULT_TRACKERS_DIR, file), target);
+
+    // Les définitions intégrées livrées dans l'image font autorité et doivent être
+    // rafraîchies à chaque démarrage. Sans cela, une ancienne copie persistée sur le
+    // volume reste figée indéfiniment (ex: V3X ajouté ensuite avec enabled=false).
+    // Les trackers personnels ne sont pas concernés : seuls les noms de fichiers
+    // présents dans DEFAULT_TRACKERS_DIR sont synchronisés ici.
+    fs.copyFileSync(source, target);
   }
 }
 

@@ -102,6 +102,29 @@ if (!supportsAffectedTrackerLogins) {
   errors.push('SpeedApp email login, Memphis cookie-only refresh and duplicated TR4KER browser readiness must remain supported');
 }
 
+const memphisRuntimeWaitsForSpaStats = (
+  memphis.fetch?.url === '/?view=profile'
+  && memphis.fetch?.mode === 'browser'
+  && browserFetcher.includes("tracker.id === 'memphis'")
+  && browserFetcher.includes("document.querySelector('#account-health-panel')")
+  && browserFetcher.includes('/Ratio\\s+indicatif/i.test(text)')
+  && memphis.fetch?.fields?.uploadedBytes
+  && memphis.fetch?.fields?.downloadedBytes
+  && memphis.fetch?.fields?.ratio
+  && memphis.fetch?.fields?.seeding
+);
+if (!memphisRuntimeWaitsForSpaStats) {
+  errors.push('Memphis must wait for SPA profile stats before extracting ratio, traffic and seeding');
+}
+
+const refreshesBundledTrackerDefinitions = (
+  db.includes('fs.copyFileSync(source, target);')
+  && !db.includes('if (fs.existsSync(target)) continue;')
+);
+if (!refreshesBundledTrackerDefinitions) {
+  errors.push('Bundled tracker definitions must refresh existing volume copies after image updates');
+}
+
 const extractorValue = (tracker, field, fixture) => {
   const extractor = tracker.fetch?.fields?.[field];
   return extractor?.regex
