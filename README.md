@@ -4,10 +4,13 @@
 
 > **Tu l'utilises ? Tu l'aimes ? [⭐ Mets une étoile !](https://github.com/Tracker-Dashboard/tracker-dashboard/stargazers)** — ça prend deux secondes.
 
+> [!NOTE]
+> **Toute aide est la bienvenue.** Les pull requests sont ouvertes à toute personne souhaitant corriger un problème, ajouter un tracker ou proposer de nouvelles fonctionnalités.
+>
+> En l'état, Aerya ne fera plus évoluer l'outil en dehors de l'ajout de trackers auxquels il a accès et des corrections de sécurité.
+
 > [!IMPORTANT]
 > Le projet est porté par l'organisation GitHub [Tracker-Dashboard](https://github.com/Tracker-Dashboard), en collaboration avec [Zup](https://github.com/Gusdezup) ([Autovisit-Web](https://github.com/Gusdezup/Autovisit-Web)).
->
-> Les pull requests sont les bienvenues. Le projet continue d'évoluer (nouveaux sites, statistiques, interface).
 
 > [!WARNING]
 > Lors d'un rafraîchissement général ou du premier lancement, certains trackers peuvent temporairement afficher une erreur ou prendre du temps à se mettre à jour. Lancez si besoin une mise à jour individuelle du tracker concerné.
