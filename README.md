@@ -24,6 +24,7 @@ Au premier accès, l'application demande de créer le compte administrateur de l
 
 ## Changements récents
 
+- **V3X** : les statistiques sont désormais relevées depuis la page « Mon activité », y compris le buffer, le temps de seed, les points horaires et le nombre de seeds en cours.
 - **LeSaloon v2 et DigitalCore** : ajout des deux trackers avec lecture navigateur des statistiques et authentification par cookie de session, leurs connexions étant protégées par un défi interactif ou un CAPTCHA.
 - **Points bonus uniformisés** : les séparateurs de milliers et de décimales propres à chaque tracker sont normalisés à l'affichage selon la convention française.
 - **Retrait de Torr9** : sa définition intégrée est supprimée et les anciennes installations la nettoient automatiquement au démarrage.
