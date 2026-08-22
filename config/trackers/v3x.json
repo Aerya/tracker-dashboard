@@ -22,35 +22,35 @@
     "responseType": "html",
     "fields": {
       "uploadedBytes": {
-        "regex": "Upload[\\s\\S]{0,300}?(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))",
+        "regex": "Upload[\\s\\S]{0,80}?</span>\\s*<span[^>]*\\bfont-mono\\b[^>]*>\\s*(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))",
         "transform": "bytes"
       },
       "downloadedBytes": {
-        "regex": "Download[\\s\\S]{0,300}?(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))",
+        "regex": "Download[\\s\\S]{0,80}?</span>\\s*<span[^>]*\\bfont-mono\\b[^>]*>\\s*(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))",
         "transform": "bytes"
       },
       "bufferBytes": {
-        "regex": "Buffer[\\s\\S]{0,300}?(?<value>[+\\-]?[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))",
+        "regex": "Buffer[\\s\\S]{0,80}?</span>\\s*<span[^>]*\\bfont-mono\\b[^>]*>\\s*(?<value>[+\\-−]?[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))",
         "transform": "bytes"
       },
       "ratio": {
-        "regex": "Ratio[\\s\\S]{0,200}?(?<value>(?:[\\d\\s.,]+|inf(?:inite|inity)?|∞))",
+        "regex": "Ratio[\\s\\S]{0,80}?</span>\\s*<span[^>]*\\bfont-mono\\b[^>]*>\\s*(?<value>(?:[\\d\\s.,]+|inf(?:inite|inity)?|∞))",
         "transform": "number"
       },
       "seedTime": {
-        "regex": "Temps\\s+de\\s+seed[\\s\\S]{0,250}?(?<value>\\d+\\s*j(?:\\s*\\d+\\s*h)?(?:\\s*\\d+\\s*m)?)",
+        "regex": "Temps\\s+de\\s+seed[\\s\\S]{0,80}?</span>\\s*<span[^>]*\\bfont-mono\\b[^>]*>\\s*(?<value>\\d+\\s*j(?:\\s*\\d+\\s*h)?(?:\\s*\\d+\\s*m)?)",
         "transform": "string"
       },
       "points": {
-        "regex": "Points(?!\\s*/\\s*h)[\\s\\S]{0,200}?(?<value>[\\d\\s.,]+)",
+        "regex": "Points(?!\\s*/\\s*h)[\\s\\S]{0,80}?</span>\\s*<span[^>]*\\bfont-mono\\b[^>]*>\\s*(?<value>[\\d\\s.,]+)",
         "transform": "string"
       },
       "pointsPerHour": {
-        "regex": "Points\\s*/\\s*h[\\s\\S]{0,200}?(?<value>[+\\-]?[\\d\\s.,]+)",
+        "regex": "Points\\s*/\\s*h[\\s\\S]{0,80}?</span>\\s*<span[^>]*\\bfont-mono\\b[^>]*>\\s*(?<value>[+\\-]?[\\d\\s.,]+)",
         "transform": "number"
       },
       "seeding": {
-        "regex": "[Ss]eeds?\\s+en\\s+cours[\\s\\S]{0,200}?(?<value>\\d+)",
+        "regex": "[Ss]eeds?\\s+en\\s+cours\\s*<span[^>]*>\\s*(?<value>\\d+)\\s*</span>",
         "transform": "integer"
       }
     }
