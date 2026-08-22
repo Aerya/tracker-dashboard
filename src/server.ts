@@ -911,6 +911,24 @@ async function fetchTrackerBounded(
 
 // Fenetre de fraicheur au boot : en dessous, on ressert la base sans re-scraper.
 const BOOT_FRESH_HOURS = Math.max(0, Number(process.env.BOOT_FRESH_HOURS) || 24);
+const browserBootWaitValue = Number(process.env.BROWSER_RUNTIME_BOOT_WAIT_MS ?? 30_000);
+const BROWSER_RUNTIME_BOOT_WAIT_MS = Number.isFinite(browserBootWaitValue)
+  ? Math.max(0, browserBootWaitValue)
+  : 30_000;
+
+async function waitForBrowserRuntimeAtBoot(): Promise<boolean> {
+  const deadline = Date.now() + BROWSER_RUNTIME_BOOT_WAIT_MS;
+  let firstAttempt = true;
+  while (firstAttempt || Date.now() < deadline) {
+    firstAttempt = false;
+    const status = await getBrowserRuntimeStatus();
+    if (status.available) return true;
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+    await new Promise(resolve => setTimeout(resolve, Math.min(1_000, remaining)));
+  }
+  return false;
+}
 
 /**
  * Au demarrage : remplit cachedStats avec le dernier snapshot OK de chaque tracker
@@ -3659,7 +3677,19 @@ export async function start(): Promise<void> {
     console.log(`Boot: ${servedFromCache} tracker(s) servis depuis la base (< ${BOOT_FRESH_HOURS}h), aucun scraping au demarrage`);
   } else {
     console.log(`Boot: ${servedFromCache} tracker(s) servis depuis la base, ${staleTrackers.length} obsolete(s)/absent(s) a rafraichir`);
-    await refresh(staleTrackers);
+    const browserTrackers = staleTrackers.filter(tracker => tracker.fetch.mode === 'browser');
+    const otherTrackers = staleTrackers.filter(tracker => tracker.fetch.mode !== 'browser');
+    if (otherTrackers.length > 0) await refresh(otherTrackers);
+    if (browserTrackers.length > 0) {
+      console.log(`Boot: attente du runtime navigateur pour ${browserTrackers.length} tracker(s) (maximum ${BROWSER_RUNTIME_BOOT_WAIT_MS} ms)`);
+      const runtimeReady = await waitForBrowserRuntimeAtBoot();
+      if (runtimeReady) {
+        console.log('Boot: runtime navigateur disponible, rafraichissement des trackers navigateur');
+      } else {
+        console.warn('Boot: runtime navigateur toujours indisponible apres le delai, tentative de rafraichissement maintenue');
+      }
+      await refresh(browserTrackers);
+    }
   }
 
   // Recuperation des logos au demarrage (non bloquant). NON force : on ne telecharge
