@@ -17,7 +17,7 @@
     ]
   },
   "fetch": {
-    "url": "/dashboard",
+    "url": "/activity",
     "mode": "browser",
     "responseType": "html",
     "fields": {
@@ -50,7 +50,7 @@
         "transform": "number"
       },
       "seeding": {
-        "regex": "[Ss]eed\\s+en\\s+cours[\\s\\S]{0,200}?(?<value>\\d+)",
+        "regex": "[Ss]eeds?\\s+en\\s+cours[\\s\\S]{0,200}?(?<value>\\d+)",
         "transform": "integer"
       }
     }

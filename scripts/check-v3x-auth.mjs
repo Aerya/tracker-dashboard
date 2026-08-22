@@ -6,7 +6,7 @@ const server = fs.readFileSync('src/server.ts', 'utf8');
 assert.equal(v3x.login?.cookieOnly, undefined, 'V3X ne doit pas etre force en cookieOnly');
 assert.equal(v3x.login?.body?.identifier, '{{username}}');
 assert.equal(v3x.login?.body?.password, '{{password}}');
-assert.equal(v3x.fetch?.url, '/dashboard');
+assert.equal(v3x.fetch?.url, '/activity');
 assert.equal(v3x.fetch?.mode, 'browser');
 assert.match(browserFetcher, /tracker\.id === 'v3x'[\s\S]*https:\/\/api\.v3x\.club/);
 assert.match(browserFetcher, /storedCookie && !credentials\.username && !credentials\.password/);
