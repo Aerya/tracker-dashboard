@@ -11,6 +11,7 @@ on:
       - synchronize
 
 permissions:
+  actions: write
   contents: write
   pull-requests: write
 
@@ -61,3 +62,49 @@ jobs:
               }
             `, { pullRequestId: pullRequest.id });
             core.info('Fusion automatique activée : GitHub attend les contrôles requis.');
+
+  publish-after-auto-merge:
+    name: Publier les images après fusion
+    needs: enable-auto-merge
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Attendre la fusion puis déclencher la publication
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const number = context.payload.pull_request.number;
+            const pause = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+
+            for (let attempt = 1; attempt <= 80; attempt += 1) {
+              const { data: pull } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: number,
+              });
+
+              if (pull.merged_at) {
+                await github.rest.actions.createWorkflowDispatch({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  workflow_id: 'docker-publish.yml',
+                  ref: 'main',
+                });
+                core.info(`PR #${number} fusionnée : publication Docker déclenchée sur main.`);
+                return;
+              }
+
+              if (pull.state === 'closed') {
+                core.info(`PR #${number} fermée sans fusion : aucune publication.`);
+                return;
+              }
+
+              core.info(`PR #${number} encore ouverte (${attempt}/80), nouvelle vérification dans 15 s.`);
+              await pause(15_000);
+            }
+
+            core.setFailed(`La PR #${number} n'a pas été fusionnée dans le délai de 20 minutes.`);
