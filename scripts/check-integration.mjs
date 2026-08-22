@@ -31,6 +31,7 @@ const speedapp = JSON.parse(fs.readFileSync(path.join(root, 'config', 'trackers'
 const memphis = JSON.parse(fs.readFileSync(path.join(root, 'config', 'trackers', 'memphis.json'), 'utf8'));
 const lesaloonv2 = JSON.parse(fs.readFileSync(path.join(root, 'config', 'trackers', 'lesaloonv2.json'), 'utf8'));
 const digitalcore = JSON.parse(fs.readFileSync(path.join(root, 'config', 'trackers', 'digitalcore.json'), 'utf8'));
+const v3x = JSON.parse(fs.readFileSync(path.join(root, 'config', 'trackers', 'v3x.json'), 'utf8'));
 const lesRescapes = JSON.parse(fs.readFileSync(lesRescapesPath, 'utf8'));
 const { applyEnginePreset } = await import('../dist/trackerTemplates.js');
 const errors = [];
@@ -95,7 +96,7 @@ const supportsAffectedTrackerLogins = (
   && browserFetcher.includes("(tracker.baseId ?? tracker.id) !== 'tr4ker'")
   && browserFetcher.includes('patterns: string[] = []')
   && fetcher.includes('patterns: string[] = []')
-  && server.includes('if (!creds && !cookieOnlyReady(tracker))')
+  && server.includes('if (!creds && !storedCookieReady(tracker))')
   && server.includes('fetchTrackerBounded(tracker, creds ?? EMPTY_CREDENTIALS)')
 );
 if (!supportsAffectedTrackerLogins) {
@@ -164,6 +165,31 @@ const supportsNewCaptchaTrackers = (
 );
 if (!supportsNewCaptchaTrackers) {
   errors.push('LeSaloon v2 and DigitalCore must use cookie-authenticated browser reads and parse their supplied stats layouts');
+}
+
+const v3xActivityFixture = `
+  <section><span>Upload</span><strong>79.9 Gio</strong></section>
+  <section><span>Download</span><strong>1.00 Gio</strong></section>
+  <section><span>Buffer</span><strong>+78.9 Gio</strong></section>
+  <section><span>Ratio</span><strong>79.89</strong></section>
+  <section><span>Temps de seed</span><strong>25j 21h</strong></section>
+  <section><span>Points</span><strong>52</strong></section>
+  <section><span>Points / h</span><strong>+4</strong></section>
+  <button>Seeds en cours <span>5</span></button>`;
+const supportsV3xActivityStats = (
+  v3x.fetch?.url === '/activity'
+  && v3x.fetch?.mode === 'browser'
+  && extractorValue(v3x, 'uploadedBytes', v3xActivityFixture) === '79.9 Gio'
+  && extractorValue(v3x, 'downloadedBytes', v3xActivityFixture) === '1.00 Gio'
+  && extractorValue(v3x, 'bufferBytes', v3xActivityFixture) === '+78.9 Gio'
+  && extractorValue(v3x, 'ratio', v3xActivityFixture) === '79.89'
+  && extractorValue(v3x, 'seedTime', v3xActivityFixture) === '25j 21h'
+  && extractorValue(v3x, 'points', v3xActivityFixture) === '52'
+  && extractorValue(v3x, 'pointsPerHour', v3xActivityFixture) === '+4'
+  && extractorValue(v3x, 'seeding', v3xActivityFixture) === '5'
+);
+if (!supportsV3xActivityStats) {
+  errors.push('V3X must read all supplied stats from the authenticated /activity page');
 }
 
 function normalizeRoute(route) {
