@@ -167,15 +167,20 @@ if (!supportsNewCaptchaTrackers) {
   errors.push('LeSaloon v2 and DigitalCore must use cookie-authenticated browser reads and parse their supplied stats layouts');
 }
 
+const v3xStatCard = (label, value) => `
+  <div class="rounded-xl border">
+    <span class="flex text-[11px]"><svg width="12"><path d="M3 0 7 12"></path></svg> ${label}</span>
+    <span class="font-mono text-lg font-semibold text-accent">${value}</span>
+  </div>`;
 const v3xActivityFixture = `
-  <section><span>Upload</span><strong>79.9 Gio</strong></section>
-  <section><span>Download</span><strong>1.00 Gio</strong></section>
-  <section><span>Buffer</span><strong>+78.9 Gio</strong></section>
-  <section><span>Ratio</span><strong>79.89</strong></section>
-  <section><span>Temps de seed</span><strong>25j 21h</strong></section>
-  <section><span>Points</span><strong>52</strong></section>
-  <section><span>Points / h</span><strong>+4</strong></section>
-  <button>Seeds en cours <span>5</span></button>`;
+  ${v3xStatCard('Upload', '79.9 Gio')}
+  ${v3xStatCard('Download', '1.00 Gio')}
+  ${v3xStatCard('Buffer', '+78.9 Gio')}
+  ${v3xStatCard('Ratio', '79.89')}
+  ${v3xStatCard('Temps de seed', '25j 21h')}
+  ${v3xStatCard('Points', '52')}
+  ${v3xStatCard('Points / h', '+4')}
+  <button class="px-4 py-2 text-sm"><span><svg width="14"><path d="M2 20"></path></svg></span>Seeds en cours<span class="px-1.5 py-0.5 text-[10px]">5</span></button>`;
 const supportsV3xActivityStats = (
   v3x.fetch?.url === '/activity'
   && v3x.fetch?.mode === 'browser'
