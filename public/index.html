@@ -6649,12 +6649,16 @@
     const isEnabled = Boolean(definition.enabled);
     const safeId = escapeHtml(definition.id);
     const cookieOnly = Boolean(credential.cookieOnly || definition.requiresCookie);
+    const cookieInstructions = definition.cookieInstructions
+      ? `<p class="beta-note" style="margin:0 0 7px"><b>Pour ce tracker :</b> ${escapeHtml(definition.cookieInstructions)}</p>`
+      : '';
     const statusBadge = cookieOnly
       ? `<span class="credential-badge ${credential.hasCookie ? 'credential-ok' : 'credential-missing'}">${credential.hasCookie ? 'Cookie OK' : 'Cookie requis'}</span>`
       : `<span class="credential-badge ${credential.hasPassword ? 'credential-ok' : 'credential-missing'}">${credential.hasPassword ? 'Configuré' : 'Manquant'}</span>`;
     // Bloc cookie de session : champ principal pour un tracker cookie-only (les
     // identifiants sont masqués, inutiles), sinon rangé dans Options avancées.
     const cookieFieldHtml = `
+                      ${cookieInstructions}
                       <div class="advanced-cookie-row">
                         <textarea class="tracker-input" id="credential-cookie-${safeId}" autocomplete="off" rows="3" spellcheck="false" style="flex:1; resize:vertical; font-family:monospace; font-size:11px; white-space:pre"
                           placeholder="${credential.hasCookie ? '•••••••• (enregistré — colle pour remplacer, vide pour effacer)' : 'Colle ici un fichier cookies.txt (Netscape), un export JSON Cookie-Editor, ou nom=valeur; nom2=valeur2'}"
@@ -6690,6 +6694,11 @@
                 <div class="definition-actions">
                   <button class="btn-test" style="padding:6px 10px" onclick="resetCredential('${safeId}')">Réinitialiser</button>
                 </div>
+                ${!cookieOnly && cookieInstructions ? `
+                <div class="tracker-field" style="grid-column:1/-1">
+                  <label>Cookie de session <span style="color:var(--muted)">— recommandé pour ${escapeHtml(definition.name)}${credential.hasCookie ? ' · <b style="color:var(--green)">défini</b>' : ''}</span></label>
+                  ${cookieFieldHtml}
+                </div>` : ''}
                 <div class="definition-actions">
                   <button class="btn-test" style="padding:6px 10px" onclick="setTrackerEnabled('${safeId}', ${isEnabled ? 'false' : 'true'})">${isEnabled ? 'Retirer' : 'Ajouter'}</button>
                 </div>
@@ -6706,7 +6715,7 @@
                 <details class="definition-advanced" style="grid-column:1/-1">
                   <summary>Options avancées${credential.hasCookie ? ' · <b style="color:var(--green)">cookie défini</b>' : ''}${credential.hasTotp ? ' · <b style="color:var(--green)">2FA défini</b>' : ''}</summary>
                   <div class="definition-advanced-body">
-                    ${cookieOnly ? `
+                    ${cookieOnly || cookieInstructions ? `
                     <div class="advanced-field advanced-cookie-field">
                       <p class="beta-note" style="margin-top:0"><b>Important :</b> exporte tous les cookies avec la même IP de sortie que celle utilisée par ce tracker dans Tracker Dashboard (même proxy, ou même connexion directe). Vérifie notamment que <code>cf_clearance</code> est présent pour les sites protégés par Cloudflare ; les sessions liées à l’IP et les cookies anti-bot seront sinon refusés.</p>
                     </div>` : `

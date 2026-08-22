@@ -100,6 +100,8 @@ export interface LoginConfig {
    * les sites qui plafonnent/bloquent les logins automatises (ex: MyAnonamouse).
    */
   cookieOnly?: boolean;
+  /** Consigne affichée dans la configuration pour récupérer le bon cookie de session. */
+  cookieInstructions?: string;
 }
 
 export interface FieldExtractor {

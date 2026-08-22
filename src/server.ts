@@ -421,6 +421,9 @@ function sanitizeTrackerConfigInput(
     failurePatterns,
   };
   if (cookieOnly) loginOut.cookieOnly = true;
+  if (String(login.cookieInstructions ?? '').trim()) {
+    loginOut.cookieInstructions = String(login.cookieInstructions).trim().slice(0, 1_000);
+  }
   if (String(login.postUrl ?? '').trim()) loginOut.postUrl = String(login.postUrl).trim();
   if (String(login.otpField ?? '').trim()) loginOut.otpField = String(login.otpField).trim();
   if (String(login.csrfHeader ?? '').trim()) loginOut.csrfHeader = String(login.csrfHeader).trim();
@@ -2970,6 +2973,7 @@ export async function start(): Promise<void> {
           baseId: configuredTracker?.baseId ?? definition.baseId,
           requiresCookie: Boolean(effective?.login?.cookieOnly),
           requiresBrowser: effective?.fetch?.mode === 'browser',
+          cookieInstructions: effective?.login?.cookieInstructions,
         };
       })
       .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
