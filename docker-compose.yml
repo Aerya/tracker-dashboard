@@ -15,6 +15,19 @@ services:
     volumes:
       - ./config:/app/config
 
+  tracker-dashboard-browser:
+    image: ghcr.io/tracker-dashboard/tracker-dashboard-browser:latest
+    container_name: tracker-dashboard-browser
+    restart: unless-stopped
+    network_mode: "service:tracker-dashboard"
+    volumes_from:
+      - tracker-dashboard
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
   tracker-dashboard-flaresolverr:
     image: ghcr.io/flaresolverr/flaresolverr:latest
     container_name: tracker-dashboard-flaresolverr

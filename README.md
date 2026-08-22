@@ -171,7 +171,9 @@ Des templates Unraid sont disponibles pour installer séparément l'application,
 
 Le navigateur (Playwright/Chromium/CloakBrowser) est externalisé dans l'image `ghcr.io/tracker-dashboard/tracker-dashboard-browser:latest`. L'image principale reste allégée.
 
-Si vous gérez Tracker Dashboard avec Compose, ajoutez une petite stack parallèle pour le runtime navigateur :
+Le fichier `docker-compose.yml` fourni inclut déjà ce runtime. Au démarrage, l'application attend sa disponibilité pendant 30 secondes maximum avant de rafraîchir les trackers en `mode: browser`. Ce délai peut être ajusté avec `BROWSER_RUNTIME_BOOT_WAIT_MS` sur le service principal.
+
+Pour une stack Compose existante qui ne contient pas encore le runtime, ajoutez ce service :
 
 ```yaml
 services:
