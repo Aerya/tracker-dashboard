@@ -1140,6 +1140,10 @@ export async function fetchTracker(
   const attemptHttpViaCurl = async (): Promise<TrackerStats | null> => {
     if (!fastFetchEnabled()) { console.log(`  [${tracker.name}] curl: fast-fetch désactivé`); return null; }
     const cfg = tracker.login;
+    // V3X accepte le login via son API Next.js, mais /activity reste rendu cote
+    // client. Le login+fetch curl ne peut donc pas valider les stats et ajoute
+    // seulement une tentative bruyante avant le vrai chemin navigateur.
+    if (tracker.id === 'v3x') return null;
     // 2FA via page dediee : non reproduit ici, on laisse la voie axios
     // (doLogin) gerer ce cas.
     if (cfg.otpStep) return null;

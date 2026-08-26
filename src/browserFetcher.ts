@@ -300,12 +300,12 @@ async function waitForTrackerContent(tracker: TrackerConfig, page: Page): Promis
           );
           if (hasLoginForm) return false;
           const text = document.body?.innerText ?? '';
-          return text.includes('Upload')
-            && text.includes('Download')
-            && text.includes('Buffer')
-            && text.includes('Ratio')
-            && text.includes('Temps de seed')
-            && text.includes('Points / h')
+          return /Upload/i.test(text)
+            && /Download/i.test(text)
+            && /Buffer/i.test(text)
+            && /Ratio/i.test(text)
+            && /Temps de seed/i.test(text)
+            && /Points\s*\/\s*h/i.test(text)
             && text.includes('Seeds en cours');
         },
         null,
@@ -451,6 +451,75 @@ function extractV3xLoginError(html: string): string | null {
   return null;
 }
 
+async function submitV3xApiLogin(
+  tracker: TrackerConfig,
+  credentials: { username: string; password: string },
+  page: Page,
+): Promise<void> {
+  const result = await page.evaluate(
+    async ({ username, password }) => {
+      try {
+        const response = await fetch('https://api.v3x.club/auth/login', {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ login: username, password, remember: true }),
+        });
+        let data: Record<string, unknown> | null = null;
+        try {
+          data = await response.json();
+        } catch {
+          data = null;
+        }
+        return {
+          ok: response.ok,
+          status: response.status,
+          error: typeof data?.error === 'string' ? data.error : '',
+          details: typeof data?.details === 'string' ? data.details : '',
+          hasUser: Boolean(data?.id || data?.username),
+        };
+      } catch (err) {
+        return {
+          ok: false,
+          status: 0,
+          error: err instanceof Error ? err.message : String(err),
+          details: '',
+          hasUser: false,
+        };
+      }
+    },
+    credentials,
+  );
+
+  if (!result.ok || !result.hasUser) {
+    const currentUrl = page.url();
+    const html = await safeContent(page);
+    const dump = writeBrowserDump(tracker, currentUrl, html, 'login-refused');
+    const suffix = dump ? ` - dump: ${dump}` : '';
+    const detail = result.error || result.details
+      ? ` : ${[result.error, result.details].filter(Boolean).join(' - ')}`
+      : ` : API login status ${result.status}`;
+    throw new Error(`Login V3X echoue${detail}${suffix}`);
+  }
+
+  await page.goto(resolveUrl(tracker.baseUrl, tracker.fetch.url), { waitUntil: 'commit', timeout: 45_000 });
+  await page.waitForLoadState('domcontentloaded', { timeout: 30_000 }).catch(() => {});
+  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+  await waitForLiveView(page);
+  if (!(await waitForTrackerContent(tracker, page))) {
+    const currentUrl = page.url();
+    const html = await safeContent(page);
+    const dump = writeBrowserDump(tracker, currentUrl, html, 'login-refused');
+    const suffix = dump ? ` - dump: ${dump}` : '';
+    const loginError = extractV3xLoginError(html);
+    const detail = loginError ? ` : ${loginError}` : ' : session API acceptee mais activite non authentifiee';
+    throw new Error(`Login V3X echoue${detail}${suffix}`);
+  }
+}
+
 async function waitForAntiBotChallenge(page: Page): Promise<void> {
   for (let i = 0; i < 20; i += 1) {
     if (!looksAntiBot(await safeContent(page))) return;
@@ -533,6 +602,11 @@ async function ensureLoggedIn(
   await waitForLiveView(page);
   await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   await page.locator('input').first().waitFor({ timeout: 10_000 }).catch(() => {});
+
+  if (tracker.id === 'v3x') {
+    await submitV3xApiLogin(tracker, credentials, page);
+    return;
+  }
 
   for (const [name, template] of Object.entries(tracker.login.body)) {
     const value = interpolate(template, {
