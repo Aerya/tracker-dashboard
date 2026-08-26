@@ -16,6 +16,11 @@ assert.match(browserFetcher, /document\.querySelector\('input\[name="login"\]'\)
 assert.match(browserFetcher, /document\.querySelector\('input\[name="password"\]'\)/);
 assert.match(browserFetcher, /document\.querySelector\('button\[type="submit"\]'\)/);
 assert.match(browserFetcher, /Login V3X echoue/);
+assert.match(browserFetcher, /function submitV3xApiLogin/);
+assert.match(browserFetcher, /https:\/\/api\.v3x\.club\/auth\/login/);
+assert.match(browserFetcher, /JSON\.stringify\(\{ login: username, password, remember: true \}\)/);
+assert.match(browserFetcher, /session API acceptee mais activite non authentifiee/);
+assert.match(fs.readFileSync('src/fetcher.ts', 'utf8'), /if \(tracker\.id === 'v3x'\) return null/);
 assert.match(server, /function storedCookieReady\(tracker: TrackerConfig\)/);
 assert.doesNotMatch(server, /cookieOnlyReady\(tracker\)/);
 console.log('V3X auth OK: username/password normal + cookie fallback + api.v3x.club cookie scope.');

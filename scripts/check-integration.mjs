@@ -182,6 +182,15 @@ const v3xActivityFixture = `
   ${v3xStatCard('Points', '52')}
   ${v3xStatCard('Points / h', '+4')}
   <button class="px-4 py-2 text-sm"><span><svg width="14"><path d="M2 20"></path></svg></span>Seeds en cours<span class="px-1.5 py-0.5 text-[10px]">5</span></button>`;
+const v3xUppercaseActivityFixture = `
+  ${v3xStatCard('UPLOAD', '84.8 Gio')}
+  ${v3xStatCard('DOWNLOAD', '1.00 Gio')}
+  ${v3xStatCard('BUFFER', '+83.8 Gio')}
+  ${v3xStatCard('RATIO', '84.76')}
+  ${v3xStatCard('TEMPS DE SEED', '48j 3h')}
+  ${v3xStatCard('POINTS', '74')}
+  ${v3xStatCard('POINTS / H', '+5')}
+  <button class="px-4 py-2 text-sm"><span><svg width="14"><path d="M2 20"></path></svg></span>Seeds en cours<span class="px-1.5 py-0.5 text-[10px]">5</span></button>`;
 const supportsV3xActivityStats = (
   v3x.fetch?.url === '/activity'
   && v3x.fetch?.mode === 'browser'
@@ -193,6 +202,13 @@ const supportsV3xActivityStats = (
   && extractorValue(v3x, 'points', v3xActivityFixture) === '52'
   && extractorValue(v3x, 'pointsPerHour', v3xActivityFixture) === '+4'
   && extractorValue(v3x, 'seeding', v3xActivityFixture) === '5'
+  && extractorValue(v3x, 'uploadedBytes', v3xUppercaseActivityFixture) === '84.8 Gio'
+  && extractorValue(v3x, 'downloadedBytes', v3xUppercaseActivityFixture) === '1.00 Gio'
+  && extractorValue(v3x, 'bufferBytes', v3xUppercaseActivityFixture) === '+83.8 Gio'
+  && extractorValue(v3x, 'ratio', v3xUppercaseActivityFixture) === '84.76'
+  && extractorValue(v3x, 'seedTime', v3xUppercaseActivityFixture) === '48j 3h'
+  && extractorValue(v3x, 'points', v3xUppercaseActivityFixture) === '74'
+  && extractorValue(v3x, 'pointsPerHour', v3xUppercaseActivityFixture) === '+5'
 );
 if (!supportsV3xActivityStats) {
   errors.push('V3X must read all supplied stats from the authenticated /activity page');

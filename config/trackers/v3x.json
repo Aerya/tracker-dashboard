@@ -23,31 +23,31 @@
     "responseType": "html",
     "fields": {
       "uploadedBytes": {
-        "regex": "Upload[\\s\\S]{0,80}?</span>\\s*<span[^>]*\\bfont-mono\\b[^>]*>\\s*(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))",
+        "regex": "[Uu][Pp][Ll][Oo][Aa][Dd][\\s\\S]{0,80}?</span>\\s*<span[^>]*\\bfont-mono\\b[^>]*>\\s*(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))",
         "transform": "bytes"
       },
       "downloadedBytes": {
-        "regex": "Download[\\s\\S]{0,80}?</span>\\s*<span[^>]*\\bfont-mono\\b[^>]*>\\s*(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))",
+        "regex": "[Dd][Oo][Ww][Nn][Ll][Oo][Aa][Dd][\\s\\S]{0,80}?</span>\\s*<span[^>]*\\bfont-mono\\b[^>]*>\\s*(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))",
         "transform": "bytes"
       },
       "bufferBytes": {
-        "regex": "Buffer[\\s\\S]{0,80}?</span>\\s*<span[^>]*\\bfont-mono\\b[^>]*>\\s*(?<value>[+\\-−]?[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))",
+        "regex": "[Bb][Uu][Ff][Ff][Ee][Rr][\\s\\S]{0,80}?</span>\\s*<span[^>]*\\bfont-mono\\b[^>]*>\\s*(?<value>[+\\-−]?[\\d\\s.,]+\\s*(?:[KMGTPE](?:i?B|io|o)|B|o))",
         "transform": "bytes"
       },
       "ratio": {
-        "regex": "Ratio[\\s\\S]{0,80}?</span>\\s*<span[^>]*\\bfont-mono\\b[^>]*>\\s*(?<value>(?:[\\d\\s.,]+|inf(?:inite|inity)?|∞))",
+        "regex": "[Rr][Aa][Tt][Ii][Oo][\\s\\S]{0,80}?</span>\\s*<span[^>]*\\bfont-mono\\b[^>]*>\\s*(?<value>(?:[\\d\\s.,]+|inf(?:inite|inity)?|∞))",
         "transform": "number"
       },
       "seedTime": {
-        "regex": "Temps\\s+de\\s+seed[\\s\\S]{0,80}?</span>\\s*<span[^>]*\\bfont-mono\\b[^>]*>\\s*(?<value>\\d+\\s*j(?:\\s*\\d+\\s*h)?(?:\\s*\\d+\\s*m)?)",
+        "regex": "[Tt][Ee][Mm][Pp][Ss]\\s+[Dd][Ee]\\s+[Ss][Ee][Ee][Dd][\\s\\S]{0,80}?</span>\\s*<span[^>]*\\bfont-mono\\b[^>]*>\\s*(?<value>\\d+\\s*j(?:\\s*\\d+\\s*h)?(?:\\s*\\d+\\s*m)?)",
         "transform": "string"
       },
       "points": {
-        "regex": "Points(?!\\s*/\\s*h)[\\s\\S]{0,80}?</span>\\s*<span[^>]*\\bfont-mono\\b[^>]*>\\s*(?<value>[\\d\\s.,]+)",
+        "regex": "[Pp][Oo][Ii][Nn][Tt][Ss](?!\\s*/\\s*[Hh])[\\s\\S]{0,80}?</span>\\s*<span[^>]*\\bfont-mono\\b[^>]*>\\s*(?<value>[\\d\\s.,]+)",
         "transform": "string"
       },
       "pointsPerHour": {
-        "regex": "Points\\s*/\\s*h[\\s\\S]{0,80}?</span>\\s*<span[^>]*\\bfont-mono\\b[^>]*>\\s*(?<value>[+\\-]?[\\d\\s.,]+)",
+        "regex": "[Pp][Oo][Ii][Nn][Tt][Ss]\\s*/\\s*[Hh][\\s\\S]{0,80}?</span>\\s*<span[^>]*\\bfont-mono\\b[^>]*>\\s*(?<value>[+\\-]?[\\d\\s.,]+)",
         "transform": "number"
       },
       "seeding": {
