@@ -12,6 +12,7 @@ import {
   type TrackerStats,
   type FieldExtractor,
   type Credentials,
+  type LoginConfig,
 } from './types.js';
 import { getProxyConfig, ensureProxyReady } from './proxy.js';
 import { closeAllSshTunnels } from './sshTunnel.js';
@@ -517,6 +518,15 @@ function extractFormAction(html: string): string {
   return m?.[1] ?? '';
 }
 
+function isOtpStepPage(html: string, landedUrl: string, otpStep: NonNullable<LoginConfig['otpStep']>): boolean {
+  if (!landedUrl.includes(otpStep.urlContains)) return false;
+  const $ = cheerio.load(html);
+  if ($(`input[name="${otpStep.field}"]`).length > 0) return true;
+  if (/[?&]act=otp(?:&|$)/i.test(landedUrl)) return true;
+  const action = extractFormAction(html);
+  return action ? /(?:^|[?&])act=otp(?:&|$)/i.test(action) : false;
+}
+
 // Page anti-bot / challenge JS (Cloudflare & co) : signaux frequents quand l'IP du
 // client est filtree -> la vraie page (avec le token CSRF) n'est jamais servie.
 export function isAntiBotPage(html: string): boolean {
@@ -861,7 +871,7 @@ async function doLogin(
       await storeResponseCookies(jar, after2faRes);
       verificationHtml = after2faRes.data;
     }
-  } else if (cfg.otpStep && landedUrl.includes(cfg.otpStep.urlContains)) {
+  } else if (cfg.otpStep && isOtpStepPage(verificationHtml, landedUrl, cfg.otpStep)) {
     // ── 3ter. 2FA via page dediee apres le login ──────────────────────────────
     if (!vars.otp) {
       const dumpPath = writeLoginDebugDump(tracker, landedUrl, verificationHtml, { reason: 'otpStep-no-secret' });
@@ -894,7 +904,7 @@ async function doLogin(
       await storeResponseCookies(jar, afterOtpRes);
       verificationHtml = afterOtpRes.data;
     }
-    if (landedUrl.includes(cfg.otpStep.urlContains)) {
+    if (isOtpStepPage(verificationHtml, landedUrl, cfg.otpStep)) {
       const dumpPath = writeLoginDebugDump(tracker, landedUrl, verificationHtml, {
         reason: 'otpStep-2fa-refusee',
         otp: vars.otp,
