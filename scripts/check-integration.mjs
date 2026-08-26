@@ -32,6 +32,7 @@ const memphis = JSON.parse(fs.readFileSync(path.join(root, 'config', 'trackers',
 const lesaloonv2 = JSON.parse(fs.readFileSync(path.join(root, 'config', 'trackers', 'lesaloonv2.json'), 'utf8'));
 const digitalcore = JSON.parse(fs.readFileSync(path.join(root, 'config', 'trackers', 'digitalcore.json'), 'utf8'));
 const v3x = JSON.parse(fs.readFileSync(path.join(root, 'config', 'trackers', 'v3x.json'), 'utf8'));
+const hdforever = JSON.parse(fs.readFileSync(path.join(root, 'config', 'trackers', 'hdforever.json'), 'utf8'));
 const lesRescapes = JSON.parse(fs.readFileSync(lesRescapesPath, 'utf8'));
 const { applyEnginePreset } = await import('../dist/trackerTemplates.js');
 const errors = [];
@@ -195,6 +196,19 @@ const supportsV3xActivityStats = (
 );
 if (!supportsV3xActivityStats) {
   errors.push('V3X must read all supplied stats from the authenticated /activity page');
+}
+
+const hdfOtpDetectionIsSpecific = (
+  hdforever.login?.otpStep?.field === 'otp_code'
+  && hdforever.login?.otpStep?.action === 'login.php?act=otp'
+  && fetcher.includes('function isOtpStepPage')
+  && fetcher.includes('if (!landedUrl.includes(otpStep.urlContains)) return false')
+  && fetcher.includes('input[name="${otpStep.field}"]')
+  && fetcher.includes('[?&]act=otp')
+  && !fetcher.includes('} else if (cfg.otpStep && landedUrl.includes(cfg.otpStep.urlContains))')
+);
+if (!hdfOtpDetectionIsSpecific) {
+  errors.push('HD-Forever otpStep must require a real OTP marker, not just login.php in the landed URL');
 }
 
 function normalizeRoute(route) {
