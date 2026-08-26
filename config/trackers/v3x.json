@@ -8,7 +8,7 @@
     "method": "POST",
     "contentType": "form",
     "body": {
-      "identifier": "{{username}}",
+      "login": "{{username}}",
       "password": "{{password}}"
     },
     "failurePatterns": [

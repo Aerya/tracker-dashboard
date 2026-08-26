@@ -289,6 +289,33 @@ async function waitForTrackerContent(tracker: TrackerConfig, page: Page): Promis
       return false;
     }
   }
+  if (tracker.id === 'v3x') {
+    try {
+      await page.waitForFunction(
+        () => {
+          const hasLoginForm = Boolean(
+            document.querySelector('input[name="login"]') &&
+            document.querySelector('input[name="password"]') &&
+            document.querySelector('button[type="submit"]'),
+          );
+          if (hasLoginForm) return false;
+          const text = document.body?.innerText ?? '';
+          return text.includes('Upload')
+            && text.includes('Download')
+            && text.includes('Buffer')
+            && text.includes('Ratio')
+            && text.includes('Temps de seed')
+            && text.includes('Points / h')
+            && text.includes('Seeds en cours');
+        },
+        null,
+        { timeout: 30_000 },
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
   if (['kufirc', 'happyfappy', 'empornium'].includes(tracker.id)) {
     try {
       await page.waitForFunction(
@@ -398,6 +425,30 @@ function looksAntiBot(html: string): boolean {
     h.includes('cf-chl-') ||
     h.includes('please enable javascript and cookies to continue') ||
     h.includes('ddos-guard');
+}
+
+function isV3xLoginPage(html: string): boolean {
+  return /<input\b[^>]*\bname=["']login["'][^>]*>/i.test(html)
+    && /<input\b[^>]*\bname=["']password["'][^>]*>/i.test(html)
+    && /<button\b[^>]*\btype=["']submit["'][^>]*>/i.test(html);
+}
+
+function extractV3xLoginError(html: string): string | null {
+  const text = html
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const patterns = [
+    /(?:identifiants?|mot de passe|connexion)[^.!?]{0,120}(?:incorrect|invalide|erron[ée]|introuvable)/i,
+    /(?:incorrect|invalide|erron[ée]|introuvable)[^.!?]{0,120}(?:identifiants?|mot de passe|connexion)/i,
+  ];
+  for (const pattern of patterns) {
+    const match = pattern.exec(text);
+    if (match?.[0]) return match[0].trim();
+  }
+  return null;
 }
 
 async function waitForAntiBotChallenge(page: Page): Promise<void> {
@@ -619,6 +670,19 @@ async function ensureLoggedIn(
   await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   await waitForAnubis(page);
   await waitForLiveView(page);
+
+  if (tracker.id === 'v3x') {
+    const postHtml = await safeContent(page);
+    const authenticated = await waitForTrackerContent(tracker, page);
+    if (!authenticated && isV3xLoginPage(postHtml)) {
+      const currentUrl = page.url();
+      const dump = writeBrowserDump(tracker, currentUrl, postHtml, 'login-refused');
+      const suffix = dump ? ` - dump: ${dump}` : '';
+      const loginError = extractV3xLoginError(postHtml);
+      const detail = loginError ? ` : ${loginError}` : ' : formulaire de connexion toujours affiche';
+      throw new Error(`Login V3X echoue${detail}${suffix}`);
+    }
+  }
 
   // ── 2FA en deux etapes : page de challenge apres le mot de passe ────────────
   if (totpSecret) {
