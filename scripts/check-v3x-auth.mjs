@@ -3,6 +3,7 @@ import fs from 'node:fs';
 const v3x = JSON.parse(fs.readFileSync('config/trackers/v3x.json', 'utf8'));
 const browserFetcher = fs.readFileSync('src/browserFetcher.ts', 'utf8');
 const server = fs.readFileSync('src/server.ts', 'utf8');
+const webUi = fs.readFileSync('public/index.html', 'utf8');
 assert.equal(v3x.login?.cookieOnly, undefined, 'V3X ne doit pas etre force en cookieOnly');
 assert.equal(v3x.login?.body?.login, '{{username}}');
 assert.equal(v3x.login?.body?.password, '{{password}}');
@@ -23,4 +24,6 @@ assert.match(browserFetcher, /session API acceptee mais activite non authentifie
 assert.match(fs.readFileSync('src/fetcher.ts', 'utf8'), /if \(tracker\.id === 'v3x'\) return null/);
 assert.match(server, /function storedCookieReady\(tracker: TrackerConfig\)/);
 assert.doesNotMatch(server, /cookieOnlyReady\(tracker\)/);
+assert.match(webUi, /\.tracker-cookie-field\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\)/);
+assert.match(webUi, /<div class="tracker-field tracker-cookie-field" style="grid-column:1\/-1">/);
 console.log('V3X auth OK: username/password normal + cookie fallback + api.v3x.club cookie scope.');

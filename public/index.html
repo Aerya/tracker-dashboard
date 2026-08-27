@@ -1709,6 +1709,12 @@
       color: var(--muted);
       font-size: 11px;
     }
+    .tracker-cookie-field {
+      grid-template-columns: minmax(0, 1fr);
+      align-items: start;
+      white-space: normal;
+    }
+    .tracker-cookie-field .advanced-cookie-row { width: 100%; }
     .tracker-credential-status {
       display: flex;
       align-items: center;
@@ -6675,7 +6681,7 @@
                 <span class="definition-badge ${isEnabled ? '' : 'definition-badge-muted'}">${isEnabled ? 'Actif' : 'Disponible'}</span>
                 ${statusBadge}
                 ${cookieOnly ? `
-                <div class="tracker-field" style="grid-column: span 2">
+                <div class="tracker-field tracker-cookie-field" style="grid-column: span 2">
                   <label>Cookie de session <span style="color:var(--muted)">— seul mode de connexion de ce site${credential.hasCookie ? ' · <b style="color:var(--green)">défini</b>' : ''}</span></label>
                   ${cookieFieldHtml}
                 </div>
@@ -6695,7 +6701,7 @@
                   <button class="btn-test" style="padding:6px 10px" onclick="resetCredential('${safeId}')">Réinitialiser</button>
                 </div>
                 ${!cookieOnly && cookieInstructions ? `
-                <div class="tracker-field" style="grid-column:1/-1">
+                <div class="tracker-field tracker-cookie-field" style="grid-column:1/-1">
                   <label>Cookie de session <span style="color:var(--muted)">— recommandé pour ${escapeHtml(definition.name)}${credential.hasCookie ? ' · <b style="color:var(--green)">défini</b>' : ''}</span></label>
                   ${cookieFieldHtml}
                 </div>` : ''}
