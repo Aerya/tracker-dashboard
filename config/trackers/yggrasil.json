@@ -3,13 +3,11 @@
   "name": "Yggrasil",
   "baseUrl": "https://yggrasil.xyz",
   "enabled": false,
-
   "login": {
     "url": "/login",
-    "postUrl": "/login",
+    "postUrl": "https://yggrasil.xyz/login",
     "method": "POST",
     "contentType": "form",
-
     "preStep": {
       "url": "/login",
       "includeHiddenInputs": true,
@@ -19,45 +17,37 @@
         }
       }
     },
-
     "body": {
       "_token": "{{_csrf}}",
       "email": "{{username}}",
       "password": "{{password}}"
     },
-
     "failurePatterns": [
       "<title>Connexion — Yggrasil</title>"
     ]
   },
-
   "fetch": {
     "url": "/profile",
     "responseType": "html",
-
     "fields": {
       "uploadedBytes": {
-        "regex": "<span class=\"lbl\">Uploadé</span>\\s*<div class=\"val(?: [^\"]*)?\">(?<value>[^<]+)</div>",
+        "regex": "<span class=\"lbl\">Uploadé</span>\\s*<div class=\"val(?: [^\"]*)?\">\\s*(?<value>[^<]+?)\\s*</div>",
         "transform": "bytes"
       },
-
       "downloadedBytes": {
-        "regex": "<span class=\"lbl\">Téléchargé</span>\\s*<div class=\"val(?: [^\"]*)?\">(?<value>[^<]+)</div>",
+        "regex": "<span class=\"lbl\">Téléchargé</span>\\s*<div class=\"val(?: [^\"]*)?\">\\s*(?<value>[^<]+?)\\s*</div>",
         "transform": "bytes"
       },
-
       "ratio": {
-        "regex": "<span class=\"lbl\">Ratio</span>\\s*<div class=\"val(?: [^\"]*)?\">\\s*(?<value>[^<\\s][^<]*?)\\s*</div>",
+        "regex": "<span class=\"lbl\">Ratio</span>\\s*<div class=\"val(?: [^\"]*)?\">\\s*(?<value>[^<]+?)\\s*</div>",
         "transform": "number"
       },
-
-      "seedTime": {
-        "regex": "<span class=\"lbl\">Temps de seed</span>\\s*<div class=\"val\"[^>]*>(?<value>[^<]+)</div>",
+      "seeding": {
+        "regex": "<span class=\"lbl\">Temps de seed</span>\\s*<div class=\"val\"[^>]*>\\s*(?<value>[\\d.,]+\\s*h)\\s*</div>",
         "transform": "string"
       }
     }
   },
-
   "dashboard": {
     "byteUnit": "decimal"
   }
