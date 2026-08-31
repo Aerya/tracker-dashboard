@@ -10,14 +10,14 @@
     "start:browser": "node --experimental-sqlite dist/browserRuntime.js"
   },
   "dependencies": {
-    "axios": "^1.19.0",
+    "axios": "^1.20.0",
     "cheerio": "^1.0.0",
     "express": "^5.2.1",
     "https-proxy-agent": "^9.1.0",
     "playwright": "^1.62.1",
     "socks-proxy-agent": "^10.1.0",
     "ssh2": "^1.17.0",
-    "top-user-agents": "^2.1.131",
+    "top-user-agents": "^2.1.132",
     "tough-cookie": "^6.0.2"
   },
   "devDependencies": {
