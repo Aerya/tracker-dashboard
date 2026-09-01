@@ -614,6 +614,7 @@ async function ensureLoggedIn(
       password: credentials.password,
     });
     const candidates = [
+      `input[id="${name}"]`,
       `[name="${name}"]`,
       ['username', 'email', 'login', 'identifier'].includes(name.toLowerCase()) ? 'input[name="identifier"]' : '',
       ['username', 'email', 'login', 'identifier'].includes(name.toLowerCase()) ? 'input[name="username"]' : '',
