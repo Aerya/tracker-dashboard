@@ -26,8 +26,9 @@ Au premier accès, l'application demande de créer le compte administrateur de l
 **Export Prometheus + Grafana** : endpoint `/metrics` (protégé par token via `METRICS_TOKEN`) exposant les stats des trackers activés (`tracker_*`) et des clients BitTorrent (`tracker_qbit_*`). Dashboard Grafana JSON dans `grafana/dashboard.json` — voir [grafana/README.md](grafana/README.md).
 
 ## Changements récents
+Draupnirr
 
-
+- **Yggrasil** : changement de domaine pour Draupnirr. Pas de changement d'ID ni de .json pour ne pas casser l'existant.
 - **AstraTorrent** : ajout du tracker avec authentification automatique par e-mail/mot de passe et récupération de l’upload, du download, du ratio et du temps de seed.
 - **Yggrasil** : ajout du tracker avec authentification automatique par e-mail/mot de passe et récupération de l’upload, du download, du ratio et du temps de seed.
 - **V3X** : les statistiques sont désormais relevées depuis la page « Mon activité », y compris le buffer, le temps de seed, les points horaires et le nombre de seeds en cours.
