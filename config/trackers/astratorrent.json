@@ -3,42 +3,49 @@
   "name": "AstraTorrent",
   "baseUrl": "https://astratorrent.cc",
   "enabled": false,
+
   "login": {
     "url": "/login.php",
     "method": "POST",
-    "contentType": "json",
-    "postUrl": "/api/auth.php?action=login",
+    "contentType": "form",
     "body": {
       "username": "{{username}}",
       "password": "{{password}}"
     },
     "failurePatterns": [
-      "Identifiants invalides"
+      "Identifiants invalides",
+      "Mot de passe incorrect"
     ]
   },
+
   "fetch": {
     "url": "/compte.php",
     "mode": "browser",
     "responseType": "html",
+
     "fields": {
       "uploadedBytes": {
-        "regex": "id=\"statUploaded\"[^>]*>\\s*(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE]?(?:i?B|o)|Go|To))",
+        "regex": "id=\"statUploaded\"[^>]*>\\s*(?<value>[\\d\\s.,]+\\s*(?:Ko|Mo|Go|To|Po|KB|MB|GB|TB|PB))",
         "transform": "bytes"
       },
+
       "downloadedBytes": {
-        "regex": "id=\"statDownloaded\"[^>]*>\\s*(?<value>[\\d\\s.,]+\\s*(?:[KMGTPE]?(?:i?B|o)|Go|To))",
+        "regex": "id=\"statDownloaded\"[^>]*>\\s*(?<value>[\\d\\s.,]+\\s*(?:Ko|Mo|Go|To|Po|KB|MB|GB|TB|PB))",
         "transform": "bytes"
       },
+
       "ratio": {
-        "regex": "id=\"statRatio\"[^>]*>(?:\\s*<[^>]+>)*\\s*(?<value>∞|[\\d.,]+)",
+        "regex": "id=\"statRatio\"[^>]*>\\s*(?<value>∞|[\\d.,]+)",
         "transform": "number"
       },
+
       "seedBonus": {
         "regex": "id=\"statPoints\"[^>]*>\\s*(?<value>[\\d\\s.,]+)\\s*pts?",
         "transform": "number"
       }
     }
   },
+
   "dashboard": {
     "byteUnit": "decimal"
   }
