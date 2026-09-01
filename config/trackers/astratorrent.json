@@ -3,7 +3,6 @@
   "name": "AstraTorrent",
   "baseUrl": "https://astratorrent.cc",
   "enabled": false,
-
   "login": {
     "url": "/login.php",
     "method": "POST",
@@ -18,35 +17,29 @@
       "Mot de passe incorrect"
     ]
   },
-
   "fetch": {
     "url": "/compte.php",
     "mode": "browser",
     "responseType": "html",
-
     "fields": {
       "uploadedBytes": {
         "regex": "id=\"statUploaded\"[^>]*>\\s*(?<value>[\\d\\s.,]+\\s*(?:Ko|Mo|Go|To|Po|KB|MB|GB|TB|PB))",
         "transform": "bytes"
       },
-
       "downloadedBytes": {
         "regex": "id=\"statDownloaded\"[^>]*>\\s*(?<value>[\\d\\s.,]+\\s*(?:Ko|Mo|Go|To|Po|KB|MB|GB|TB|PB))",
         "transform": "bytes"
       },
-
       "ratio": {
         "regex": "id=\"statRatio\"[^>]*>(?:\\s*<[^>]+>)*\\s*(?<value>∞|[\\d.,]+)",
         "transform": "number"
       },
-
       "seedBonus": {
         "regex": "id=\"statPoints\"[^>]*>\\s*(?<value>[\\d\\s.,]+)\\s*pts?",
         "transform": "number"
       }
     }
   },
-
   "dashboard": {
     "byteUnit": "decimal"
   }
