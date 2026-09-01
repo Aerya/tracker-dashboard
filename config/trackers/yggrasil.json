@@ -1,11 +1,11 @@
 {
   "id": "yggrasil",
-  "name": "Yggrasil",
-  "baseUrl": "https://yggrasil.xyz",
+  "name": "Draupnirr",
+  "baseUrl": "https://Draupnirr.xyz",
   "enabled": false,
   "login": {
     "url": "/login",
-    "postUrl": "https://yggrasil.xyz/login",
+    "postUrl": "https://Draupnirr.xyz/login",
     "method": "POST",
     "contentType": "form",
     "preStep": {
